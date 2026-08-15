@@ -145,3 +145,12 @@ object v2 20eps SR 0.90、goal v2 15eps SR 0.80、long seed0 5eps SR 0.80——
 **修复**：`code/gr00t/eval/service.py` 的客户端 socket 设置 RCVTIMEO/SNDTIMEO
 （15000ms），超时抛 RuntimeError → 该 episode 记失败、run 继续下一 episode。
 long 两片已重启（GPU 5 seed0 / GPU 4 seed1-2），dev 三路不受影响继续。
+
+## 2026-08-15：dev 三路预防性重启（D-013）
+
+goal 客户端（修复前启动、无 ZMQ 超时）在 v2 配置 15eps 后再次冻于第 5 trial
+（tqdm 两轮静止、server 674% CPU 自旋）；spatial/object 客户端同为旧版。
+**决策**：dev 三路全部改用带 15s ZMQ 超时的新客户端重启（long 两片已是新版，不动）。
+重启后若出现连续 "inference server timeout"，则表明 server 端存在特定输入的无限自旋，
+届时按 episode 定位并修复 server 侧。部分作废数据（spatial 25/object 20/goal 15 eps，
+SR 0.96/0.90/0.867）仅作参考。
