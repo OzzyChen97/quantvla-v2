@@ -285,5 +285,12 @@ def main(args: ArgsConfig):
 
 
 if __name__ == "__main__":
+    # SIGUSR1 dumps all python thread stacks to the log — the runtime watchdog
+    # uses it to diagnose hung servers (review round 5, item 3)
+    import faulthandler
+    import signal as _signal
+
+    faulthandler.register(_signal.SIGUSR1)
+
     config = tyro.cli(ArgsConfig)
     main(config)

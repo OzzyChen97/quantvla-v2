@@ -295,6 +295,24 @@ def _generate(args: argparse.Namespace) -> None:
             }
             with open(out_dir / f"{name}.json", "w", encoding="utf-8") as f:
                 json.dump(out, f, indent=2)
+    # uniqueness audit (review round 5, item 9): random masks must be distinct
+    rnd = plans.get("random", [])
+    masks = [tuple(sorted(n for n, e in pl.items() if e.get("skip"))) for pl in rnd]
+    uniq = len(set(masks))
+    hams = [len(set(masks[i]) ^ set(masks[j])) for i in range(len(masks)) for j in range(i + 1, len(masks))]
+    jacs = [len(set(masks[i]) & set(masks[j])) / max(len(set(masks[i]) | set(masks[j])), 1)
+            for i in range(len(masks)) for j in range(i + 1, len(masks))]
+    devs = [abs(plan_total_bytes(pl, shapes, args.row_rot) - target_bytes) / max(target_bytes, 1.0)
+            for pl in rnd]
+    audit = {
+        "n_generated": len(rnd), "n_unique_masks": uniq,
+        "pairwise_hamming_min": min(hams) if hams else None,
+        "pairwise_jaccard_max": max(jacs) if jacs else None,
+        "byte_deviation_max": max(devs) if devs else None,
+    }
+    with open(out_dir / "uniqueness.json", "w", encoding="utf-8") as f:
+        json.dump(audit, f, indent=2)
+    print(f"[baselines] uniqueness audit: {audit}")
     print(f"[baselines] wrote {sum(len(v) for v in plans.values())} plans -> {out_dir}")
 
 

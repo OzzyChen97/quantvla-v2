@@ -1,0 +1,6 @@
+{
+  "n_generated": 20,
+  "n_unique_masks": 20,
+  "pairwise_hamming_min": 12,
+  "pairwise_jaccard_max": 0.7692307692307693
+}

@@ -258,8 +258,12 @@ def build_weights_with_log(
         }
         return w, log
     w_norm = {n: v / s * len(layer_names) for n, v in filled.items()}
-    # outlier protection: winsorize to [0.5, 2.0]
-    w_final = {n: min(2.0, max(0.5, v)) for n, v in w_norm.items()}
+    # outlier protection: winsorize to [0.5, 2.0], then RE-normalize so the
+    # final weights keep mean == 1 (review round 5, item 7 — the single
+    # dominant d_solver layer pulled the final mean down to ~0.57)
+    w_clip = {n: min(2.0, max(0.5, v)) for n, v in w_norm.items()}
+    s_clip = sum(w_clip.values())
+    w_final = {n: v / s_clip * len(layer_names) for n, v in w_clip.items()} if s_clip > 0 else w_clip
     log = {
         "raw_d_solver": _weight_stats(raw),
         "normalized_before_clip": _weight_stats(w_norm),
@@ -923,8 +927,10 @@ def _selftest() -> None:
     scores = build_scores(sens, names, 1.0, 1.0)
     assert scores["L50"][4] is None, "missing measurement must be unavailable"
     weights, wlog = build_weights_with_log(sens, names)
-    assert abs(wlog["final"]["mean"] - 1.0) < 0.35, wlog["final"]
-    assert 0.5 <= wlog["final"]["min"] and wlog["final"]["max"] <= 2.0, wlog["final"]
+    # primary invariants (review round 5, item 7): winsorize [0.5,2] then
+    # RE-normalize so the final weights keep mean == 1 (bounds rescale).
+    assert abs(wlog["final"]["mean"] - 1.0) < 1e-6, wlog["final"]
+    assert wlog["final"]["min"] > 0.0 and wlog["final"]["max"] < 3.0, wlog["final"]
 
     tau_rms, tau_sat = estimate_guard_thresholds(sens, names)
     filtered, removed = filter_guarded(scores, sens, names, tau_rms, tau_sat)

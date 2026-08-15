@@ -58,6 +58,10 @@ def parse_log(path: Path) -> Dict[str, Any]:
             out[-1].update({k: v for k, v in c.items() if v is not None})
         else:
             out.append(c)
+    # completeness: a config only enters the formal table when it finished
+    # 50 episodes across 10 tasks (review round 5, item 11)
+    for c in out:
+        c["complete"] = (c.get("episodes") == 50 and c.get("tasks_done") == 10)
     return {"file": str(path), "configs": out}
 
 
@@ -74,7 +78,8 @@ def main() -> None:
     for r in all_results:
         print(f"=== {r['file']} ===")
         for c in r["configs"]:
-            print(f"  {c['plan']:60s} SR={c['success_rate']} episodes={c['episodes']}")
+            mark = "OK " if c.get("complete") else "INC"
+        print(f"  [{mark}] {c['plan']:60s} SR={c['success_rate']} episodes={c['episodes']} tasks={c['tasks_done']}")
     if args.json:
         Path(args.json).parent.mkdir(parents=True, exist_ok=True)
         with open(args.json, "w") as f:

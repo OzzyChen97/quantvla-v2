@@ -1,0 +1,596 @@
+{
+  "meta": {
+    "type": "transfer",
+    "transfer_mode": "uniform_baseline",
+    "mask_source": "checkpoints/packs/gr00t/gr00t_quant_plan_libero_spatial_adjudicated.final_plan.json",
+    "mask_suite": "spatial",
+    "target_suite": "10",
+    "pack_source": "checkpoints/packs/gr00t/duquant_packed_libero_10_w4a8_b64c32ls015",
+    "note": "layer FP16/W4 mask from the source plan; weights, DuQuant rotation packs and A8 scales belong to the TARGET checkpoint"
+  },
+  "packdirs": {
+    "64": "checkpoints/packs/gr00t/duquant_packed_libero_10_w4a8_b64c32ls015"
+  },
+  "layers": {
+    "action_head.model.transformer_blocks.0.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.0.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.1.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.1.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.10.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.10.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.11.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.11.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.2.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.2.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.3.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.3.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.4.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.4.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.5.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.5.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.6.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.6.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.7.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.7.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.8.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.8.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.9.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.9.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.0.mlp.down_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.0.mlp.gate_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.0.mlp.up_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.0.self_attn.k_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.0.self_attn.o_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.0.self_attn.q_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.0.self_attn.v_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.1.mlp.down_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.1.mlp.gate_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.1.mlp.up_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.1.self_attn.k_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.1.self_attn.o_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.1.self_attn.q_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.1.self_attn.v_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.10.mlp.down_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.10.mlp.gate_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.10.mlp.up_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.10.self_attn.k_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.10.self_attn.o_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.10.self_attn.q_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.10.self_attn.v_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.11.mlp.down_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.11.mlp.gate_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.11.mlp.up_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.11.self_attn.k_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.11.self_attn.o_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.11.self_attn.q_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.11.self_attn.v_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.2.mlp.down_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.2.mlp.gate_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.2.mlp.up_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.2.self_attn.k_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.2.self_attn.o_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.2.self_attn.q_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.2.self_attn.v_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.3.mlp.down_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.3.mlp.gate_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.3.mlp.up_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.3.self_attn.k_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.3.self_attn.o_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.3.self_attn.q_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.3.self_attn.v_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.4.mlp.down_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.4.mlp.gate_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.4.mlp.up_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.4.self_attn.k_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.4.self_attn.o_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.4.self_attn.q_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.4.self_attn.v_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.5.mlp.down_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.5.mlp.gate_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.5.mlp.up_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.5.self_attn.k_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.5.self_attn.o_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.5.self_attn.q_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.5.self_attn.v_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.6.mlp.down_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.6.mlp.gate_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.6.mlp.up_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.6.self_attn.k_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.6.self_attn.o_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.6.self_attn.q_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.6.self_attn.v_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.7.mlp.down_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.7.mlp.gate_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.7.mlp.up_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.7.self_attn.k_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.7.self_attn.o_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.7.self_attn.q_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.7.self_attn.v_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.8.mlp.down_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.8.mlp.gate_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.8.mlp.up_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.8.self_attn.k_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.8.self_attn.o_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.8.self_attn.q_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.8.self_attn.v_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.9.mlp.down_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.9.mlp.gate_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.9.mlp.up_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.9.self_attn.k_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.9.self_attn.o_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.9.self_attn.q_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "backbone.eagle_model.language_model.model.layers.9.self_attn.v_proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.12.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.12.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.13.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.13.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.14.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.14.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.15.ff.net.0.proj": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    },
+    "action_head.model.transformer_blocks.15.ff.net.2": {
+      "bits": 6,
+      "group": 64,
+      "skip": false
+    }
+  }
+}

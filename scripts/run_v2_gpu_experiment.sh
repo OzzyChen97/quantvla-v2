@@ -65,12 +65,26 @@ start_server() {
     # Force-free the port: a stale server from an earlier wave must never
     # satisfy the readiness check while the new server dies with
     # "Address already in use" (this exact failure stalled the whole fleet).
-    local holder
+    local holder hcmd
     holder=$(ss -tlnp 2>/dev/null | grep ":$PORT " | grep -oP 'pid=\K[0-9]+' | head -1 || true)
     if [[ -n "$holder" ]]; then
-        echo "!!! port $PORT held by stale pid $holder — killing it first"
-        kill "$holder" 2>/dev/null || true
-        sleep 8
+        hcmd=$(ps -p "$holder" -o args= 2>/dev/null || true)
+        # only kill OUR OWN stale servers, never another user's service
+        if [[ "$hcmd" == *inference_service* || "$hcmd" == *run_quantvla* || "$hcmd" == *run_inference_server* ]]; then
+            echo "!!! port $PORT held by our stale server pid $holder — killing it first"
+            kill "$holder" 2>/dev/null || true
+            for _ in $(seq 1 20); do
+                ss -tln 2>/dev/null | grep -q ":$PORT " || break
+                sleep 1
+            done
+            if ss -tln 2>/dev/null | grep -q ":$PORT "; then
+                kill -KILL "$holder" 2>/dev/null || true
+                sleep 5
+            fi
+        else
+            echo "!!! port $PORT held by pid $holder which is NOT our server — refusing to kill; aborting"
+            return 1
+        fi
     fi
     GR00T_DUQUANT_PLAN="$plan" GR00T_GPU=${GR00T_GPU:-4} GR00T_PORT="$PORT" \
         ./scripts/run_quantvla.sh "libero_$suite" >"$logf" 2>&1 &
@@ -108,7 +122,46 @@ stop_server() {
 
 run_libbero() {
     local suite=$1; shift
-    LIBERO_PORT="$PORT" ./scripts/run_libero_eval.sh "libero_$suite" --headless "$@"
+    # config-level timeout (ZMQ client also has a 15s per-request timeout)
+    LIBERO_PORT="$PORT" timeout --signal=TERM "${EVAL_TIMEOUT:-21600}" \
+        ./scripts/run_libero_eval.sh "libero_$suite" --headless "$@"
+}
+
+# progress watchdog: run the eval in background; if the episode counter stops
+# growing for STALL_LIMIT seconds, dump diagnostics, kill the pair, retry ONCE.
+run_eval_watchdog() {
+    local suite=$1; shift
+    local stall_limit=${STALL_LIMIT:-1800}
+    local attempt
+    for attempt in 1 2; do
+        run_libbero "$suite" "$@" &
+        local EVAL_PID=$!
+        local last=-1 now=0 stall=0
+        while kill -0 "$EVAL_PID" 2>/dev/null; do
+            now=$(grep -c "episodes completed so far" "$LOG/liberos_${suite}.log" 2>/dev/null || true)
+            if [[ "$now" != "$last" ]]; then last=$now; stall=0; else stall=$((stall + 60)); fi
+            if [[ $stall -ge $stall_limit ]]; then
+                echo "!!! watchdog: no episode growth for ${stall}s (attempt $attempt) — dumping diagnostics"
+                nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader > "$LOG/watchdog_${suite}_attempt${attempt}.smi" 2>/dev/null || true
+                ps -ef --forest | grep -A3 -B1 "inference_service\|run_libero" >> "$LOG/watchdog_${suite}_attempt${attempt}.ps" 2>/dev/null || true
+                tail -30 "$LOG/liberos_${suite}.log" > "$LOG/watchdog_${suite}_attempt${attempt}.log" 2>/dev/null || true
+                kill "$EVAL_PID" 2>/dev/null || true
+                stop_server
+                break
+            fi
+            sleep 60
+        done
+        if ! kill -0 "$EVAL_PID" 2>/dev/null; then
+            wait "$EVAL_PID" 2>/dev/null && return 0 || {
+                [[ $attempt -eq 2 ]] && { echo "!!! eval failed twice — aborting"; return 1; }
+                echo "!!! eval attempt $attempt failed — retrying once"
+                stop_server
+                continue
+            }
+        fi
+        [[ $attempt -eq 2 ]] && { echo "!!! watchdog fired twice — aborting"; return 1; }
+    done
+    return 1
 }
 
 # --------------------------------------------------------------------------- #
@@ -177,7 +230,7 @@ PY
     for PLAN in "$FINAL" "$BDIR/uniform_w6.json" \
                 "$BDIR/${REPS[0]}" "$BDIR/${REPS[1]}" "$BDIR/${REPS[2]}"; do
         start_server "$S" "$PLAN" || exit 1
-        run_libbero "$S" --seed 0
+        run_eval_watchdog "$S" --seed 0
         stop_server
     done
     echo "--- dev LIBERO ($S) done; record numbers in runs/v2_decisions.md ---"
@@ -207,11 +260,19 @@ final_holdout() {
     # runs/v2_decisions.md D-008).
     local PLAN="$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_spatial_adjudicated.final_plan.json"
     [[ -f "$PLAN" ]] || { echo "!!! spatial adjudicated plan missing — run spatial pipeline first"; exit 1; }
+        # per seed: transfer-v2 (spatial mask + Long pack) AND the same-budget
+        # uniform-W6 baseline on the Long checkpoint (review round 5, item 5)
+        local PLANS=(
+            "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_long_transfer_v2.json"
+            "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_long_transfer_w6.json"
+        )
         for SEED in ${HOLD_SEEDS:-0 1 2}; do
-            echo "--- held-out: libero_$S seed=$SEED (spatial plan zero-shot, D-008) ---"
-            start_server "$S" "$PLAN" || exit 1
-            run_libbero "$S" --seed "$SEED"
-            stop_server
+            for PLAN2 in "${PLANS[@]}"; do
+                echo "--- held-out: libero_$S seed=$SEED plan=$(basename "$PLAN2") ---"
+                start_server "$S" "$PLAN2" || exit 1
+                run_eval_watchdog "$S" --seed "$SEED"
+                stop_server
+            done
         done
     done
     echo "--- held-out acceptance done; task-level cluster stats go into the paper report ---"

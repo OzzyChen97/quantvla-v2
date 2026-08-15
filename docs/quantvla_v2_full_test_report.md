@@ -41,13 +41,19 @@
 spatial v2 20eps SR 0.95 / object v2 20eps SR 0.90 / goal v2 15eps SR 0.80 /
 long seed0 5eps SR 0.80。
 
-正式结果待重启后的运行完成，用 `parse_libero_logs.py` 提取填入：
-| 套件 | v2 | uniform W6 | uniform W4 | random best/median/worst |
-|---|---|---|---|---|
-| spatial | — | — | — | — |
-| goal | — | — | — | — |
-| object | — | — | — | — |
-| long（held-out, 3 seeds, spatial plan） | — | — | — | — |
+正式结果待运行完成，用 `parse_libero_logs.py` 提取填入（只有 complete 配置
+——50 episodes × 10 tasks——才进入正式表）：
+| 套件 | v2 | uniform W6 | random best/median/worst |
+|---|---|---|---|
+| spatial | — | — | — |
+| goal | — | — | — |
+| object | — | — | — |
+| long（held-out, 3 seeds × {transfer-v2, transfer-w6}） | — | — | — |
+
+**Long 口径（D-014）**：mask-only transfer——spatial 裁决 plan 的 FP16/W4 mask +
+**Long checkpoint 自己的权重/DuQuant pack/A8 scale**（`gr00t_transfer_plan.py`），
+不再是直接复用 spatial plan 文件。uniform W4 不跑 LIBERO（仅 D_solver 对照）。
+已知限制：`--seed` 只固定仿真环境，不固定 policy 侧 flow-matching noise。
 
 ## 5. Held-out（libero_10，spatial plan zero-shot，3 种子）
 

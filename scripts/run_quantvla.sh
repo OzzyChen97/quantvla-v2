@@ -246,6 +246,6 @@ echo "  3. Monitor GPU memory - full quantization uses ~40% less memory than FP1
 echo "  4. If accuracy drops significantly, increase GR00T_DENOISING_STEPS to 24-32"
 echo ""
 
-# Start the quantized inference server
-# This will apply DuQuant to the model during loading
-./scripts/run_inference_server.sh "$TASK_SUITE"
+# Start the quantized inference server (exec: the orchestrator's SERVER_PID
+# IS the final python process, so kill/wait cleanly tears it down — no orphans)
+exec ./scripts/run_inference_server.sh "$TASK_SUITE"

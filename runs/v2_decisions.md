@@ -154,3 +154,31 @@ goal 客户端（修复前启动、无 ZMQ 超时）在 v2 配置 15eps 后再�
 重启后若出现连续 "inference server timeout"，则表明 server 端存在特定输入的无限自旋，
 届时按 episode 定位并修复 server 侧。部分作废数据（spatial 25/object 20/goal 15 eps，
 SR 0.96/0.90/0.867）仅作参考。
+
+## 2026-08-15：Long packdir 污染与第五轮审查整改（D-014/D-015）
+
+**D-014（方法有效性，最高优先级）**：spatial 裁决 plan 的 `packdirs` 指向
+`duquant_packed_libero_spatial_*`，held-out 直接复用时 Long server 加载的是
+**Long 权重 + spatial 旋转/pack 元数据**——跨 checkpoint 错用预处理参数，非干净
+mask zero-shot。处置：立即停 Long 两路并作废数据；新增 `gr00t_transfer_plan.py`
+（mask 来自 spatial plan、packdir/A8/权重全部属目标 checkpoint），生成
+`gr00t_quant_plan_long_transfer_v2.json`（78 W4/38 skip，Long pack）与
+`gr00t_quant_plan_long_transfer_w6.json`（同预算 baseline）；held-out 每种子
+同时跑 transfer-v2 与 transfer-w6。
+
+**D-015（可靠性根治，五项全部落实）**：
+1. **orphan 根治**：`run_quantvla.sh`/`run_inference_server.sh` 末尾 `exec`——
+   orchestrator 的 SERVER_PID 即最终 python 进程，kill/wait 干净回收；
+2. **安全清端口**：只杀 cmdline 匹配本项目的 holder（不误杀他人服务），kill 后
+   轮询确认端口释放，未释放再 KILL；
+3. **运行期保护**：eval 外层 `timeout`（6h 配置级）+ 进度 watchdog（episode 计数
+   30 分钟不增长 → 转储 nvidia-smi/进程树/日志 → 杀进程对 → 自动重试一次，
+   两次失败才中止）；server 注册 `faulthandler(SIGUSR1)` 支持线程栈转储；
+4. **parser 完整性**：只有 `episodes==50 && tasks==10` 的配置才标记 complete 进入
+   正式表；不完整配置不参与比较；
+5. **random 唯一性审计**：三套件 20/20 唯一（min Hamming 8-12），
+   `baselines_<S>/uniqueness.json` 落盘。
+另：selector w_i 改为 **winsorize 后再归一化（final mean == 1，精确）**（D-015，
+未来计划的 w_i 稳定性改进；当前 dev 三路使用旧归一化的已裁决 plan，继续有效）；
+LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）；
+已知限制：eval seed 固定环境不固定 policy 侧 flow-matching noise（降低配对检验效率）。

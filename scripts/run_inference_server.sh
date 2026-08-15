@@ -63,7 +63,8 @@ echo "=========================================="
 cd /home1/gyy/vla/QuantVLA
 
 PY_BIN=${PY_BIN:-/home1/gyy/probe/miniforge3/envs/groot_test/bin/python}
-$PY_BIN scripts/inference_service.py \
+# exec: the process tree collapses to a single python PID — no wrapper orphans
+exec $PY_BIN scripts/inference_service.py \
     --model_path $MODEL_PATH \
     --server \
     --data_config $DATA_CONFIG \
