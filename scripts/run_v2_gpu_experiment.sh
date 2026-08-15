@@ -194,7 +194,7 @@ final_holdout() {
     # runs/v2_decisions.md D-008).
     local PLAN="$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_spatial_adjudicated.final_plan.json"
     [[ -f "$PLAN" ]] || { echo "!!! spatial adjudicated plan missing — run spatial pipeline first"; exit 1; }
-        for SEED in 0 1 2; do
+        for SEED in ${HOLD_SEEDS:-0 1 2}; do
             echo "--- held-out: libero_$S seed=$SEED (spatial plan zero-shot, D-008) ---"
             start_server "$S" "$PLAN" || exit 1
             run_libbero "$S" --seed "$SEED"
