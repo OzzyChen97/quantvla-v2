@@ -498,31 +498,32 @@ def flip_neighbors_plans(
     budget: float,
     row_rot: str,
     base_plan: Dict[str, Any],
-    n_flips: Tuple[int, ...] = (2, 4, 6, 8),
+    n_flips: Tuple[int, ...] = (8, 12, 16, 20),
     per_flip: int = 2,
     seed: int = 3,
 ) -> List[Dict[str, Any]]:
-    """Mutation diversity (Q-DiT style): flip k random skip<->W4 decisions of
-    the base plan, then budget-repair. Guarantees mask diversity when greedy /
+    """Mutation diversity (Q-DiT style): SWAP k skipped layers with k W4
+    layers of the base plan (pure swaps -> the FP16-mask Hamming distance is
+    exactly 2k), then budget-repair. Guarantees mask diversity when greedy /
     milp / lambda sweep all collapse onto the same mask (which happened on the
     first spatial run: 17 candidates, 1 unique mask)."""
     rng = random.Random(seed)
     names = [n for n in shapes if scores.get(n, {}).get(4) is not None]
-    base_skip = {n for n, e in base_plan.items() if e.get("skip")}
+    # swap pool restricted to score-available layers: guarded / unmeasured
+    # layers (score None) must NEVER be turned into W4 by a mutation.
+    swap_skip = [n for n, e in base_plan.items()
+                 if e.get("skip") and n in names]
+    swap_w4 = [n for n in names if not base_plan[n].get("skip")]
     out: List[Dict[str, Any]] = []
     for k in n_flips:
         for _ in range(per_flip):
-            w4 = set(names) - base_skip
-            skip = set(base_skip)
-            kk = min(k, len(names))
-            flip = rng.sample(names, kk)
-            for n in flip:
-                if n in skip:
-                    skip.remove(n)
-                    w4.add(n)
-                else:
-                    skip.discard(n)
-                    w4.discard(n)
+            kk = min(k, len(swap_skip), len(swap_w4))
+            if kk == 0:
+                continue
+            add_skip = set(rng.sample(swap_w4, kk))    # W4 -> skip
+            drop_skip = set(rng.sample(swap_skip, kk))  # skip -> W4
+            skip = set(n for n, e in base_plan.items() if e.get("skip"))
+            skip = (skip | add_skip) - drop_skip
             plan = {n: ({"bits": None, "group": 64, "skip": True} if n in skip
                         else {"bits": 4, "group": 64, "skip": False})
                     for n in shapes}
