@@ -45,4 +45,4 @@ echo ""
 
 cd /home1/gyy/vla/QuantVLA/code/examples/Libero/eval
 
-python run_libero_eval.py --task_suite_name "$TASK" --port ${LIBERO_PORT:-5556} "${EXTRA_ARGS[@]}"
+python -u run_libero_eval.py --task_suite_name "$TASK" --port ${LIBERO_PORT:-5556} "${EXTRA_ARGS[@]}"
