@@ -206,3 +206,19 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
 - **行动**：发现时舰队仅运行 ~14min（server 13:37、client ~9min），kill 全部 63 个
   进程，用修复后脚本重部署 8 分片；确认 8 server + 8 client 全部就位、分片过滤生效
   （进度条 0/5）、LIBERO_RUN_LOG 指向各自分片日志。
+
+## 2026-08-15：watchdog 增加 CPU 活性判定 + 全队二次重启（D-018）
+
+- **触发观察**：long_s0 首个任务（both alphabet soup and tomato sauce）episode 1
+  运行 >15min 未完成，而 pre-kill 同任务同 seed 运行记录显示单 episode 2-3.5min、
+  全任务 11:53——长 rollout 会逼近 720 步上限（~24-36min），期间日志无任何输出；
+  旧 watchdog 只看 episode 计数增长，30min 无增长即误杀健康 eval（与 D-014 同源
+  的第二种触发路径，D-017 只修了"看错文件"）；
+- **修复**：watchdog 增加进程树 CPU 时间（root+全部后代，ps time 求和）作为第二
+  活性信号——健康 mujoco 客户端步进持续烧 CPU，挂死客户端（阻塞 recv/死锁）不烧；
+  **只有 episode 计数和 CPU 时间同时冻结满 STALL_LIMIT 才判 stall**；诊断 dump
+  同步改为 tail 被监控日志（$elog）；
+- **验证**：bash -n 通过；实测 sum_tree_cpu 从 timeout 祖先聚合到 python 客户端
+  CPU（51s，随步进增长）；确认 44342/GPU7 是 lzb 用户进程，非我方残留；
+- **行动**：kill 64 个进程后二次重部署 8 分片（watchdog v2 生效），损失约 20min
+  进度（~15 eps，全部 SR 100% 无失败记录）。

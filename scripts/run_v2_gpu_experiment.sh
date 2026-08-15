@@ -132,8 +132,27 @@ run_libbero() {
         ./scripts/run_libero_eval.sh "libero_$suite" --headless "$@" "${extra[@]}"
 }
 
-# progress watchdog: run the eval in background; if the episode counter stops
-# growing for STALL_LIMIT seconds, dump diagnostics, kill the pair, retry ONCE.
+# cumulative CPU seconds of a process tree (root + all descendants).
+# A healthy mujoco client keeps burning CPU while stepping, even during a
+# single long episode that writes no log lines for many minutes; a hung
+# client (e.g. blocked recv / deadlock) does not. ps "time" is [[HH:]MM:]SS.
+sum_tree_cpu() {
+    local p=$1 c v s=0
+    v=$(ps -o time= -p "$p" 2>/dev/null)
+    if [[ -n "$v" ]]; then
+        s=$(( s + $(echo "$v" | awk -F: '{if(NF==3) t=$1*3600+$2*60+$3; else t=$1*60+$2; print int(t)}') ))
+    fi
+    for c in $(pgrep -P "$p" 2>/dev/null); do
+        s=$(( s + $(sum_tree_cpu "$c") ))
+    done
+    echo "$s"
+}
+
+# progress watchdog: run the eval in background; stall only if BOTH the episode
+# counter in the watched log AND the eval process-tree CPU time stop growing for
+# STALL_LIMIT seconds — a full-horizon episode can legitimately take >30 min
+# without logging a completion (D-018). On stall: dump diagnostics, kill the
+# pair, restart server, retry ONCE.
 run_eval_watchdog() {
     local suite=$1; shift
     local stall_limit=${STALL_LIMIT:-1800}
@@ -146,15 +165,20 @@ run_eval_watchdog() {
     for attempt in 1 2; do
         run_libbero "$suite" "$@" &
         local EVAL_PID=$!
-        local last=-1 now=0 stall=0
+        local last_eps=-1 last_cpu=-1 now_eps=0 now_cpu=0 stall=0
         while kill -0 "$EVAL_PID" 2>/dev/null; do
-            now=$(grep -c "episodes completed so far" "$elog" 2>/dev/null || true)
-            if [[ "$now" != "$last" ]]; then last=$now; stall=0; else stall=$((stall + 60)); fi
+            now_eps=$(grep -c "episodes completed so far" "$elog" 2>/dev/null || true)
+            now_cpu=$(sum_tree_cpu "$EVAL_PID")
+            if [[ "$now_eps" != "$last_eps" || "$now_cpu" != "$last_cpu" ]]; then
+                last_eps=$now_eps; last_cpu=$now_cpu; stall=0
+            else
+                stall=$((stall + 60))
+            fi
             if [[ $stall -ge $stall_limit ]]; then
-                echo "!!! watchdog: no episode growth for ${stall}s (attempt $attempt) — dumping diagnostics"
+                echo "!!! watchdog: no episode growth AND no CPU growth for ${stall}s (attempt $attempt) — dumping diagnostics"
                 nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader > "$LOG/watchdog_${suite}_attempt${attempt}.smi" 2>/dev/null || true
                 ps -ef --forest | grep -A3 -B1 "inference_service\|run_libero" >> "$LOG/watchdog_${suite}_attempt${attempt}.ps" 2>/dev/null || true
-                tail -30 "$LOG/liberos_${suite}.log" > "$LOG/watchdog_${suite}_attempt${attempt}.log" 2>/dev/null || true
+                tail -30 "$elog" > "$LOG/watchdog_${suite}_attempt${attempt}.log" 2>/dev/null || true
                 kill "$EVAL_PID" 2>/dev/null || true
                 stop_server
                 break
