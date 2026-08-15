@@ -184,6 +184,9 @@ consensus_freeze() {
 }
 
 final_holdout() {
+    # HOLD_SUITES env selects the held-out suites (default "10 90"; the v1.3
+    # full-test scope runs libero_10 only).
+    for S in ${HOLD_SUITES:-10 90}; do
     # D-008: the 3-suite consensus Jaccard gate FAILED (0.39-0.50 < 0.7) — layer
     # sensitivity is checkpoint-specific, so no unified plan was frozen. The
     # held-out Long suite therefore runs the SPATIAL adjudicated plan zero-shot
@@ -191,9 +194,8 @@ final_holdout() {
     # runs/v2_decisions.md D-008).
     local PLAN="$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_spatial_adjudicated.final_plan.json"
     [[ -f "$PLAN" ]] || { echo "!!! spatial adjudicated plan missing — run spatial pipeline first"; exit 1; }
-    for S in 10 90; do
         for SEED in 0 1 2; do
-            echo "--- held-out: libero_$S seed=$SEED (frozen consensus plan, zero-shot) ---"
+            echo "--- held-out: libero_$S seed=$SEED (spatial plan zero-shot, D-008) ---"
             start_server "$S" "$PLAN" || exit 1
             run_libbero "$S" --seed "$SEED"
             stop_server
@@ -212,7 +214,9 @@ case "$MODE" in
         echo ">>> then record decisions in runs/v2_decisions.md and run final-holdout"
         ;;
     dev-accept)
-        for S in "${DEV_SUITES[@]}"; do dev_accept "$S"; done
+        S2="${2:-}"
+        [[ -n "$S2" ]] || { echo "usage: $0 dev-accept <suite>"; exit 1; }
+        dev_accept "$S2"
         ;;
     final-holdout)
         final_holdout

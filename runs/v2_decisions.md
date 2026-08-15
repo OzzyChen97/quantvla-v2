@@ -84,3 +84,12 @@ gate 语义从"worst-seed ≥0.2"改为 **"均值 ≥0.2 且 min ≥0（无符�
 4. start_server 增加端口应答 + **模型路径校验**（防止陈旧 server 误答）。
 修复后三套件 dev-accept 并行（GPU 7/3/1，端口 5556/7/8）：
 spatial 首任务 5/5、goal 4/5、object 4/5——正式对照进行中。
+
+## 2026-08-15：全 GPU 舰队部署（D-010）
+
+- dev-accept 曾忽略套件参数（三个 job 全跑 spatial）→ 修复为单套件模式；
+- case 块 `local` 语法错误 → 修复；
+- 陈旧 orphan server（PID 129136，15:25 起存活 5.5h+ CPU）清理；start_server 的模型路径校验生效；
+- **最终部署**：GPU 7/3/1 各跑 spatial/goal/object dev-accept（端口 5556/7/8），
+  GPU 5 跑 held-out libero_10（spatial plan zero-shot，3 种子，端口 5560），GPU 4 备用；
+- 新增 `parse_libero_logs.py`：按 server-start 分隔符解析每配置成功率。
