@@ -33,8 +33,21 @@
 
 ## 4. LIBERO 成功率对照（进行中）
 
-（待 dev-accept 完成后填入：v2 / uniform W6 / uniform W4 / random best/median/worst
-各 50 rollouts，task-level 报告。）
+五路并行（GPU 7/3/1 dev-accept，GPU 5/4 held-out libero_10 种子分片），每配置
+50 rollouts（seed 0），held-out 3 种子。运行中经一次全量重启（D-011：陈旧 server
+占端口致假活死锁，start_server 已加固为强制清端口 + 绑定失败检测 + 新进程存活校验）。
+
+重启前部分数据（陈旧 server 污染，**已作废，仅作调试参考**）：
+spatial v2 20eps SR 0.95 / object v2 20eps SR 0.90 / goal v2 15eps SR 0.80 /
+long seed0 5eps SR 0.80。
+
+正式结果待重启后的运行完成，用 `parse_libero_logs.py` 提取填入：
+| 套件 | v2 | uniform W6 | uniform W4 | random best/median/worst |
+|---|---|---|---|---|
+| spatial | — | — | — | — |
+| goal | — | — | — | — |
+| object | — | — | — | — |
+| long（held-out, 3 seeds, spatial plan） | — | — | — | — |
 
 ## 5. Held-out（libero_10，spatial plan zero-shot，3 种子）
 

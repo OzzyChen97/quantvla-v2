@@ -62,17 +62,30 @@ start_server() {
     [[ "$suite" == "10" ]] && model_suffix="long"
     local logf="$LOG/server_${suite}_$(basename "$plan").log"
     echo "--- starting server: libero_$suite plan=$plan (log: $logf)"
+    # Force-free the port: a stale server from an earlier wave must never
+    # satisfy the readiness check while the new server dies with
+    # "Address already in use" (this exact failure stalled the whole fleet).
+    local holder
+    holder=$(ss -tlnp 2>/dev/null | grep ":$PORT " | grep -oP 'pid=\K[0-9]+' | head -1 || true)
+    if [[ -n "$holder" ]]; then
+        echo "!!! port $PORT held by stale pid $holder — killing it first"
+        kill "$holder" 2>/dev/null || true
+        sleep 8
+    fi
     GR00T_DUQUANT_PLAN="$plan" GR00T_GPU=${GR00T_GPU:-4} GR00T_PORT="$PORT" \
         ./scripts/run_quantvla.sh "libero_$suite" >"$logf" 2>&1 &
     SERVER_PID=$!
     for _ in $(seq 1 150); do
-        # port up AND the log must show the CORRECT suite checkpoint (guards
-        # against stale/leftover servers answering on the port)
+        if grep -q "Address already in use" "$logf" 2>/dev/null; then
+            echo "!!! new server could not bind $PORT — tail:"; tail -15 "$logf"; return 1
+        fi
+        # port up AND the log must show the CORRECT suite checkpoint AND the
+        # freshly-launched process must still be alive
         if ss -tln 2>/dev/null | grep -q ":$PORT "; then
-            if grep -q "Model: .*libero-$model_suffix" "$logf" 2>/dev/null; then
+            if grep -q "Model: .*libero-$model_suffix" "$logf" 2>/dev/null && kill -0 "$SERVER_PID" 2>/dev/null; then
                 return 0
             fi
-            echo "!!! port $PORT answered but log does not show libero-$suite model — killing and retrying"
+            echo "!!! port $PORT answered but log does not show libero-$model_suffix model or new server died — killing and retrying"
             kill "$SERVER_PID" 2>/dev/null || true
             return 1
         fi

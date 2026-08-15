@@ -93,3 +93,45 @@ spatial 首任务 5/5、goal 4/5、object 4/5——正式对照进行中。
 - **最终部署**：GPU 7/3/1 各跑 spatial/goal/object dev-accept（端口 5556/7/8），
   GPU 5 跑 held-out libero_10（spatial plan zero-shot，3 种子，端口 5560），GPU 4 备用；
 - 新增 `parse_libero_logs.py`：按 server-start 分隔符解析每配置成功率。
+
+## 2026-08-15：舰队死锁事件与全量重启（D-011）
+
+**事件**：dev LIBERO 五路（spatial/goal/object/long×2）在运行约 8-10h 后全部停滞——
+客户端 CPU 时间 ~2 分钟（阻塞等 server）、陈旧 server 进程 600% CPU 死转、episode 计数两轮零增长。
+**根因链**：早前波次的 orphan server 持续占用 5556/5557/5558 端口；orchestrator 的
+start_server 端口检查被旧进程"骗过"（旧端口可连 + 旧日志文件含正确 Model 行），
+新 server 启动即死（`Address already in use`），客户端实际在与旧 plan 的陈旧 server 对话，
+且旧 server 陷入死锁——整条链路假活。
+
+**修复（已推送）**：start_server 加固三层：
+1. 启动前 `ss -tlnp` 找端口占用者并强制 kill + 等待释放；
+2. 日志出现 `Address already in use` 即判失败退出；
+3. 端口就绪时必须同时满足"日志含正确套件模型"且"新启动进程仍存活"。
+
+**处置**：Python 辅助脚本安全清理全部 32 个残留进程（排除自身与祖先链），五卡归零后
+用加固版 orchestrator 全量重启（日志全新）：
+- GPU 7 spatial dev-accept（5556）、GPU 3 goal（5557）、GPU 1 object（5558）、
+  GPU 5 long seed0（5560）、GPU 4 long seed1-2（5561）。
+
+## 当前进度与计划（2026-08-15 重启后）
+
+**已完成**：
+- ① CPU selftests 10/10 绿；
+- ② GPU 冒烟：finite/coverage/CS 就地验证/A8 二次启动 全 PASS；
+- ③ 三套件正式 gate-0 全 PASS（CS 主代理，D-001/D-006）；
+- ④ 三套件全链路：probe → 二元 selector（guard+swap 多样性 TopK）→ D_solver 裁决
+  （spatial flip12 / goal flip12 / object flip16）；
+- 配置级 D_solver 同协议对照：v2 比 uniform W6 好 4.7–8.5×、比 random 好 16–23×；
+- D-008：三套件 mask Jaccard 0.39–0.50 → 层敏感度为 checkpoint 特异，
+  held-out 采用 spatial plan zero-shot。
+
+**进行中（⑤ LIBERO full test，重启后约 1h）**：五路并行如上；dev 每套件
+5 配置 × 50 rollouts（v2 / uniform W6 / random best·median·worst，seed 0），
+held-out libero_10 3 种子。预计剩余 15–30h。
+
+**重启前部分数据（仅参考，不计入正式结果）**：spatial v2 20eps SR 0.95、
+object v2 20eps SR 0.90、goal v2 15eps SR 0.80、long seed0 5eps SR 0.80——
+因陈旧 server 污染已作废，正式数字以重启后为准。
+
+**下一步**：五路完成后用 `parse_libero_logs.py` 出五配置对照表 + task-level 汇总，
+填入 `docs/quantvla_v2_full_test_report.md`，并向用户交付最终汇总。
