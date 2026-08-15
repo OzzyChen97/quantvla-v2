@@ -162,9 +162,9 @@ PY
 consensus_freeze() {
     echo "--- [consensus] mask Jaccard gate + frozen unified plan ---"
     $PY scripts/tools/gr00t_consensus_plan.py \
-        --plans "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_spatial.json" \
-                "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_goal.json" \
-                "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_object.json" \
+        --plans "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_spatial_adjudicated.final_plan.json" \
+                "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_goal_adjudicated.final_plan.json" \
+                "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_object_adjudicated.final_plan.json" \
         --ckpt "$REPO/checkpoints/gr00t/libero-spatial" \
         --budget uniform-w6 \
         --out "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_consensus.json" \

@@ -323,11 +323,12 @@ def collect_one_seed(
             col = _LayerCollector([name], mode="q", banks=banks, max_tokens=max_tokens)
             col.install(model_q)
             run_activations(model_q, policy_q, obs_list, noises, batch_size)
-            pooled = col.pooled(name)
+            front, back = col.pooled_blocks(name)
             col.remove()
-            s = banks[name].evaluate(pooled) if pooled is not None else {"cka": None, "cs": None, "cs_cross": None}
-            s.update(guard_metrics(fp_out.get(name), pooled))
-            s["nmse"] = _nmse(fp_out[name], pooled) if fp_out.get(name) is not None and pooled is not None else None
+            s = banks[name].evaluate_blocks(front, back) if front is not None else {"cka": None, "cs": None, "cs_cross": None}
+            q_pos = torch.cat([front, back], dim=0) if (front is not None and back is not None) else front
+            s.update(guard_metrics(fp_out.get(name), q_pos))
+            s["nmse"] = _nmse(fp_out[name], q_pos) if fp_out.get(name) is not None and q_pos is not None else None
 
             # single-layer d_solver at THIS bit (intervention vs R).
             # P0-4 (correctness review): the target bit must stay active while

@@ -127,31 +127,33 @@ def discover_attention_names(model: torch.nn.Module) -> List[str]:
 # Collectors (token-capped at hook time to keep memory bounded)
 # --------------------------------------------------------------------------- #
 class _LayerCollector:
-    """Collects outputs of named linear layers (ref -> banks, q -> capped pools)."""
+    """Collects outputs of named linear layers (ref -> banks with the REF-shared
+    padding mask; q -> (front, back) block pools aligned row-for-row)."""
 
     def __init__(self, names: List[str], mode: str, banks: Dict[str, Any], max_tokens: int):
         self.names = set(names)
         self.mode = mode  # "ref" or "q"
         self.banks = banks
         self.max_tokens = max_tokens
-        self.q_pools: Dict[str, List[torch.Tensor]] = {}
+        self.q_blocks: Dict[str, List[tuple]] = {}
         self.handles: List[Any] = []
         self.hit_count: Dict[str, int] = {}
 
     def _hook_fn(self, name: str):
         def fn(module, args, output):
-            # review round 3 item 5: position-stratified pooling (vision-front /
-            # text-back caps + padding zero-row mask) for BOTH ref and q pools
-            from gr00t.quantization.kernel_scores import pool_samples_stratified
+            # review round 4: position-stratified blocks; the padding zero-mask
+            # is computed ONLY on the ref side and replayed on q (pairing)
+            from gr00t.quantization.kernel_scores import split_blocks
 
+            front, back = split_blocks(output, self.max_tokens)
             if self.mode == "ref":
-                pooled = pool_samples_stratified(output, self.max_tokens)
-                if pooled is not None:
-                    self.banks[name].accumulate_ref(pooled)
+                if back is not None:
+                    zero_mask = back.norm(dim=1) > 1e-9
+                else:
+                    zero_mask = None
+                self.banks[name].accumulate_ref_blocks(front, back, zero_mask)
             else:
-                pooled = pool_samples_stratified(output, self.max_tokens)
-                if pooled is not None:
-                    self.q_pools.setdefault(name, []).append(pooled)
+                self.q_blocks.setdefault(name, []).append((front, back))
             self.hit_count[name] = self.hit_count.get(name, 0) + 1
 
         return fn
@@ -167,14 +169,25 @@ class _LayerCollector:
             h.remove()
         self.handles = []
 
-    def pooled(self, name: str) -> Optional[torch.Tensor]:
-        from gr00t.quantization.kernel_scores import pool_samples_stratified
-
-        chunks = self.q_pools.pop(name, [])
+    def pooled_blocks(self, name: str) -> tuple:
+        """(front_cat, back_cat) concatenated across batches (or None)."""
+        chunks = self.q_blocks.pop(name, [])
         if not chunks:
+            return None, None
+        fronts = [f for f, _ in chunks if f is not None]
+        backs = [b for _, b in chunks if b is not None]
+        front_cat = torch.cat(fronts, dim=0) if fronts else None
+        back_cat = torch.cat(backs, dim=0) if backs else None
+        return front_cat, back_cat
+
+    def pooled(self, name: str) -> Optional[torch.Tensor]:
+        """Positional-only concat (no padding mask) — for GUARD metrics."""
+        front_cat, back_cat = self.pooled_blocks(name)
+        if front_cat is None:
             return None
-        cat = torch.cat(chunks, dim=0) if len(chunks) > 1 else chunks[0]
-        return pool_samples_stratified(cat, self.max_tokens)
+        if back_cat is None:
+            return front_cat
+        return torch.cat([front_cat, back_cat], dim=0)
 
 
 class _AttentionCollector:
@@ -184,31 +197,37 @@ class _AttentionCollector:
         self.mode = mode
         self.banks = banks
         self.max_tokens = max_tokens
-        self.q_pools: Dict[str, List[torch.Tensor]] = {}
+        self.q_blocks: Dict[str, List[tuple]] = {}
         self.hit_count: Dict[str, int] = {}
 
     def __call__(self, layer_name: str, tensor: torch.Tensor, step: Optional[int]) -> None:
-        from gr00t.quantization.kernel_scores import pool_samples_stratified
+        from gr00t.quantization.kernel_scores import split_blocks
 
         key = f"attn:{layer_name}"
+        front, back = split_blocks(tensor, self.max_tokens)
         if self.mode == "ref":
-            pooled = pool_samples_stratified(tensor, self.max_tokens)
-            if pooled is not None:
-                self.banks[key].accumulate_ref(pooled)
+            zero_mask = back.norm(dim=1) > 1e-9 if back is not None else None
+            self.banks[key].accumulate_ref_blocks(front, back, zero_mask)
         else:
-            pooled = pool_samples_stratified(tensor, self.max_tokens)
-            if pooled is not None:
-                self.q_pools.setdefault(key, []).append(pooled)
+            self.q_blocks.setdefault(key, []).append((front, back))
         self.hit_count[key] = self.hit_count.get(key, 0) + 1
 
-    def pooled(self, key: str) -> Optional[torch.Tensor]:
-        from gr00t.quantization.kernel_scores import pool_samples_stratified
-
-        chunks = self.q_pools.pop(key, [])
+    def pooled_blocks(self, key: str) -> tuple:
+        chunks = self.q_blocks.pop(key, [])
         if not chunks:
+            return None, None
+        fronts = [f for f, _ in chunks if f is not None]
+        backs = [b for _, b in chunks if b is not None]
+        return (
+            torch.cat(fronts, dim=0) if fronts else None,
+            torch.cat(backs, dim=0) if backs else None,
+        )
+
+    def pooled(self, key: str) -> Optional[torch.Tensor]:
+        front_cat, back_cat = self.pooled_blocks(key)
+        if front_cat is None:
             return None
-        cat = torch.cat(chunks, dim=0) if len(chunks) > 1 else chunks[0]
-        return pool_samples_stratified(cat, self.max_tokens)
+        return torch.cat([front_cat, back_cat], dim=0) if back_cat is not None else front_cat
 
 
 # --------------------------------------------------------------------------- #
@@ -657,11 +676,13 @@ def main() -> None:
                 col.install(model_q)
                 run_activations(model_q, policy_q, obs_list[: args.n_obs], noises[: args.n_obs], args.batch_size)
                 set_single_layer_bits(model_q, name, REF_BITS)
-                pooled = col.pooled(name)
+                front, back = col.pooled_blocks(name)
                 col.remove()
-                scores = banks[name].evaluate(pooled) if pooled is not None else {"cka": None, "cs": None, "cs_cross": None}
+                scores = banks[name].evaluate_blocks(front, back) if front is not None else {"cka": None, "cs": None, "cs_cross": None}
                 # v1.3 feasibility guards vs the pure FP16 reference
-                guards = guard_metrics(fp_out.get(name), pooled)
+                # (positional-only pooling on both sides — row-aligned)
+                q_pos = torch.cat([front, back], dim=0) if (front is not None and back is not None) else front
+                guards = guard_metrics(fp_out.get(name), q_pos)
                 scores.update(guards)
                 results["layers"][name][f"b{b}"] = scores
             save_incremental()
@@ -676,9 +697,10 @@ def main() -> None:
         run_activations(model_q, policy_q, obs_list[: args.n_obs], noises[: args.n_obs], args.batch_size)
         for aname in attn_names:
             key = f"attn:{aname}"
-            pooled = attn_col.pooled(key)
+            front, back = attn_col.pooled_blocks(key)
             results["layers"][key][f"b{b}"] = (
-                banks[key].evaluate(pooled) if pooled is not None else {"cka": None, "cs": None}
+                banks[key].evaluate_blocks(front, back) if front is not None
+                else {"cka": None, "cs": None, "cs_cross": None}
             )
         clear_atm_capture(model_q)
         save_incremental()

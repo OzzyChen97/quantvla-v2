@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""GR00T v2 consensus plan (review round 3, item 7).
+"""GR00T v2 consensus plan (review round 3 item 7; review round 4: adjudicated inputs).
+
+The inputs MUST be the TopK-adjudicated final plans
+(`*_adjudicated.final_plan.json`), NOT the pre-adjudication selector plans —
+the method definition is proxy search -> config-level D_solver TopK
+adjudication -> LIBERO, and the consensus step sits AFTER the adjudication.
+Each input plan's meta must carry "adjudicated": true, otherwise this tool
+refuses to run (the TopK result must not be silently bypassed).
 
 The design doc §6.5 requires the three dev suites (spatial/goal/object) to
 produce FP16 masks with pairwise Jaccard >= 0.7, and the final deployment to
@@ -163,6 +170,14 @@ def main() -> None:
     plans = [json.loads(Path(x).read_text()) for x in args.plans]
     if len(plans) < 2 or len(plans) > 3:
         raise SystemExit("--plans expects 2-3 dev-suite plans")
+    # review round 4: only TopK-adjudicated final plans are valid inputs —
+    # the proxy-only selector plan is the INNER loop, never the frozen artifact.
+    for x, pl in zip(args.plans, plans):
+        if not (pl.get("meta") or {}).get("adjudicated"):
+            raise SystemExit(
+                f"{x} is not a TopK-adjudicated final plan (meta.adjudicated missing) — "
+                "run gr00t_topk_scorer.py first and pass its .final_plan.json"
+            )
     all_shapes = read_layer_shapes(Path(args.ckpt), r".*", r"^$")
     names = sorted(set().union(*(set(p.get("layers", {})) for p in plans)))
     shapes = {n: all_shapes[n] for n in names if n in all_shapes}

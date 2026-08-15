@@ -66,6 +66,17 @@ python scripts/tools/calibrate_atm_perstep_gr00t.py --selftest  # plan-aware 三
 | 8（清单10） | ATM/OHB 核心实验必须关 | ✅ 编排脚本默认 `GR00T_ATM_ENABLE=0 GR00T_OHB_ENABLE=0`（核心方法对比全程无校正） |
 | 9 | 论文定位（完整版 vs 现状） | ✅ 设计文档新增 §9「论文定位与主张边界」：可主张 6 项 / 暂不主张 6 项 + 建议标题方向 |
 
+## 第四轮（测试前两项）回应
+
+| # | 审查项 | 状态 |
+|---|---|---|
+| 1 | CKA stratified pooling 的 ref/q token index 必须配对（correctness） | ✅ 重构为 paired-blocks：padding 零行 mask 只在 **ref 侧**计算并存入 bank（`accumulate_ref_blocks`），q 侧用**同一 `_row_keep` 掩码**（`evaluate_blocks`）——量化把 padding 行从近零推过阈值也不会再让两侧行集失配；行数不一致直接 raise；回归：ref 零行/q 该行漂移为 1.0 → CKA=1、CS=0；`split_blocks` 为纯位置确定性拆分 |
+| 2 | consensus 必须吃 `*_adjudicated.final_plan.json`，不能绕过 TopK | ✅ consensus 强制校验输入 meta.adjudicated==true，否则拒绝运行；编排脚本 consensus 步骤改用各套件裁决后的 `.final_plan.json` |
+| 3（其余，正式比较前修） | Gate 0 多 seed 聚合 | ✅ `gr00t_gate0_check` 改为跨全部 seed 取**最差值**（min of rates/ratios）——一个坏 seed 即 fail |
+| 4 | baseline report 路径 | ✅ 编排脚本 stage2 用 `--out` 指定 `baselines_${S}_dsolver.json`，dev_accept 读取同路径（已核对一致） |
+| 5 | 日志隔离 | ✅ 冒烟/编排输出到 `/tmp/logs/v2_smoke`、`/tmp/logs/v2_gpu`，server 按 plan 命名日志 |
+| 6 | 真正的 policy-noise 配对 | ⏳ 待正式比较前核查：probe 已用 `action_noise=` 配对注入；如存在模型内部随机源需在下一步 audit 中定位 |
+
 ## 仍需 GPU 验证（执行层，非代码正确性）
 
 1. 全模型 bit 扫描顺序不变性（[2,4,8] vs [8,4,2] 的 b4 一致）——layer 级已由 CPU selftest 覆盖；

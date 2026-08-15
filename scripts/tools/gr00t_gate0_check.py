@@ -52,23 +52,33 @@ def check_gate0(
     """Returns {passed: bool, checks: {name: {value, threshold, passed}}}."""
     checks: Dict[str, Any] = {}
     seeds = audit.get("seeds", [])
-    last = seeds[-1]["stats"] if seeds else {}
+    # review round 4: aggregate across ALL seeds with the WORST value (min of
+    # rates/ratios) so one bad seed fails the gate instead of being hidden by
+    # the last seed.
+    def worst(key_path):
+        vals = []
+        for sd in seeds:
+            node = sd.get("stats", {})
+            for k in key_path:
+                node = (node or {}).get(k) or {}
+            v = _num(node) if not isinstance(node, dict) else None
+            if v is not None:
+                vals.append(v)
+        return min(vals) if vals else None
 
-    finite = _num(last.get("finite_rate"))
+    finite = worst(("finite_rate",))
     checks["finite_rate"] = {
         "value": finite, "threshold": min_finite,
         "passed": finite is not None and finite >= min_finite,
     }
 
-    w2 = (last.get("w2_vs_w8") or {}).get("rms_ratio") or {}
-    ratio = _num(w2.get("median_ratio"))
+    ratio = worst(("w2_vs_w8", "rms_ratio", "median_ratio"))
     checks["w2_vs_w8_median_ratio"] = {
         "value": ratio, "threshold": min_w2_w8_ratio,
         "passed": ratio is not None and ratio >= min_w2_w8_ratio,
     }
 
-    gf = last.get("guard_fire_w2") or {}
-    fire = _num(gf.get("rate"))
+    fire = worst(("guard_fire_w2", "rate"))
     checks["guard_fire_w2_rate"] = {
         "value": fire, "threshold": min_guard_fire,
         "passed": fire is not None and fire >= min_guard_fire,
@@ -81,7 +91,7 @@ def check_gate0(
         "passed": jac is not None and jac >= min_seed_jaccard,
     }
 
-    sp = _num((last.get("spearman") or {}).get("b4", {}).get("cka_loss"))
+    sp = worst(("spearman", "b4", "cka_loss"))
     checks["spearman_cka_vs_dsolver_b4"] = {
         "value": sp, "threshold": min_spearman,
         "passed": sp is not None and sp >= min_spearman,

@@ -625,7 +625,9 @@ skip（FP16）**不测量**——它是参照本身；plan 里才出现 skip 选
 | `scripts/run_v2_gpu_experiment.sh` | **第二轮审查**：重写为 gated 管线（selftests → gate 0 audit → dev probe → selector → baselines 两阶段 → TopK 裁决 → dev LIBERO → freeze → held-out Long/90） | ✅ |
 | `scripts/tools/gr00t_v2_common.py` | `SUITE_DATA_CONFIG`（goal→MeanStd）统一工具与服务坐标系；`fixed_calibration_buffer`（**自包含 seed 纯函数**：本地 torch.Generator + obs/noise/meta 全量 sha256）；`ensure_a8_calibrated`（static/dynamic 双态 + sidecar 校验） | ✅ |
 | `code/gr00t/quantization/duquant_layers.py` | **第三轮**：`load_act_scales` 标记 calibrator full（修复"第二次启动 0/0 误报"）；`static_scales_ready()`；`save/load_act_scales` 带 sidecar 元数据（plan/checkpoint/buffer/data_config/act/denoising hash）并可校验 | ✅ round-trip 回归 |
-| `code/gr00t/quantization/kernel_scores.py` | **第三轮**：`pool_samples_stratified`——按位置模态分层子采样（vision 前块 / text 后块各自 cap max_tokens/2）+ 后块零行 padding mask | ✅ selftest |
+| `code/gr00t/quantization/kernel_scores.py` | **第三轮**：`pool_samples_stratified`——按位置模态分层子采样（vision 前块 / text 后块各自 cap max_tokens/2）；**第四轮**：ref/q 配对重构——padding 零行 mask 仅 ref 侧计算、q 侧复用同一 `_row_keep`（`accumulate_ref_blocks`/`evaluate_blocks`），行数失配即 raise | ✅ selftest（配对回归：ref 零行/q 漂移行仍 CKA=1） |
+| `scripts/tools/gr00t_consensus_plan.py` | **第四轮**：输入强制为 TopK 裁决后的 `.final_plan.json`（meta.adjudicated==true 校验） | ✅ |
+| `scripts/run_v2_smoke.sh`（新） | **第四轮**：GPU 冒烟（selftests → 小规模 gate-0 → finite/coverage 检查 → A8 二次启动 save/load 验证） | ✅ |
 | `scripts/tools/gr00t_gate0_check.py`（新） | **第三轮**：gate 0 硬门（finite=1.0 / W2-W8 分离 ≥2× / W2 护栏点火率 ≥50% / 种子 mask Jaccard ≥0.7 / Spearman 方向 ≥0.2），exit 0/1，编排脚本失败即中止 | ✅ selftest |
 | `scripts/tools/gr00t_consensus_plan.py`（新） | **第三轮**：三开发套件 FP16 mask 两两 Jaccard ≥0.7 硬门 + 多数投票 + 预算修复 + **冻结统一 plan**（Long/90 zero-shot 使用） | ✅ selftest |
 | `scripts/tools/gr00t_topk_scorer.py` | **第三轮**：n-obs 默认 16 + best-vs-runner-up **paired bootstrap** 显著性报告；`--act-scale-path` | ✅ |
