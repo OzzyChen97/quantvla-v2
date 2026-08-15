@@ -252,12 +252,17 @@ dev_accept() {
     [[ -f "$FINAL" ]] || { echo "!!! final plan missing: $FINAL"; exit 1; }
     local BDIR="$REPO/checkpoints/packs/gr00t/baselines_${S}"
 
-    # representative random masks from the stage-2 report
+    # representative RANDOM masks: best/median/worst over the 20 random masks
+    # only — the stage-2 report's own "best" is uniform_w6 and its "worst" for
+    # object is uniform_w4, but the LIBERO table needs random best/median/worst
+    # and uniform W4 must not run LIBERO at all (D-019).
     mapfile -t REPS < <($PY - "$REPO/checkpoints/packs/gr00t/baselines_${S}_dsolver.json" <<'PY'
 import json, sys
+from pathlib import Path
 d = json.load(open(sys.argv[1]))
-rep = d["representatives"]
-print(rep["best"]["file"]); print(rep["median"]["file"]); print(rep["worst"]["file"])
+scored = [e for e in d["scored"] if Path(e["file"]).name.startswith("random_")]
+scored.sort(key=lambda e: e["d_solver"])
+print(scored[0]["file"]); print(scored[len(scored)//2]["file"]); print(scored[-1]["file"])
 PY
 )
     echo "--- dev LIBERO ($S): v2 final + uniform_w6 + random best/median/worst (seed 0) ---"

@@ -222,3 +222,17 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   CPU（51s，随步进增长）；确认 44342/GPU7 是 lzb 用户进程，非我方残留；
 - **行动**：kill 64 个进程后二次重部署 8 分片（watchdog v2 生效），损失约 20min
   进度（~15 eps，全部 SR 100% 无失败记录）。
+
+## 2026-08-15：random best/median/worst 选择修正 + 全队三次重启（D-019）
+
+- **Bug**：dev_accept 从 stage-2 报告的 `representatives` 取 best/median/worst，
+  但该报告的 best=uniform_w6（均匀基线本身 d_solver 最优）、object 的
+  worst=uniform_w4 —— 结果 LIBERO 对比会 (a) uniform W6 跑两遍、(b) object 会跑
+  uniform W4（违反 D-014"uniform W4 不跑 LIBERO"）、(c) 缺失真正的 random best 列；
+- **修复**：dev_accept 与 aggregator 都改为只从 scored[] 中 `random_*.json` 的
+  20 个随机 mask 里按 d_solver 排序取 best/median/worst——
+  spatial: random_3/random_1/random_7；goal: random_17/random_1/random_2；
+  object: random_5/random_17/random_10；
+- **行动**：第三次全量重部署（kill 64 → 8 分片 relaunch，bash-127…134）；新增
+  `scripts/tools/aggregate_v2_fulltest.py`（分片合并 50 eps/配置、任务级 SR、
+  long 3-seed 汇总、PENDING 标记，配合 parse_libero_logs 输出最终表格）。
