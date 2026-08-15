@@ -88,6 +88,7 @@ from gr00t_v2_common import (  # noqa: E402
     load_policy,
     make_l1_obs,
     make_obs,
+    resolve_data_config,
     restore_quant_env,
     set_quant_env,
     stack_obs,
@@ -344,7 +345,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Model checkpoint dir (default: checkpoints/gr00t/libero-<suite>).",
     )
-    p.add_argument("--data-config", default="examples.Libero.custom_data_config:LiberoDataConfig")
+    p.add_argument("--data-config", default=None,
+                   help="Default: resolved per suite via SUITE_DATA_CONFIG (goal -> MeanStd).")
     p.add_argument("--obs-format", default="libero", choices=["libero", "gr1"],
                    help="合成 obs 格式：libero（默认）或 gr1（fourier_gr1_arms_waist）")
     p.add_argument("--embodiment-tag", default="new_embodiment",
@@ -416,6 +418,7 @@ def main() -> None:
 
     args.bits = [int(x) for x in args.bits.split(",") if x.strip()]
     args.per_layer_bits = [int(x) for x in args.per_layer_bits.split(",") if x.strip()]
+    args.data_config = resolve_data_config(args.suite, args.data_config)
     suite_dir = SUITE_DIRS[args.suite]
     if args.model_path is None:
         args.model_path = str(REPO_ROOT / "checkpoints" / "gr00t" / suite_dir)

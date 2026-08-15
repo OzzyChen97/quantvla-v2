@@ -60,6 +60,7 @@ from gr00t_v2_common import (  # noqa: E402
     load_policy,
     make_l1_obs,
     make_noises,
+    resolve_data_config,
     set_quant_env,
     strip_quant_env,
 )
@@ -288,7 +289,8 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="P2-G data-free per-step ATM/OHB calibration (GR00T)")
     p.add_argument("--suite", default="spatial", choices=["spatial", "goal", "object", "90", "10"])
     p.add_argument("--model-path", default=None)
-    p.add_argument("--data-config", default="examples.Libero.custom_data_config:LiberoDataConfig")
+    p.add_argument("--data-config", default=None,
+                   help="Default: resolved per suite via SUITE_DATA_CONFIG (goal -> MeanStd).")
     p.add_argument("--device", default="cuda")
     p.add_argument("--denoising-steps", type=int, default=8)
     p.add_argument("--n-obs", type=int, default=16)
@@ -396,6 +398,7 @@ def main() -> None:
         print("[calibrate-perstep] selftest OK (v1.3 plan-aware + CV stats)")
         return
 
+    args.data_config = resolve_data_config(args.suite, args.data_config)
     suite_dir = SUITE_DIRS[args.suite]
     if args.model_path is None:
         args.model_path = str(REPO_ROOT / "checkpoints" / "gr00t" / suite_dir)
@@ -459,7 +462,7 @@ def main() -> None:
 
     # P0-2: A8 calibration to completion (cfg.calib_batches real batches) in
     # the deployment (plan) state before any statistics are collected.
-    from gr00t.quantization.duquant_layers import all_calibrated, calibration_progress
+    from gr00t_v2_common import ensure_a8_calibrated
 
     n_warm_obs = args.calib_steps * args.batch_size
     print(f"[calibrate-perstep] A8 calibration: {n_warm_obs} obs = {args.calib_steps} batches ...")
@@ -473,9 +476,19 @@ def main() -> None:
                     policy_q.model.get_action(norm, action_noise=batched_noise)
             else:
                 policy_q.model.get_action(norm, action_noise=batched_noise)
-    full, total = calibration_progress(policy_q.model)
-    if not all_calibrated(policy_q.model):
-        raise SystemExit(f"[calibrate-perstep] A8 calibration incomplete: {full}/{total}")
+    # review round 2 item 4: dynamic-act mode has no static calibrators
+    # (0/0 must NOT abort); static mode requires full calibration.
+    expected_wrapped = None
+    if args.plan:
+        with open(args.plan, "r", encoding="utf-8") as f:
+            _plan_doc = json.load(f)
+        expected_wrapped = sum(
+            1 for v in (_plan_doc.get("layers") or {}).values() if not v.get("skip")
+        )
+    ensure_a8_calibrated(
+        policy_q, warm_obs, warm_noises, args.batch_size,
+        act_dynamic=args.act_dynamic, expected_wrapped=expected_wrapped,
+    )
 
     print("[calibrate-perstep] quant pass ...")
     t0 = time.time()

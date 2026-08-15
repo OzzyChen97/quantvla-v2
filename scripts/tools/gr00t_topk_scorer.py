@@ -41,6 +41,7 @@ from gr00t_v2_common import (  # noqa: E402
     ensure_flash_attn_rpath,
     load_policy,
     make_obs,
+    resolve_data_config,
     restore_quant_env,
     set_quant_env,
     strip_quant_env,
@@ -96,7 +97,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--plan", default=None, help="Selector plan JSON with the diverse TopK.")
     p.add_argument("--ckpt", default=None, help="Checkpoint dir.")
     p.add_argument("--suite", default="spatial", choices=["spatial", "goal", "object", "90", "10"])
-    p.add_argument("--data-config", default="examples.Libero.custom_data_config:LiberoDataConfig")
+    p.add_argument("--data-config", default=None,
+                   help="Default: resolved per suite via SUITE_DATA_CONFIG (goal -> MeanStd).")
     p.add_argument("--device", default="cuda")
     p.add_argument("--denoising-steps", type=int, default=8)
     p.add_argument("--n-obs", type=int, default=8)
@@ -151,6 +153,7 @@ def main() -> None:
 
     if not args.plan or not args.ckpt:
         raise SystemExit("--plan/--ckpt are required (or use --selftest)")
+    args.data_config = resolve_data_config(args.suite, args.data_config)
     sel_plan = json.loads(Path(args.plan).read_text())
     topk = sel_plan.get("topk", [])
     if not topk:
@@ -182,6 +185,17 @@ def main() -> None:
         torch.cuda.empty_cache()
     restore_quant_env(saved_env)
 
+    # ---- ONE fixed calibration buffer for every TopK plan (review round 2,
+    #      items 1/5): D_solver must be scored in the SAME frozen-A8 state the
+    #      deployment will use, and on identical calibration data ----
+    from gr00t_v2_common import ensure_a8_calibrated, fixed_calibration_buffer
+
+    n_warm_obs = args.calib_steps * args.batch_size
+    warm_obs, warm_noises, warm_sha = fixed_calibration_buffer(
+        rng, n_warm_obs, horizon, action_dim, fmt="libero"
+    )
+    print(f"[topk_scorer] fixed calibration buffer: {n_warm_obs} obs, sha256={warm_sha[:16]}...")
+
     # ---- materialize + score each TopK plan in true deployment semantics ----
     out_dir = Path(args.out + ".topk_tmp") if args.out else Path(args.plan).parent / "topk_tmp"
     files = build_topk_plan_files(sel_plan, args.packdir, out_dir)
@@ -200,12 +214,14 @@ def main() -> None:
         os.environ["GR00T_DUQUANT_PLAN"] = plan_path
         t0 = time.time()
         policy_q = load_policy(args.ckpt, data_config=args.data_config, denoising_steps=args.denoising_steps, device=args.device)
+        # wrap verification + static A8 calibration on the shared fixed buffer
+        # (review round 2, item 1: D_solver was previously scored in the
+        # provisional per-forward scale state, NOT the deployed frozen state)
+        ensure_a8_calibrated(
+            policy_q, warm_obs, warm_noises, args.batch_size,
+            act_dynamic=False, expected_wrapped=expected_wrapped,
+        )
         n_wrapped = count_wrapped(policy_q.model)
-        if n_wrapped != expected_wrapped:
-            raise SystemExit(
-                f"[topk_scorer] wrap mismatch for {entry['source']}: "
-                f"{n_wrapped} wrapped, expected {expected_wrapped} — deployment semantics broken"
-            )
         q_traj = run_rollouts(policy_q.model, policy_q, obs_list, noises, args.batch_size)
         mean_div, per_obs = solver_divergence(fp_traj, q_traj, args.gamma)
         scored.append({
@@ -227,24 +243,37 @@ def main() -> None:
     if final is None:
         raise SystemExit("[topk_scorer] select_final returned None (no d_solver scores)")
     final_plan = json.loads(Path(final["plan_file"]).read_text())
+    base = Path(args.out or str(Path(args.plan).parent / (Path(args.plan).stem + "_adjudicated")))
     report = {
         "meta": {
             "parent_plan": args.plan, "suite": args.suite, "n_obs": args.n_obs,
             "tol": args.tol, "final_source": final["source"],
+            "calibration_buffer_sha256": warm_sha,
             "note": "true deployment semantics via GR00T_DUQUANT_PLAN (skip = unwrapped FP16); "
-                    "select_final = min D_solver, 5% tie set broken by canonical proxy",
+                    "select_final = min D_solver, 5% tie set broken by canonical proxy; "
+                    "one shared fixed A8 calibration buffer for all plans",
         },
         "scored": scored,
         "final": {k: v for k, v in final.items() if k != "plan_file"},
-        "final_plan": final_plan,
+        "final_plan_path": str(base.with_suffix(".final_plan.json")),
     }
-    out_path = Path(args.out or str(Path(args.plan).parent / (Path(args.plan).stem + "_adjudicated.json")))
-    with open(out_path, "w", encoding="utf-8") as f:
+    # review round 2, item 2: the deployable plan is a SEPARATE file whose
+    # top level is exactly {packdirs, layers, meta} — the GR00T_DUQUANT_PLAN
+    # loader reads top-level keys, so a nested final_plan would be silently
+    # ignored (falling back to uniform W4).
+    final_plan["meta"] = dict(final_plan.get("meta") or {})
+    final_plan["meta"]["adjudicated"] = True
+    final_plan["meta"]["final_source"] = final["source"]
+    final_plan["meta"]["final_d_solver"] = final["d_solver"]
+    with open(base.with_suffix(".report.json"), "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
+    with open(base.with_suffix(".final_plan.json"), "w", encoding="utf-8") as f:
+        json.dump(final_plan, f, indent=2)
     print(f"[topk_scorer] final = {final['source']} (D_solver {final['d_solver']:.5f})")
-    print(f"[topk_scorer] report + final plan -> {out_path}")
-    print("[topk_scorer] NEXT: run the FINAL plan through run_quantvla.sh with GR00T_DUQUANT_PLAN, "
-          "then LIBERO acceptance (§6.5)")
+    print(f"[topk_scorer] report -> {base.with_suffix('.report.json')}")
+    print(f"[topk_scorer] deployable plan -> {base.with_suffix('.final_plan.json')}")
+    print("[topk_scorer] NEXT: run_quantvla.sh with "
+          f"GR00T_DUQUANT_PLAN={base.with_suffix('.final_plan.json')}, then LIBERO acceptance (§6.5)")
 
 
 if __name__ == "__main__":

@@ -635,6 +635,53 @@ def all_calibrated(model: nn.Module) -> bool:
     return total > 0 and full == total
 
 
+def static_calibrators_required(model: nn.Module) -> bool:
+    """True when the model has at least one STATIC-A8 DuQuantLinear.
+
+    (dynamic-act mode has calibrator=None everywhere -> False, so 0/0 is NOT
+    treated as an incomplete static calibration; review round 2, item 4.)"""
+    return any(
+        isinstance(m, DuQuantLinear) and m.calibrator is not None
+        for m in model.modules()
+    )
+
+
+def save_act_scales(model: nn.Module, path: str) -> None:
+    """Persist frozen per-layer static A8 scales (review round 2, item 3)."""
+    import numpy as np
+
+    scales: Dict[str, np.ndarray] = {}
+    for name, m in model.named_modules():
+        if isinstance(m, DuQuantLinear) and m.calibrator is not None:
+            if not m._act_scale_initialized or m._act_scale is None:
+                raise RuntimeError(f"layer {name} has no frozen act scale to save")
+            scales[name] = m._act_scale.detach().float().cpu().numpy()
+    np.savez(path, **scales)
+
+
+def load_act_scales(model: nn.Module, path: str) -> None:
+    """Restore frozen static A8 scales; every static layer must be covered."""
+    import numpy as np
+
+    data = np.load(path, allow_pickle=False)
+    missing = []
+    for name, m in model.named_modules():
+        if isinstance(m, DuQuantLinear) and m.calibrator is not None:
+            if name not in data:
+                missing.append(name)
+                continue
+            scale = torch.from_numpy(data[name].astype(np.float32)).to(
+                dtype=m._weight.dtype, device=m._weight.device
+            )
+            if m._act_scale is None:
+                m._act_scale = scale
+            else:
+                m._act_scale.copy_(scale)
+            m._act_scale_initialized = True
+    if missing:
+        raise RuntimeError(f"act-scale file missing {len(missing)} static layers: {missing[:5]}")
+
+
 def selftest() -> None:
     """P0 regression tests (CPU): weight immutability + bit-order invariance
     (P0-1) and act-scale calibration lifecycle (P0-2).

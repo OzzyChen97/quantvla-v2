@@ -1,8 +1,19 @@
 # QuantVLA v2 GR00T N1.5 LIBERO 实验报告
 
-> 实验日期：2026-08-15 | 执行者：QuantVLA v2 自动编排管线（`scripts/run_v2_gpu_experiment.sh`）
-> 对应设计文档：`docs/quantvla_v2_design.md`（v1.2）
-> 本报告性质：**完整实验报告（含执行过程、关键事件、产物、结果与结论）**
+> ⚠️ **INVALIDATED BY COMMIT 2f4ec47（2026-08-15）**
+>
+> 本报告仅保留为工程调试记录。所有 sensitivity、plan、D_solver 与 LIBERO
+> 结论均基于 P0 正确性修复**之前**的代码，当时存在：原始权重被重复旋转
+> （bit 切换逐次叠加 R_out·W·R_in）、静态 A8 激活 scale 在第一个 batch 即冻结、
+> D_solver 加权和被错误写成平均（全部多除以 T+1=9）、第二组噪声未与参照轨迹
+> 配对、以及 run_quantvla.sh 无条件套用 Long 套件的 ATM/OHB 表。**文中数字
+> （含 Long 76%）不得作为 v2 方法的有效性证据或论文结果。** 修复清单与回归
+> 测试见 `docs/quantvla_v2_p0_review_response.md`；正式实验须按设计文档
+> v1.3 §6.6 的 gated 流程重跑（`scripts/run_v2_gpu_experiment.sh` 已重写）。
+
+> 实验日期：2026-08-15 | 执行者：QuantVLA v2 自动编排管线（旧版，已作废）
+> 对应设计文档：`docs/quantvla_v2_design.md`（v1.2，已升级至 v1.3）
+> 本报告性质：**已作废的历史记录（见上方 banner）**
 
 ---
 

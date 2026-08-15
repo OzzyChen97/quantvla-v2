@@ -40,6 +40,8 @@ You can use bore to forward the port to your client: `159.223.171.199` is bore.p
     bore local 8000 --to 159.223.171.199
 """
 
+import os
+import sys
 import time
 from dataclasses import dataclass
 from typing import Literal
@@ -138,6 +140,50 @@ def _example_http_client_call(obs: dict, host: str, port: int, api_token: str):
         return {}
 
 
+def _maybe_close_a8_calibration(policy) -> None:
+    """Static-A8 calibration closure before serving (review round 2, item 3).
+
+    No-op for FP16 models (no GR00T_DUQUANT_* env) and for dynamic-act models
+    (no static calibrators). For static-A8 quantized models: load persisted
+    frozen scales when GR00T_DUQUANT_ACT_SCALE_PATH exists, otherwise run the
+    fixed synthetic buffer (calib_steps × batch_size obs, seed 0) and save.
+    """
+    if not any(
+        k.startswith("GR00T_DUQUANT_") and k != "GR00T_DUQUANT_PACKDIR"
+        for k in os.environ
+    ):
+        return
+    from pathlib import Path as _Path
+
+    _here = _Path(__file__).resolve().parents[1]
+    if str(_here / "scripts" / "tools") not in sys.path:
+        sys.path.insert(0, str(_here / "scripts" / "tools"))
+
+    from gr00t.quantization.duquant_layers import static_calibrators_required
+    from gr00t_v2_common import ensure_a8_calibrated, fixed_calibration_buffer
+
+    act_dynamic = os.environ.get("GR00T_DUQUANT_ACT_DYNAMIC", "0") not in ("0", "false", "False")
+    if act_dynamic or not static_calibrators_required(policy.model):
+        return
+    scale_path = os.environ.get("GR00T_DUQUANT_ACT_SCALE_PATH") or None
+    calib_steps = int(os.environ.get("GR00T_DUQUANT_CALIB_STEPS", "32"))
+    batch_size = 8
+    horizon = int(policy.model.action_head.config.action_horizon)
+    action_dim = int(policy.model.action_head.config.action_dim)
+    rng = np.random.default_rng(0)
+    warm_obs, warm_noises, sha = fixed_calibration_buffer(
+        rng, calib_steps * batch_size, horizon, action_dim, fmt="libero"
+    )
+    print(f"[inference] static A8 calibration warmup: {calib_steps * batch_size} "
+          f"synthetic obs (buffer sha256 {sha[:16]}...)")
+    t0 = time.time()
+    ensure_a8_calibrated(
+        policy, warm_obs, warm_noises, batch_size,
+        act_dynamic=False, act_scale_path=scale_path,
+    )
+    print(f"[inference] static A8 calibration complete in {time.time() - t0:.1f}s")
+
+
 def main(args: ArgsConfig):
     if args.server:
         # Create a policy
@@ -162,6 +208,14 @@ def main(args: ArgsConfig):
             embodiment_tag=args.embodiment_tag,
             denoising_steps=args.denoising_steps,
         )
+
+        # Review round 2, item 3: close the static-A8 calibration loop BEFORE
+        # the server accepts any request. Without this, the first LIBERO
+        # get_action calls would online-calibrate the frozen scales on TEST
+        # observations (model state changing during evaluation). A fixed
+        # synthetic buffer (same sha256 across starts) completes the
+        # calibration; GR00T_DUQUANT_ACT_SCALE_PATH persists it across runs.
+        _maybe_close_a8_calibration(policy)
 
         # Start the server
         if args.http_server:

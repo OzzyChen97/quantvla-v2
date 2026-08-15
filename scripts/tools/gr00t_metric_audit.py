@@ -46,6 +46,7 @@ from gr00t_v2_common import (  # noqa: E402
     ensure_flash_attn_rpath,
     load_policy,
     make_obs,
+    resolve_data_config,
     restore_quant_env,
     set_quant_env,
     strip_quant_env,
@@ -309,7 +310,8 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="GR00T v2 metric validity audit (v1.3 gate 0)")
     p.add_argument("--suite", default="spatial", choices=["spatial", "goal", "object", "90", "10"])
     p.add_argument("--model-path", default=None)
-    p.add_argument("--data-config", default="examples.Libero.custom_data_config:LiberoDataConfig")
+    p.add_argument("--data-config", default=None,
+                   help="Default: resolved per suite via SUITE_DATA_CONFIG (goal -> MeanStd).")
     p.add_argument("--device", default="cuda")
     p.add_argument("--denoising-steps", type=int, default=8)
     p.add_argument("--n-obs", type=int, default=8, help="Synthetic obs per seed (activations + fp traj).")
@@ -392,6 +394,7 @@ def main() -> None:
         return
 
     bits = [int(x) for x in args.bits.split(",") if x.strip()]
+    args.data_config = resolve_data_config(args.suite, args.data_config)
     suite_dir = SUITE_DIRS[args.suite]
     if args.model_path is None:
         args.model_path = str(REPO_ROOT / "checkpoints" / "gr00t" / suite_dir)

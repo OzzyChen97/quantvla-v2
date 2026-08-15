@@ -59,6 +59,7 @@ from gr00t_v2_common import (  # noqa: E402
     ensure_flash_attn_rpath,
     load_policy,
     make_obs,
+    resolve_data_config,
     set_quant_env,
     strip_quant_env,
 )
@@ -208,7 +209,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--gamma", type=float, default=1.2)
     p.add_argument("--denoising-steps", type=int, default=8)
-    p.add_argument("--data-config", default="examples.Libero.custom_data_config:LiberoDataConfig")
+    p.add_argument("--data-config", default=None,
+                   help="Default: resolved per suite via SUITE_DATA_CONFIG (goal -> MeanStd).")
     p.add_argument("--device", default="cuda")
     p.add_argument("--group", type=int, default=64)
     p.add_argument("--ls", type=float, default=0.15)
@@ -294,6 +296,7 @@ def _generate(args: argparse.Namespace) -> None:
 
 
 def _stage2(args: argparse.Namespace) -> None:
+    args.data_config = resolve_data_config(args.suite, args.data_config)
     plans_dir = Path(args.plans_dir or str(REPO_ROOT / "checkpoints/packs/gr00t" / f"baselines_{args.suite}"))
     plan_files = sorted(plans_dir.glob("*.json"))
     if not plan_files:
@@ -332,6 +335,16 @@ def _stage2(args: argparse.Namespace) -> None:
         torch.cuda.empty_cache()
     restore_quant_env(saved_env)
 
+    # ---- ONE fixed calibration buffer shared by EVERY plan (review round 2,
+    #      item 5): all plans must freeze their A8 scales on identical data ----
+    from gr00t_v2_common import ensure_a8_calibrated, fixed_calibration_buffer
+
+    n_warm_obs = args.calib_steps * args.batch_size
+    warm_obs, warm_noises, warm_sha = fixed_calibration_buffer(
+        rng, n_warm_obs, horizon, action_dim, fmt="libero"
+    )
+    print(f"[baselines] fixed calibration buffer: {n_warm_obs} obs, sha256={warm_sha[:16]}...")
+
     # ---- score each plan under TRUE deployment semantics (GR00T_DUQUANT_PLAN) ----
     tmp_dir = plans_dir / ".stage2_tmp"
     tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -358,16 +371,11 @@ def _stage2(args: argparse.Namespace) -> None:
                 f"[baselines] wrap mismatch for {d['_file']}: {n_wrapped} wrapped, "
                 f"expected {expected_wrapped} — plan not applied in deployment semantics"
             )
-        # P0-2: static A8 calibration to completion in the plan state
-        from gr00t.quantization.duquant_layers import all_calibrated, calibration_progress
-
-        n_warm_obs = args.calib_steps * args.batch_size
-        warm_obs = [make_obs(rng, "libero") for _ in range(n_warm_obs)]
-        warm_noises = [torch.randn(horizon, action_dim) for _ in warm_obs]
-        run_rollouts(policy_q.model, policy_q, warm_obs, warm_noises, args.batch_size, return_trajectory=False)
-        full, total = calibration_progress(policy_q.model)
-        if not all_calibrated(policy_q.model):
-            raise SystemExit(f"[baselines] A8 calibration incomplete: {full}/{total}")
+        # A8 calibration to completion in the plan state on the SHARED buffer
+        ensure_a8_calibrated(
+            policy_q, warm_obs, warm_noises, args.batch_size,
+            act_dynamic=False, expected_wrapped=expected_wrapped,
+        )
 
         q_traj = run_rollouts(policy_q.model, policy_q, obs_list, noises, args.batch_size)
         mean_div, per_obs = solver_divergence(fp_traj, q_traj, args.gamma)
@@ -387,7 +395,9 @@ def _stage2(args: argparse.Namespace) -> None:
     rep = pick_representatives(scored)
     out = {
         "meta": {"suite": args.suite, "n_obs": args.n_obs, "plans_dir": str(plans_dir),
+                 "calibration_buffer_sha256": warm_sha,
                  "note": "true deployment semantics via GR00T_DUQUANT_PLAN; "
+                         "one shared fixed A8 calibration buffer for all plans; "
                          "take best/median/worst to LIBERO (two-stage protocol, §6.5)"},
         "scored": scored,
         "representatives": rep,

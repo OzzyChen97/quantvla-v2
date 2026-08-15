@@ -213,3 +213,134 @@ def make_noises(model: Any, n: int, seed: int = 0) -> List[torch.Tensor]:
     gen = torch.Generator().manual_seed(seed)
     # 每个 obs 一个 2D 噪声 (H, D)；chunked 打包时叠加 batch 维 → (B, H, D)
     return [torch.randn(horizon, action_dim, generator=gen) for _ in range(n)]
+
+
+# --------------------------------------------------------------------------- #
+# Suite -> data-config mapping (review round 2, item 6)
+# --------------------------------------------------------------------------- #
+# The LIBERO service (run_quantvla.sh) serves the GOAL suite with
+# LiberoDataConfigMeanStd; every measurement tool must use the SAME transforms
+# or probe/TopK/baseline scores live in a different coordinate system than the
+# deployed policy.
+SUITE_DATA_CONFIG = {
+    "spatial": "examples.Libero.custom_data_config:LiberoDataConfig",
+    "goal": "examples.Libero.custom_data_config:LiberoDataConfigMeanStd",
+    "object": "examples.Libero.custom_data_config:LiberoDataConfig",
+    "10": "examples.Libero.custom_data_config:LiberoDataConfig",
+    "90": "examples.Libero.custom_data_config:LiberoDataConfig",
+}
+
+
+def resolve_data_config(suite: str, arg: str | None) -> str:
+    if arg:
+        return arg
+    if suite not in SUITE_DATA_CONFIG:
+        raise SystemExit(f"unknown suite {suite!r} for data-config resolution")
+    return SUITE_DATA_CONFIG[suite]
+
+
+# --------------------------------------------------------------------------- #
+# A8 calibration closure (review round 2, items 1/3/4/5)
+# --------------------------------------------------------------------------- #
+def fixed_calibration_buffer(
+    rng: np.random.Generator,
+    n_obs: int,
+    horizon: int,
+    action_dim: int,
+    fmt: str = "libero",
+) -> tuple:
+    """Deterministic synthetic calibration buffer + its sha256 fingerprint.
+
+    All plans/configs compared in one experiment MUST share ONE buffer (same
+    obs + same paired noises); the fingerprint lets stage2 / TopK scoring /
+    final deployment prove they calibrated on identical data.
+    """
+    import hashlib
+
+    obs_list = [make_obs(rng, fmt) for _ in range(n_obs)]
+    noises = [torch.randn(horizon, action_dim) for _ in obs_list]
+    h = hashlib.sha256()
+    for nz in noises:
+        h.update(nz.numpy().tobytes())
+    return obs_list, noises, h.hexdigest()
+
+
+def warmup_forward(policy: Any, obs_list: list, noises: list, batch_size: int) -> None:
+    """Forward-only pass with the given paired noises (autocast-aware)."""
+    from gr00t.model.policy import COMPUTE_DTYPE
+
+    use_autocast = str(policy.device).startswith("cuda")
+    for batched_obs, batched_noise in chunked(obs_list, noises, batch_size):
+        norm = policy.apply_transforms(batched_obs)
+        with torch.inference_mode():
+            if use_autocast:
+                with torch.autocast(device_type="cuda", dtype=COMPUTE_DTYPE):
+                    policy.model.get_action(norm, action_noise=batched_noise)
+            else:
+                policy.model.get_action(norm, action_noise=batched_noise)
+
+
+def count_wrapped_layers(model: Any) -> int:
+    from gr00t.quantization.duquant_layers import DuQuantLinear
+
+    return sum(1 for m in model.modules() if isinstance(m, DuQuantLinear))
+
+
+def ensure_a8_calibrated(
+    policy: Any,
+    warm_obs: list,
+    warm_noises: list,
+    batch_size: int,
+    act_dynamic: bool = False,
+    expected_wrapped: int | None = None,
+    act_scale_path: str | None = None,
+) -> None:
+    """Close the static-A8 calibration loop before any measurement/serving.
+
+    Review round 2 (items 1/3/4):
+      - dynamic-act mode has no static calibrators (0/0 must NOT abort): only
+        the wrapped-layer count is verified;
+      - static mode runs the FIXED buffer until all_calibrated() and raises if
+        the calibration does not complete;
+      - optional persistence: load frozen scales from act_scale_path when they
+        exist, save them after the first successful warmup.
+    """
+    from gr00t.quantization.duquant_layers import (
+        all_calibrated,
+        load_act_scales,
+        save_act_scales,
+        static_calibrators_required,
+    )
+
+    model = policy.model
+    if expected_wrapped is not None:
+        n = count_wrapped_layers(model)
+        if n != expected_wrapped:
+            raise SystemExit(
+                f"[a8-calib] wrap mismatch: {n} wrapped layers, expected {expected_wrapped}"
+            )
+    if act_dynamic or not static_calibrators_required(model):
+        return  # dynamic act (or no static-A8 layers): nothing to freeze
+
+    if act_scale_path and Path(act_scale_path).exists():
+        load_act_scales(model, act_scale_path)
+        if all_calibrated(model):
+            print(f"[a8-calib] loaded frozen A8 scales from {act_scale_path}")
+            return
+        raise SystemExit(f"[a8-calib] {act_scale_path} does not cover all static layers")
+
+    if all_calibrated(model):
+        return
+    warmup_forward(policy, warm_obs, warm_noises, batch_size)
+    if not all_calibrated(model):
+        from gr00t.quantization.duquant_layers import calibration_progress
+
+        full, total = calibration_progress(model)
+        raise SystemExit(
+            f"[a8-calib] static A8 calibration incomplete: {full}/{total} after "
+            f"{len(warm_obs)} obs / {len(warm_obs) // max(batch_size, 1)} batches"
+        )
+    if act_scale_path:
+        save_act_scales(model, act_scale_path)
+        print(f"[a8-calib] frozen A8 scales saved -> {act_scale_path}")
+    print(f"[a8-calib] static A8 calibration complete ({count_wrapped_layers(model)} wrapped layers)")

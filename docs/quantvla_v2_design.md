@@ -620,7 +620,10 @@ skip（FP16）**不测量**——它是参照本身；plan 里才出现 skip 选
 | `code/gr00t/quantization/duquant_layers.py` | **P0 修复**：`transform_weight_for_forward_optimized` 先 clone 再旋转（权重不可变）；`_get_act_scale` 满批前只给临时 scale 不冻结；`all_calibrated()`/`calibration_progress()` 助手 | ✅ CPU 回归：顺序不变性 + 校准生命周期 |
 | `scripts/tools/calibrate_atm_perstep_gr00t.py`（新） | data-free ATM/OHB 校准（静态/per-step） | ✅ selftest；GPU 待做 |
 | 同上 | **v1.3 增项**：`--plan` plan-aware 校准（全 FP16 block 中性值强制 α=β=1、漂移值保留并标记）；CV_t(α/β) 统计 + `static_sufficient` 判定，sidecar 输出 `<out>.cv_stats.json` | ✅ selftest 全过（plan-aware 三态 + CV 统计） |
-| `scripts/run_quantvla.sh` | v2 plan 模式注释 | ✅ |
+| `scripts/run_quantvla.sh` | v2 plan 模式注释；ATM/OHB **opt-in**（默认关，开 ATM 无表即报错） | ✅ |
+| `scripts/inference_service.py` | **第二轮审查**：启动服务前闭环静态 A8 校准（固定合成 buffer + `all_calibrated` 强校验；`GR00T_DUQUANT_ACT_SCALE_PATH` 持久化/加载）；FP16 与 dynamic-act 模式 no-op | ✅ |
+| `scripts/run_v2_gpu_experiment.sh` | **第二轮审查**：重写为 gated 管线（selftests → gate 0 audit → dev probe → selector → baselines 两阶段 → TopK 裁决 → dev LIBERO → freeze → held-out Long/90） | ✅ |
+| `scripts/tools/gr00t_v2_common.py` | `SUITE_DATA_CONFIG`（goal→MeanStd）统一工具与服务坐标系；`fixed_calibration_buffer`（sha256 指纹）；`ensure_a8_calibrated`（static/dynamic 双态） | ✅ |
 
 **运行手册（groot_test 环境 + 空闲 GPU）**：
 

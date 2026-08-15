@@ -40,6 +40,18 @@ python scripts/tools/calibrate_atm_perstep_gr00t.py --selftest  # plan-aware 三
 - 旧实验报告 `docs/quantvla_v2_gr00t_experiment_report.md` 的数字基于被污染的敏感度数据，
   不再作为 v1.3 方法的证据；正式实验需按设计文档 §6.6 的 Phase 1 流程重跑。
 
+## 第二轮审查（2f4ec47 复核）回应
+
+| # | 审查项 | 状态 |
+|---|---|---|
+| 1 | TopK scorer 未完成 A8 校准（用 provisional scale 打分） | ✅ 每个 TopK plan 加载后先 `ensure_a8_calibrated()`（共享固定 buffer，`all_calibrated` 强校验）再跑 D_solver |
+| 2 | TopK scorer 输出嵌套 final_plan，loader 读不到顶层 layers | ✅ 拆分为 `<out>.report.json` + `<out>.final_plan.json`（后者顶层即 `{packdirs, layers, meta}`，可直接 `GR00T_DUQUANT_PLAN=` 部署） |
+| 3 | 真实 LIBERO 服务未闭环 A8 校准（在线用 test obs 校准） | ✅ `inference_service.py` 在启动 server 前执行 `_maybe_close_a8_calibration()`：FP16/动态模式 no-op；静态模式用固定合成 buffer（seed 0，sha256 固定）完成校准；支持 `GR00T_DUQUANT_ACT_SCALE_PATH` 持久化（`save_act_scales`/`load_act_scales`） |
+| 4 | `--act-dynamic` 下 `all_calibrated()==False (0/0)` 被拦死 | ✅ 新增 `static_calibrators_required()`；`ensure_a8_calibrated(act_dynamic=...)` 在动态模式下只校验 wrapped 层数、不检查静态校准；calibrator 传入 `act_dynamic=args.act_dynamic` |
+| 5 | baseline 每个 plan 用不同校准 buffer | ✅ stage2/TopK scorer 的 calibration buffer 在循环外生成一次、全部 plan 复用；报告 meta 记录 `calibration_buffer_sha256` |
+| 6 | Goal suite 的 data config 不一致（工具 vs 服务） | ✅ `SUITE_DATA_CONFIG` 映射（goal→MeanStd）+ `resolve_data_config()`；probe/audit/baselines/topk_scorer/calibrator 的 `--data-config` 默认改为按 suite 解析 |
+| 7 | 编排脚本是旧流程；旧报告未作废 | ✅ `run_v2_gpu_experiment.sh` 重写为 gated 管线（selftests → gate 0 audit → dev probe → selector → baselines → TopK 裁决 → dev LIBERO → freeze → held-out Long/90）；`docs/quantvla_v2_gr00t_experiment_report.md` 顶部加 INVALIDATED banner |
+
 ## 仍需 GPU 验证（执行层，非代码正确性）
 
 1. 全模型 bit 扫描顺序不变性（[2,4,8] vs [8,4,2] 的 b4 一致）——layer 级已由 CPU selftest 覆盖；
