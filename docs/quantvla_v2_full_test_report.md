@@ -45,7 +45,7 @@ long seed0 5eps SR 0.80。
 ——50 episodes × 10 tasks——才进入正式表）：
 | 套件 | v2 | uniform W6 | random best/median/worst |
 |---|---|---|---|
-| spatial | — | — | — |
+| spatial | 98.0% | 94.0% | 92.0% / 88.0% / 88.0% |
 | goal | — | — | — |
 | object | — | — | — |
 | long（held-out, 3 seeds × {transfer-v2, transfer-w6}） | — | — | — |

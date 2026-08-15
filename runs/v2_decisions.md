@@ -236,3 +236,22 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
 - **行动**：第三次全量重部署（kill 64 → 8 分片 relaunch，bash-127…134）；新增
   `scripts/tools/aggregate_v2_fulltest.py`（分片合并 50 eps/配置、任务级 SR、
   long 3-seed 汇总、PENDING 标记，配合 parse_libero_logs 输出最终表格）。
+
+## 2026-08-16：spatial 套件 LIBERO 完成（v2 98% vs W6 94% vs random 92/88/…）
+
+- spatial_s0 全部 5 配置完成（exit 0，01:15），spatial_s1 进行中（配置 5 random_7
+  worst，42/50 eps）；aggregate_v2_fulltest.py 输出最终表格式验证通过；
+- spatial 正式结果（每配置 50 rollouts，2 分片 × 25 eps）：
+  v2 final **98.00%** > uniform W6 **94.00%** > random best(random_3) 92.00% >
+  random median(random_1) 88.00%（random worst(random_7) 88.00%（spatial_s1 01:25 完成，全套件 5 配置 OK）；
+  单调排序符合 v2 > 同预算均匀 > 随机 mask 的预期；
+- 任务级：v2 除 "black bowl between plate and ramekin"(0.80) 外全部 1.00；
+  uniform W6 三个 0.80 任务（table center / between plate+ramekin / wooden cabinet）。
+
+## 2026-08-16：spatial 全完成（v2 98% / W6 94% / random 92-88-88）
+
+- 两分片全部 exit 0，5 配置 × 50 rollouts 全部 complete；
+- 正式行（已写入 docs/quantvla_v2_full_test_report.md §4）：
+  **spatial: v2 98.0% | uniform W6 94.0% | random best 92.0% / median 88.0% / worst 88.0%**
+- v2 相对 uniform W6 的 LIBERO 优势 +4.0pp（D_solver 阶段 4.7×），相对随机 mask
+  中位 +10.0pp；与 D_solver 排序一致。
