@@ -26,7 +26,7 @@ TASK_RE = re.compile(r"Current task success rate: ([\d.]+)")
 EPISODE_RE = re.compile(r"# episodes completed so far: (\d+)")
 
 
-def parse_log(path: Path) -> Dict[str, Any]:
+def parse_log(path: Path, exp_eps: int = 50, exp_tasks: int = 10) -> Dict[str, Any]:
     configs: List[Dict[str, Any]] = []
     current: Optional[Dict[str, Any]] = None
     with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -61,8 +61,8 @@ def parse_log(path: Path) -> Dict[str, Any]:
     # completeness: a config only enters the formal table when it finished the
     # expected episodes/tasks (50/10 full suite; 25/5 per task shard)
     for c in out:
-        c["complete"] = (c.get("episodes") == args.expected_episodes
-                         and c.get("tasks_done") == args.expected_tasks)
+        c["complete"] = (c.get("episodes") == exp_eps
+                         and c.get("tasks_done") == exp_tasks)
     return {"file": str(path), "configs": out}
 
 
@@ -79,7 +79,7 @@ def main() -> None:
     logs = [Path(x) for x in args.log] if args.log else sorted(
         Path("runs/v2_gpu_logs").glob("liberos_*.log")
     )
-    all_results = [parse_log(l) for l in logs]
+    all_results = [parse_log(l, args.expected_episodes, args.expected_tasks) for l in logs]
     for r in all_results:
         print(f"=== {r['file']} ===")
         for c in r["configs"]:
