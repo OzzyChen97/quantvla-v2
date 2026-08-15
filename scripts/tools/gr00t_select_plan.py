@@ -795,8 +795,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out", default=None, help="Output plan JSON path.")
     p.add_argument("--include", default=r".*(backbone\.eagle_model\.language_model\..*\.(q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj)|action_head\.model\.transformer_blocks\.\d+\.ff\.net\.(0\.proj|2)).*")
     p.add_argument("--exclude", default=r"(?:^|\.)(vision|radio|norm|ln|layernorm|embed|lm_head|attn1)(?:\.|$)")
-    p.add_argument("--lambda-cka", type=float, default=1.0, help="Weight of the (1-CKA) proxy term.")
-    p.add_argument("--lambda-cs", type=float, default=1.0, help="Weight of the CS-divergence proxy term.")
+    p.add_argument("--lambda-cka", type=float, default=0.0,
+                   help="Weight of the (1-CKA) proxy term. Gate-0 evidence (spatial audit): "
+                        "Spearman(1-CKA, d_solver)@b4 ~ 0 (-0.08/-0.03/-0.06 over 3 seeds) vs "
+                        "Spearman(CS, d_solver) +0.41 — CKA disabled by default, re-enable only "
+                        "with new evidence. The lambda sweep still emits CKA-weighted diversity "
+                        "candidates for TopK adjudication.")
+    p.add_argument("--lambda-cs", type=float, default=1.0, help="Weight of the CS-divergence proxy term (primary).")
     p.add_argument("--group", type=int, default=64, help="DuQuant rotation block size (all plan layers; multi-block is P4).")
     p.add_argument("--row-rot", default="restore")
     p.add_argument("--budget", default="uniform-w6",

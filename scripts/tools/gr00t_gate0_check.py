@@ -13,8 +13,12 @@ Checks (thresholds are CLI-overridable):
   3. guard fire rate on W2 >= 0.5     (feasibility guards must fire on the
                                        known-bad case — review P0 guard test)
   4. cross-seed mask Jaccard >= 0.7   (ranking reproducibility)
-  5. Spearman(1-CKA, d_solver)@b4 >= 0.2 (directional sanity; absolute ranking
-                                       quality is judged against random masks)
+  5. Spearman(primary proxy, d_solver)@b4 >= 0.2 — the primary proxy is CS by
+      default: the spatial gate-0 on the real model measured
+      Spearman(1-CKA, d_solver) ≈ 0 (three seeds: -0.08/-0.03/-0.06) vs
+      Spearman(CS, d_solver) ≈ +0.41 (0.43/0.41/0.39). The check uses
+      --spearman-metric (default cs) and the selector defaults follow the
+      same evidence (lambda_cka=0, lambda_cs=1).
 
 Usage:
     python scripts/tools/gr00t_gate0_check.py --audit <metric_audit.json>
@@ -48,6 +52,7 @@ def check_gate0(
     min_guard_fire: float = 0.5,
     min_seed_jaccard: float = 0.7,
     min_spearman: float = 0.2,
+    spearman_metric: str = "cs",
 ) -> Dict[str, Any]:
     """Returns {passed: bool, checks: {name: {value, threshold, passed}}}."""
     checks: Dict[str, Any] = {}
@@ -91,8 +96,8 @@ def check_gate0(
         "passed": jac is not None and jac >= min_seed_jaccard,
     }
 
-    sp = worst(("spearman", "b4", "cka_loss"))
-    checks["spearman_cka_vs_dsolver_b4"] = {
+    sp = worst(("spearman", "b4", spearman_metric))
+    checks[f"spearman_{spearman_metric}_vs_dsolver_b4"] = {
         "value": sp, "threshold": min_spearman,
         "passed": sp is not None and sp >= min_spearman,
     }
@@ -110,7 +115,7 @@ def _selftest() -> None:
             "finite_rate": 1.0,
             "w2_vs_w8": {"rms_ratio": {"median_ratio": 5.0}},
             "guard_fire_w2": {"rate": 0.9},
-            "spearman": {"b4": {"cka_loss": 0.6}},
+            "spearman": {"b4": {"cka_loss": 0.6, "cs": 0.5}},
         }}],
     }
     res = check_gate0(base)
@@ -135,6 +140,8 @@ def main() -> None:
     p.add_argument("--min-guard-fire", type=float, default=0.5)
     p.add_argument("--min-seed-jaccard", type=float, default=0.7)
     p.add_argument("--min-spearman", type=float, default=0.2)
+    p.add_argument("--spearman-metric", default="cs",
+                   help="Primary proxy metric for the Spearman gate (gate-0 evidence: cs).")
     p.add_argument("--selftest", action="store_true")
     args = p.parse_args()
 
@@ -152,6 +159,7 @@ def main() -> None:
         min_guard_fire=args.min_guard_fire,
         min_seed_jaccard=args.min_seed_jaccard,
         min_spearman=args.min_spearman,
+        spearman_metric=args.spearman_metric,
     )
     print("[gate0_check] checks:")
     for name, c in res["checks"].items():
