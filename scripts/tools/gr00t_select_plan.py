@@ -491,6 +491,64 @@ def assert_plan_guards(plan: Dict[str, Any], guarded_names: set) -> None:
         )
 
 
+def flip_neighbors_plans(
+    shapes: Dict[str, Dict[str, Any]],
+    scores: Dict[str, Dict[int, float]],
+    weights: Dict[str, float],
+    budget: float,
+    row_rot: str,
+    base_plan: Dict[str, Any],
+    n_flips: Tuple[int, ...] = (2, 4, 6, 8),
+    per_flip: int = 2,
+    seed: int = 3,
+) -> List[Dict[str, Any]]:
+    """Mutation diversity (Q-DiT style): flip k random skip<->W4 decisions of
+    the base plan, then budget-repair. Guarantees mask diversity when greedy /
+    milp / lambda sweep all collapse onto the same mask (which happened on the
+    first spatial run: 17 candidates, 1 unique mask)."""
+    rng = random.Random(seed)
+    names = [n for n in shapes if scores.get(n, {}).get(4) is not None]
+    base_skip = {n for n, e in base_plan.items() if e.get("skip")}
+    out: List[Dict[str, Any]] = []
+    for k in n_flips:
+        for _ in range(per_flip):
+            w4 = set(names) - base_skip
+            skip = set(base_skip)
+            kk = min(k, len(names))
+            flip = rng.sample(names, kk)
+            for n in flip:
+                if n in skip:
+                    skip.remove(n)
+                    w4.add(n)
+                else:
+                    skip.discard(n)
+                    w4.discard(n)
+            plan = {n: ({"bits": None, "group": 64, "skip": True} if n in skip
+                        else {"bits": 4, "group": 64, "skip": False})
+                    for n in shapes}
+            # budget repair: quantize the cheapest-per-byte skipped layer until feasible
+            while plan_total_bytes(plan, shapes, row_rot) > budget + 1e-3:
+                cand: Optional[Tuple[float, str]] = None
+                for n in names:
+                    if not plan[n]["skip"]:
+                        continue
+                    sh = shapes[n]
+                    saved = layer_bytes_fp16(sh["out"], sh["in"], sh["has_bias"]) - layer_bytes_quant(
+                        sh["out"], sh["in"], sh["has_bias"], 4, 64, row_rot=row_rot
+                    )
+                    if saved <= 0:
+                        continue
+                    ratio = (weights[n] * scores[n][4]) / saved
+                    if cand is None or ratio < cand[0]:
+                        cand = (ratio, n)
+                if cand is None:
+                    break
+                plan[cand[1]] = {"bits": 4, "group": 64, "skip": False}
+            out.append({"plan": plan, "objective": plan_objective(plan, scores, weights),
+                        "source": f"flip{k}"})
+    return out
+
+
 def plan_mask(plan: Dict[str, Any]) -> Tuple[str, ...]:
     """FP16 (skip) layer set of a plan — the diversity unit."""
     return tuple(sorted(n for n, e in plan.items() if e.get("skip")))
@@ -822,9 +880,10 @@ def parse_args() -> argparse.Namespace:
                    help="v1.3: min FP16-mask Hamming distance between TopK plans "
                         "(default: max(3, 10%% of layers)).")
     p.add_argument("--n-perturb", type=int, default=10, help="v1.3: score-perturbation neighbor count.")
-    p.add_argument("--perturb-sigma", type=float, default=0.1)
-    p.add_argument("--lambda-pairs", default="1,1;1,0.5;0.5,1;1,2;2,1",
-                   help="v1.3: λ-sweep pairs for candidate diversity (semicolon-separated 'cka,cs').")
+    p.add_argument("--perturb-sigma", type=float, default=0.25)
+    p.add_argument("--lambda-pairs", default="0,1;0,2;0,5;1,1;0.5,1;2,1",
+                   help="v1.3: λ-sweep pairs for candidate diversity (semicolon-separated "
+                        "'cka,cs'; cs-strength variants included because CS is the primary proxy).")
     p.add_argument("--no-milp", action="store_true", help="v1.3: skip the scipy-milp exact 0-1 solve.")
     p.add_argument("--n-bootstrap", type=int, default=100, help="v1.3: w_i stability bootstrap draws.")
     p.add_argument("--guard-margin", type=float, default=1.5,
@@ -890,11 +949,16 @@ def _selftest() -> None:
     cands += lambda_sweep_plans(shapes, sens, names, weights, budget, "restore",
                                 pairs=((1.0, 1.0), (0.5, 1.0), (1.0, 0.5)))
     top = select_diverse(cands, k=8, min_hamming=3)
-    assert len(top) >= 3, f"diverse topk too small: {len(top)}"
+    assert len(top) >= 5, f"diverse topk too small: {len(top)} (diversity collapsed)"
     masks = [plan_mask(c["plan"]) for c in top]
     for i in range(len(masks)):
         for j in range(i + 1, len(masks)):
             assert hamming(masks[i], masks[j]) >= 3, "hamming diversity violated"
+
+    flips = flip_neighbors_plans(shapes, filtered, weights, budget, "restore", g_plan)
+    assert len(flips) == 8, len(flips)
+    for f in flips:
+        assert plan_total_bytes(f["plan"], shapes, "restore") <= budget + 1e-3
 
     bs = bootstrap_stability(sens, shapes, filtered, budget, "restore", n=20, seed=2)
     assert bs["jaccard"]["mean"] is not None and 0.0 <= bs["jaccard"]["mean"] <= 1.0, bs
@@ -1010,6 +1074,10 @@ def main() -> None:
     guarded_names = {r["layer"] for r in removed}
     candidates += perturbed_plans(shapes, scores, weights, budget, args.row_rot,
                                   n=args.n_perturb, sigma=args.perturb_sigma, seed=1)
+    # Q-DiT-style mutations: guaranteed mask diversity even when every
+    # continuous candidate collapses onto one mask
+    candidates += flip_neighbors_plans(shapes, scores, weights, budget, args.row_rot,
+                                       base_plan=g_plan, seed=3)
     # P0-7: the λ sweep inherits the guard filter (guarded layers stay FP16
     # in EVERY sweep candidate, not just the canonical scores).
     candidates += lambda_sweep_plans(shapes, sens, layer_names, weights, budget, args.row_rot,
