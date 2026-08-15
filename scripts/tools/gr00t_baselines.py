@@ -60,6 +60,7 @@ from gr00t_v2_common import (  # noqa: E402
     load_policy,
     make_obs,
     resolve_data_config,
+    restore_quant_env,
     set_quant_env,
     strip_quant_env,
 )

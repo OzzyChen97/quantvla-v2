@@ -40,3 +40,14 @@ CKA 若重新启用需新的 gate-0 证据。
   如实记录；paired bootstrap：best flip12 vs runner-up flip8 mean_diff −0.00034，p_best_wins 1.0）；
 - **最终 spatial plan = flip12**（78 W4 / 38 skip，D_solver 0.00123），写入
   `gr00t_quant_plan_libero_spatial_adjudicated.final_plan.json`。
+
+## 2026-08-15：spatial 同协议 D_solver 对照（首个方法证据，决策 D-005）
+
+stage2 同协议（8 obs、同一固定 buffer、真实部署语义逐计划加载 + 独立 A8 校准）：
+- **v2 裁决 plan（flip12）：0.00079**
+- uniform W6（同预算 862.9MB）：0.00374 → v2 好 **4.7×**
+- uniform W4：0.01540 → 19×
+- size_based：0.01951 → 25×
+- random（同 W4 数+字节匹配）best 0.01742 / median 0.01742 / worst 0.02860 → v2 好 **22× / 36×**
+
+配置级 D_solver 上"v2 选层 > uniform W6 > 随机/均匀 W4"。LIBERO 成功率对照待 dev-accept 阶段。
