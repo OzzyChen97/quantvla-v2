@@ -60,3 +60,18 @@ gate 语义从"worst-seed ≥0.2"改为 **"均值 ≥0.2 且 min ≥0（无符�
 过度敏感（goal seed2=0.159、object seed0=0.051 仍为正）。三套件 gate 全部 PASS。
 说明：逐层代理与动作损伤的相关性是弱-中等（~0.3），这正是方法保留 config-level D_solver
 裁决 + LIBERO 验收的原因；正式结论以二者为准。
+
+## 2026-08-15：object 套件完成（D-007）
+
+- gate-0：CS 均值 0.296（3 seed 全正）；W2/W8 29.2×、护栏 0.733、Jaccard 1.0、finite 1.0；
+- probe → selector（diverse TopK 8/26）→ TopK 裁决 8 候选 → **final = flip16（D_solver 0.00195）**；
+- 同协议匹配对照（8 obs）：**v2 = 0.00142** vs uniform W6 0.01210（**8.5×**）、random median 0.03287（23×）、uniform W4 0.04677（33×）。
+
+## 2026-08-15：goal 套件完成 + 三套件 consensus 硬门（D-007/D-008）
+
+- goal：gate-0 PASS（CS 0.305）；diverse TopK 7/26 → **final=flip12（0.00546）**；
+  同协议对照：**v2 0.00550** vs W6 0.03241（5.9×）、random median 0.08835（16×）、W4 0.08042。
+- **D-008（consensus 硬门 FAIL）**：三套件裁决 plan 的 FP16 mask 两两 Jaccard = 0.500/0.490/0.389 < 0.7
+  → **层敏感度是 checkpoint 特异的**（各套件 probe 各自的敏感度），选层不具备跨套件普适可复现性。
+  按设计不冻结统一 plan：dev 三套件各用本套件裁决 plan；**held-out Long 用 spatial 裁决 plan zero-shot**
+  （spatial 是主套件、协议最完整；决策理由见 D-008）。

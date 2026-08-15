@@ -29,7 +29,7 @@ cd "$REPO"
 export PYTHONPATH="$REPO/code:$REPO/scripts/tools:${PYTHONPATH:-}"
 PY=/home1/gyy/probe/miniforge3/envs/groot_test/bin/python
 export CUDA_VISIBLE_DEVICES=${GR00T_GPU:-4}
-PORT=5556
+PORT=${GR00T_PORT:-5556}
 LOG="$REPO/runs/v2_gpu_logs"
 export LIBERO_LOG_DIR="$REPO/runs/libero_logs"
 mkdir -p "$LOG"
@@ -60,7 +60,7 @@ start_server() {
     local suite=$1 plan=$2
     local logf="$LOG/server_${suite}_$(basename "$plan").log"
     echo "--- starting server: libero_$suite plan=$plan (log: $logf)"
-    GR00T_DUQUANT_PLAN="$plan" GR00T_GPU=${GR00T_GPU:-4} \
+    GR00T_DUQUANT_PLAN="$plan" GR00T_GPU=${GR00T_GPU:-4} GR00T_PORT="$PORT" \
         ./scripts/run_quantvla.sh "libero_$suite" >"$logf" 2>&1 &
     SERVER_PID=$!
     for _ in $(seq 1 150); do
@@ -84,7 +84,7 @@ stop_server() {
 
 run_libbero() {
     local suite=$1; shift
-    ./scripts/run_libero_eval.sh "libero_$suite" --headless "$@"
+    LIBERO_PORT="$PORT" ./scripts/run_libero_eval.sh "libero_$suite" --headless "$@"
 }
 
 # --------------------------------------------------------------------------- #
@@ -141,7 +141,7 @@ dev_accept() {
     local BDIR="$REPO/checkpoints/packs/gr00t/baselines_${S}"
 
     # representative random masks from the stage-2 report
-    mapfile -t REPS < <($PY - "$BDIR/dsolver_report.json" <<'PY'
+    mapfile -t REPS < <($PY - "$REPO/checkpoints/packs/gr00t/baselines_${S}_dsolver.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 rep = d["representatives"]
