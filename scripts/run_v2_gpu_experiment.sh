@@ -122,9 +122,14 @@ stop_server() {
 
 run_libbero() {
     local suite=$1; shift
+    # task sharding (review round 5, speedup): TASK_IDS="0 1 2 3 4"
+    local extra=()
+    if [[ -n "${TASK_IDS:-}" ]]; then
+        extra=(--task_ids ${TASK_IDS})
+    fi
     # config-level timeout (ZMQ client also has a 15s per-request timeout)
     LIBERO_PORT="$PORT" timeout --signal=TERM "${EVAL_TIMEOUT:-21600}" \
-        ./scripts/run_libero_eval.sh "libero_$suite" --headless "$@"
+        ./scripts/run_libero_eval.sh "libero_$suite" --headless "$@" "${extra[@]}"
 }
 
 # progress watchdog: run the eval in background; if the episode counter stops

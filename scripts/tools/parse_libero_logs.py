@@ -58,10 +58,11 @@ def parse_log(path: Path) -> Dict[str, Any]:
             out[-1].update({k: v for k, v in c.items() if v is not None})
         else:
             out.append(c)
-    # completeness: a config only enters the formal table when it finished
-    # 50 episodes across 10 tasks (review round 5, item 11)
+    # completeness: a config only enters the formal table when it finished the
+    # expected episodes/tasks (50/10 full suite; 25/5 per task shard)
     for c in out:
-        c["complete"] = (c.get("episodes") == 50 and c.get("tasks_done") == 10)
+        c["complete"] = (c.get("episodes") == args.expected_episodes
+                         and c.get("tasks_done") == args.expected_tasks)
     return {"file": str(path), "configs": out}
 
 
@@ -69,6 +70,10 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--log", nargs="*", default=None, help="log paths (default: runs/v2_gpu_logs/liberos_*.log)")
     p.add_argument("--json", default=None)
+    p.add_argument("--expected-episodes", type=int, default=50,
+                   help="episodes required for completeness (25 for task shards).")
+    p.add_argument("--expected-tasks", type=int, default=10,
+                   help="tasks required for completeness (5 for task shards).")
     args = p.parse_args()
 
     logs = [Path(x) for x in args.log] if args.log else sorted(

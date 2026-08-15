@@ -182,3 +182,14 @@ mask zero-shot。处置：立即停 Long 两路并作废数据；新增 `gr00t_t
 未来计划的 w_i 稳定性改进；当前 dev 三路使用旧归一化的已裁决 plan，继续有效）；
 LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）；
 已知限制：eval seed 固定环境不固定 policy 侧 flow-matching noise（降低配对检验效率）。
+
+## 2026-08-15：任务分片加速部署（D-016）
+
+- 实测单次 get_action 仅 0.3-0.5s——瓶颈是 mujoco 仿真步进（每 episode 最长 720 步），
+  非 server/网络；机器 128 核 load 36，CPU 余量充足；
+- **任务分片**：`run_libbero` 支持 `TASK_IDS`（eval 客户端已有 task_ids 字段），
+  每套件 10 任务切 2 片、每片独立 server（每 GPU 双 server 内存 ~28GB 可容）；
+- 部署：spatial 片0/1（GPU7:5556/5559）、goal 片0/1（GPU3:5557/5562）、
+  object 片0/1（GPU1:5558/5563）、long 片0/1（GPU5:5560/GPU4:5561，各 5 任务 ×
+  2 配置 × 3 种子）；
+- parser 完整性阈值参数化（分片 = 25eps/5tasks）；墙钟时间预计减半。
