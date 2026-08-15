@@ -81,6 +81,50 @@ def pool_samples(t: torch.Tensor, max_tokens: int) -> Optional[torch.Tensor]:
     return t
 
 
+def pool_samples_stratified(
+    t: torch.Tensor,
+    max_tokens: int,
+    front_frac: float = 0.5,
+    drop_zero_rows: bool = True,
+    zero_eps: float = 1e-9,
+) -> Optional[torch.Tensor]:
+    """Position-stratified token pooling (v1.3 Phase-1; review round 3 item 5).
+
+    GR00T's LLM/DiT token axis follows the vision-prefix layout: leading tokens
+    are vision-dominant, trailing tokens are text/state-dominant. Flat pooling
+    lets the (much larger) vision block drown out the action-relevant tokens in
+    CKA/CS. This version:
+
+      - splits each sequence into a front block (vision-dominant) and a back
+        block (text/state-dominant) at fraction `front_frac`;
+      - caps EACH block at max_tokens//2 with deterministic stride subsampling;
+      - drops all-zero rows in the back block (padding-mask heuristic: padded
+        positions produce (near-)zero rows after the pipeline).
+
+    Sequences of rank < 3 fall back to flat pooling.
+    """
+    if t is None:
+        return None
+    t = t.detach().to(torch.float32)
+    if t.dim() < 3:
+        return pool_samples(t, max_tokens)
+    t = t.reshape(-1, t.shape[-2], t.shape[-1]).cpu()  # (B, L, D)
+    L = t.shape[1]
+    n_front = max(1, round(L * front_frac))
+    front = t[:, :n_front].reshape(-1, t.shape[-1])
+    back = t[:, n_front:].reshape(-1, t.shape[-1])
+    if drop_zero_rows:
+        keep = back.norm(dim=1) > zero_eps
+        back = back[keep]
+    cap = max(2, max_tokens // 2)
+    front = _stride_subsample(front, cap)
+    back = _stride_subsample(back, cap)
+    out = torch.cat([front, back], dim=0)
+    if out.shape[0] < 2:
+        return None
+    return out
+
+
 def _center(x: torch.Tensor) -> torch.Tensor:
     return x - x.mean(dim=0, keepdim=True)
 
@@ -365,6 +409,22 @@ def selftest() -> None:
     )
     # (CKA is row-correspondence sensitive: permuting one side drops it.)
     assert s_perm["cka"] is not None and s_perm["cka"] < 0.9, f"CKA(X,perm(X))={s_perm['cka']}"
+
+    # --- stratified pooling (review round 3, item 5) ---
+    x3 = torch.randn(4, 32, 16)  # (B, L, D), vision-prefix layout
+    x3[:, 24:, :] = 0.0  # padding in the back (text) block
+    sp = pool_samples_stratified(x3, max_tokens=64, front_frac=0.5)
+    assert sp is not None and sp.shape[0] <= 64 and sp.shape[1] == 16
+    # zero rows must be dropped: the back block contributed nothing
+    assert (sp.norm(dim=1) > 0).all(), "padding zero rows were not masked"
+    # front cap: front block of 16 rows caps at max_tokens//2=32 -> keeps 16
+    # (flat pooling would have kept 64 rows incl. 32 zero rows)
+    x3b = torch.randn(4, 64, 16)
+    sp2 = pool_samples_stratified(x3b, max_tokens=64)
+    assert sp2.shape[0] <= 64
+    # rank-2 fallback
+    sp3 = pool_samples_stratified(x, 128)
+    assert sp3 is not None
 
     # --- v1.3 feasibility guards ---
     g_same = rms_ratio_median(x, x)

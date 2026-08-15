@@ -101,7 +101,7 @@ def parse_args() -> argparse.Namespace:
                    help="Default: resolved per suite via SUITE_DATA_CONFIG (goal -> MeanStd).")
     p.add_argument("--device", default="cuda")
     p.add_argument("--denoising-steps", type=int, default=8)
-    p.add_argument("--n-obs", type=int, default=8)
+    p.add_argument("--n-obs", type=int, default=16, help="Synthetic obs for D_solver (round 3: 16, with paired-bootstrap significance).")
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--gamma", type=float, default=1.2)
     p.add_argument("--group", type=int, default=64)
@@ -110,6 +110,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--row-rot", default="restore")
     p.add_argument("--calib-steps", type=int, default=32)
     p.add_argument("--packdir", default=None)
+    p.add_argument("--act-scale-path", default=None,
+                   help="Shared plan-specific A8 scale artifact (.npz).")
     p.add_argument("--out", default=None)
     p.add_argument("--tol", type=float, default=0.05, help="select_final relative tolerance.")
     p.add_argument("--selftest", action="store_true", help="Offline materialization + select_final test.")
@@ -192,7 +194,7 @@ def main() -> None:
 
     n_warm_obs = args.calib_steps * args.batch_size
     warm_obs, warm_noises, warm_sha = fixed_calibration_buffer(
-        rng, n_warm_obs, horizon, action_dim, fmt="libero"
+        0, n_warm_obs, horizon, action_dim, fmt="libero"
     )
     print(f"[topk_scorer] fixed calibration buffer: {n_warm_obs} obs, sha256={warm_sha[:16]}...")
 
@@ -220,6 +222,14 @@ def main() -> None:
         ensure_a8_calibrated(
             policy_q, warm_obs, warm_noises, args.batch_size,
             act_dynamic=False, expected_wrapped=expected_wrapped,
+            act_scale_path=args.act_scale_path,
+            act_scale_meta={
+                "buffer_sha256": warm_sha,
+                "data_config": args.data_config,
+                "act_percentile": args.act_pct,
+                "calib_batches": args.calib_steps,
+                "denoising_steps": args.denoising_steps,
+            },
         )
         n_wrapped = count_wrapped(policy_q.model)
         q_traj = run_rollouts(policy_q.model, policy_q, obs_list, noises, args.batch_size)
@@ -231,6 +241,7 @@ def main() -> None:
             "proxy": float(entry.get("objective", float("inf"))),
             "n_wrapped": n_wrapped,
             "plan_file": plan_path,
+            "_per_obs": per_obs,
         })
         del policy_q, q_traj
         gc.collect()
@@ -238,6 +249,28 @@ def main() -> None:
             torch.cuda.empty_cache()
         print(f"[topk_scorer] {entry['source']}: D_solver = {mean_div:.5f} ± "
               f"{scored[-1]['d_solver_std']:.5f} (wrapped {n_wrapped}) ({time.time() - t0:.1f}s)")
+
+    # paired-bootstrap significance: best vs runner-up over shared obs indices
+    # (review round 3, item 9 — a fixed 5% tie rule on 8-16 point estimates is
+    # not a statistical decision; report the bootstrap evidence alongside it)
+    bootstrap = None
+    if len(scored) >= 2 and all(len(s.get("_per_obs", [])) > 1 for s in scored):
+        srt = sorted(scored, key=lambda c: c["d_solver"])
+        best, runner = srt[0], srt[1]
+        pa = np.asarray(best["_per_obs"])
+        pr = np.asarray(runner["_per_obs"])
+        n = min(len(pa), len(pr))
+        pa, pr = pa[:n], pr[:n]
+        rng_boot = np.random.default_rng(123)
+        idx = rng_boot.integers(0, n, size=(2000, n))
+        diff = (pa[idx] - pr[idx]).mean(axis=1)  # best − runner (negative = best wins)
+        bootstrap = {
+            "best": best["source"], "runner_up": runner["source"],
+            "mean_diff": float(np.mean(diff)),
+            "p_best_wins": float((diff <= 0).mean()),
+        }
+    for s_ in scored:
+        s_.pop("_per_obs", None)
 
     final = select_final(scored, tol=args.tol)
     if final is None:
@@ -249,6 +282,7 @@ def main() -> None:
             "parent_plan": args.plan, "suite": args.suite, "n_obs": args.n_obs,
             "tol": args.tol, "final_source": final["source"],
             "calibration_buffer_sha256": warm_sha,
+            "paired_bootstrap": bootstrap,
             "note": "true deployment semantics via GR00T_DUQUANT_PLAN (skip = unwrapped FP16); "
                     "select_final = min D_solver, 5% tie set broken by canonical proxy; "
                     "one shared fixed A8 calibration buffer for all plans",

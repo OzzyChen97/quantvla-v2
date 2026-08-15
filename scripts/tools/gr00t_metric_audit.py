@@ -44,6 +44,7 @@ from gr00t_v2_common import (  # noqa: E402
     PACKDIR_TEMPLATE,
     SUITE_DIRS,
     ensure_flash_attn_rpath,
+    fixed_calibration_buffer,
     load_policy,
     make_obs,
     resolve_data_config,
@@ -172,6 +173,46 @@ def compute_audit_stats(layers: Dict[str, Dict[str, Any]], bits: List[int]) -> D
     # W2 vs W8 separation (the known-bad-case probe): if many layers show
     # metric(W2) ≈ metric(W8), the collection pipeline cannot be trusted for
     # mixed-bit search (keep binary + min_bits=4, design §6.6.1).
+    # hard-gate inputs (review round 3, item 6): finite metric rate, and the
+    # W2 stress guard fire rate (fraction of layers whose W2 guard values exceed
+    # τ = P99(W4 candidates) × 1.5 — the known-bad case must fire).
+    finite = tot = 0
+    for entry in layers.values():
+        for b in bits:
+            e = entry.get(f"b{b}", {})
+            for k in ("cka", "cs", "cs_cross", "rms_ratio", "sat_rate", "nmse"):
+                v = e.get(k)
+                if v is not None:
+                    tot += 1
+                    if math.isfinite(float(v)):
+                        finite += 1
+    stats["finite_rate"] = finite / tot if tot else 1.0
+
+    if 2 in bits:
+        rms4 = [float(entry["b4"]["rms_ratio"]) for entry in layers.values()
+                if entry.get("b4", {}).get("rms_ratio") is not None]
+        sat4 = [float(entry["b4"]["sat_rate"]) for entry in layers.values()
+                if entry.get("b4", {}).get("sat_rate") is not None]
+        if rms4 and sat4:
+            def _p99(vals, margin=1.5):
+                srt = sorted(vals)
+                idx = max(0, min(len(srt) - 1, math.ceil(0.99 * len(srt)) - 1))
+                return srt[idx] * margin
+            tau_r, tau_s = _p99(rms4), _p99(sat4)
+            fires = tot2 = 0
+            for entry in layers.values():
+                b2 = entry.get("b2", {})
+                if b2.get("rms_ratio") is not None and b2.get("sat_rate") is not None:
+                    tot2 += 1
+                    if float(b2["rms_ratio"]) > tau_r or float(b2["sat_rate"]) > tau_s:
+                        fires += 1
+            stats["guard_fire_w2"] = {
+                "rate": fires / tot2 if tot2 else None, "n": tot2,
+                "tau_rms": tau_r, "tau_sat": tau_s,
+            }
+        else:
+            stats["guard_fire_w2"] = None
+
     if 2 in bits and 8 in bits:
         for m in metrics:
             ratios = []
@@ -454,8 +495,9 @@ def main() -> None:
 
         set_all_bits(model_q, REF_BITS)
         n_warm_obs = args.calib_steps * args.batch_size
-        warm_obs = [make_obs(rng, "libero") for _ in range(n_warm_obs)]
-        warm_noises = [torch.randn(horizon, action_dim) for _ in warm_obs]
+        warm_obs, warm_noises, _ = fixed_calibration_buffer(
+            seed, n_warm_obs, horizon, action_dim, fmt="libero"
+        )
         run_rollouts(model_q, policy_q, warm_obs, warm_noises, args.batch_size, return_trajectory=False)
         full, total = calibration_progress(model_q)
         if not all_calibrated(model_q):

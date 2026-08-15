@@ -85,6 +85,7 @@ from gr00t_v2_common import (  # noqa: E402
     SUITE_DIRS,
     chunked,
     ensure_flash_attn_rpath,
+    fixed_calibration_buffer,
     load_policy,
     make_l1_obs,
     make_obs,
@@ -139,12 +140,16 @@ class _LayerCollector:
 
     def _hook_fn(self, name: str):
         def fn(module, args, output):
-            from gr00t.quantization.kernel_scores import pool_samples
+            # review round 3 item 5: position-stratified pooling (vision-front /
+            # text-back caps + padding zero-row mask) for BOTH ref and q pools
+            from gr00t.quantization.kernel_scores import pool_samples_stratified
 
             if self.mode == "ref":
-                self.banks[name].accumulate_ref(output)
+                pooled = pool_samples_stratified(output, self.max_tokens)
+                if pooled is not None:
+                    self.banks[name].accumulate_ref(pooled)
             else:
-                pooled = pool_samples(output, self.max_tokens)
+                pooled = pool_samples_stratified(output, self.max_tokens)
                 if pooled is not None:
                     self.q_pools.setdefault(name, []).append(pooled)
             self.hit_count[name] = self.hit_count.get(name, 0) + 1
@@ -163,13 +168,13 @@ class _LayerCollector:
         self.handles = []
 
     def pooled(self, name: str) -> Optional[torch.Tensor]:
-        from gr00t.quantization.kernel_scores import pool_samples
+        from gr00t.quantization.kernel_scores import pool_samples_stratified
 
         chunks = self.q_pools.pop(name, [])
         if not chunks:
             return None
         cat = torch.cat(chunks, dim=0) if len(chunks) > 1 else chunks[0]
-        return pool_samples(cat, self.max_tokens)
+        return pool_samples_stratified(cat, self.max_tokens)
 
 
 class _AttentionCollector:
@@ -183,25 +188,27 @@ class _AttentionCollector:
         self.hit_count: Dict[str, int] = {}
 
     def __call__(self, layer_name: str, tensor: torch.Tensor, step: Optional[int]) -> None:
-        from gr00t.quantization.kernel_scores import pool_samples
+        from gr00t.quantization.kernel_scores import pool_samples_stratified
 
         key = f"attn:{layer_name}"
         if self.mode == "ref":
-            self.banks[key].accumulate_ref(tensor)
+            pooled = pool_samples_stratified(tensor, self.max_tokens)
+            if pooled is not None:
+                self.banks[key].accumulate_ref(pooled)
         else:
-            pooled = pool_samples(tensor, self.max_tokens)
+            pooled = pool_samples_stratified(tensor, self.max_tokens)
             if pooled is not None:
                 self.q_pools.setdefault(key, []).append(pooled)
         self.hit_count[key] = self.hit_count.get(key, 0) + 1
 
     def pooled(self, key: str) -> Optional[torch.Tensor]:
-        from gr00t.quantization.kernel_scores import pool_samples
+        from gr00t.quantization.kernel_scores import pool_samples_stratified
 
         chunks = self.q_pools.pop(key, [])
         if not chunks:
             return None
         cat = torch.cat(chunks, dim=0) if len(chunks) > 1 else chunks[0]
-        return pool_samples(cat, self.max_tokens)
+        return pool_samples_stratified(cat, self.max_tokens)
 
 
 # --------------------------------------------------------------------------- #
@@ -523,11 +530,14 @@ def main() -> None:
 
     n_warm_batches = args.calib_steps  # GR00T_DUQUANT_CALIB_STEPS = batch count
     n_warm_obs = n_warm_batches * args.batch_size
+    # review round 3: self-contained seed-based canonical buffer (identical to
+    # the one used by baselines/topk/calibrator/server)
+    warm_obs, warm_noises, warm_sha = fixed_calibration_buffer(
+        0, n_warm_obs, horizon, action_dim, fmt=args.obs_format
+    )
     print(f"[probe] A8 calibration: {n_warm_obs} obs = {n_warm_batches} batches "
-          f"(state = weight_bits=0 reference) ...")
+          f"(state = weight_bits=0 reference; buffer sha256 {warm_sha[:16]}...)")
     t0 = time.time()
-    warm_obs = [make_obs(rng, args.obs_format) for _ in range(n_warm_obs)]
-    warm_noises = [torch.randn(horizon, action_dim) for _ in warm_obs]
     run_rollouts(model_q, policy_q, warm_obs, warm_noises, args.batch_size, return_trajectory=False)
     full, total = calibration_progress(model_q)
     if not all_calibrated(model_q):
@@ -563,11 +573,12 @@ def main() -> None:
             "calib_steps": args.calib_steps,
             "per_layer_bits": args.per_layer_bits,
             "obs_source": "L1 synthetic (data-free)",
-            "token_mix": "all_tokens_flattened_stride_subsampled_cap1024 (padding NOT masked)",
+            "token_mix": "position-stratified: vision-front block + text-back block each capped at max_tokens/2 (stride subsample); zero rows in the back block dropped (padding heuristic)",
             "reference_protocol": "wrapped pipeline, all target layers weight_bits=0, A8 static act, rotations active",
             "base_mode": "ATM OFF, OHB OFF, per-step OFF, static activation scale",
             "global_dsolver_pairing": "pure FP16 model vs full config",
             "guard_reference": "pure FP16 model (deployment pairing); D_sat proxied by P99.9(|fp_out|)/127",
+            "calibration_buffer_sha256": warm_sha[:16],
             "guard_thresholds": None,  # filled at the end: τ = P99(W4 candidates) × margin
         },
         "layers": {n: {} for n in banks},

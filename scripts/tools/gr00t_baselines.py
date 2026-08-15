@@ -218,6 +218,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--row-rot", default="restore")
     p.add_argument("--calib-steps", type=int, default=32)
     p.add_argument("--packdir", default=None)
+    p.add_argument("--act-scale-path", default=None,
+                   help="Shared plan-specific A8 scale artifact (.npz): reuse the SAME frozen scales across baseline scoring, TopK, calibrator and server.")
     return p.parse_args()
 
 
@@ -341,7 +343,7 @@ def _stage2(args: argparse.Namespace) -> None:
 
     n_warm_obs = args.calib_steps * args.batch_size
     warm_obs, warm_noises, warm_sha = fixed_calibration_buffer(
-        rng, n_warm_obs, horizon, action_dim, fmt="libero"
+        0, n_warm_obs, horizon, action_dim, fmt="libero"
     )
     print(f"[baselines] fixed calibration buffer: {n_warm_obs} obs, sha256={warm_sha[:16]}...")
 
@@ -372,9 +374,18 @@ def _stage2(args: argparse.Namespace) -> None:
                 f"expected {expected_wrapped} — plan not applied in deployment semantics"
             )
         # A8 calibration to completion in the plan state on the SHARED buffer
+        # (or load the shared frozen artifact via --act-scale-path)
         ensure_a8_calibrated(
             policy_q, warm_obs, warm_noises, args.batch_size,
             act_dynamic=False, expected_wrapped=expected_wrapped,
+            act_scale_path=args.act_scale_path,
+            act_scale_meta={
+                "buffer_sha256": warm_sha,
+                "data_config": args.data_config,
+                "act_percentile": args.act_pct,
+                "calib_batches": args.calib_steps,
+                "denoising_steps": args.denoising_steps,
+            },
         )
 
         q_traj = run_rollouts(policy_q.model, policy_q, obs_list, noises, args.batch_size)

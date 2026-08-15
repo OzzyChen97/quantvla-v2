@@ -314,6 +314,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--beta-log-clamp", type=float, default=0.30)
     p.add_argument("--beta-neutral", type=float, default=0.03)
     p.add_argument("--scope", default="dit")
+    p.add_argument("--act-scale-path", default=None,
+                   help="Shared plan-specific A8 scale artifact (.npz): calibrate alpha/beta "
+                        "on the SAME frozen A8 scales the deployment will load.")
     p.add_argument("--plan", default=None,
                    help="v1.3: quant plan JSON (gr00t_quant_plan.json). Plan-aware "
                         "calibration: attention blocks whose projections are all FP16 "
@@ -462,12 +465,18 @@ def main() -> None:
 
     # P0-2: A8 calibration to completion (cfg.calib_batches real batches) in
     # the deployment (plan) state before any statistics are collected.
-    from gr00t_v2_common import ensure_a8_calibrated
+    # Review round 3: the buffer is the self-contained seed-1 canonical buffer,
+    # and --act-scale-path loads the SAME frozen scales the server will use
+    # (alpha/beta must be calibrated on the deployed A8 state, not on a
+    # re-derived one).
+    from gr00t_v2_common import ensure_a8_calibrated, fixed_calibration_buffer
 
     n_warm_obs = args.calib_steps * args.batch_size
     print(f"[calibrate-perstep] A8 calibration: {n_warm_obs} obs = {args.calib_steps} batches ...")
-    warm_obs = [make_l1_obs(rng) for _ in range(n_warm_obs)]
-    warm_noises = make_noises(policy_q.model, n_warm_obs, seed=1)
+    warm_obs, warm_noises, warm_sha = fixed_calibration_buffer(
+        1, n_warm_obs, int(policy_q.model.action_head.config.action_horizon),
+        int(policy_q.model.action_head.config.action_dim), fmt="libero"
+    )
     for batched_obs, batched_noise in chunked(warm_obs, warm_noises, args.batch_size):
         norm = policy_q.apply_transforms(batched_obs)
         with torch.inference_mode():
@@ -488,6 +497,14 @@ def main() -> None:
     ensure_a8_calibrated(
         policy_q, warm_obs, warm_noises, args.batch_size,
         act_dynamic=args.act_dynamic, expected_wrapped=expected_wrapped,
+        act_scale_path=args.act_scale_path,
+        act_scale_meta={
+            "buffer_sha256": warm_sha,
+            "data_config": args.data_config,
+            "act_percentile": args.act_pct,
+            "calib_batches": args.calib_steps,
+            "denoising_steps": args.denoising_steps,
+        },
     )
 
     print("[calibrate-perstep] quant pass ...")

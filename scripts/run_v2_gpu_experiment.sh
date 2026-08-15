@@ -1,33 +1,38 @@
 #!/bin/bash
 # QuantVLA v2 (v1.3, P0-corrected) gated GPU experiment pipeline.
 #
-# Review round 2, item 7: the old script (probe -> selector -> LIBERO, probing
-# Long during development) violated the design-doc policy and skipped every
-# correctness gate. This pipeline follows docs/quantvla_v2_design.md §6.6:
+# Review round 3, item 7: this is a REAL pipeline — gate failures abort, the
+# consensus plan is frozen for held-out suites, and LIBERO comparisons run
+# inside this script with a managed server lifecycle (not printed commands).
 #
+# Flow (docs/quantvla_v2_design.md §6.6):
 #   CPU selftests
-#     -> gate 0 metric audit (dev suites)
+#     -> gate 0 metric audit (+ gr00t_gate0_check.py HARD gate)
 #     -> dev-suite W4 probe
-#     -> binary selector (+ guard filter, diverse TopK)
+#     -> binary selector (guards, diverse TopK)
 #     -> baseline generation + stage-2 D_solver screening
 #     -> TopK adjudication (gr00t_topk_scorer)
-#     -> dev-suite LIBERO acceptance (spatial/goal/object ONLY)
+#     -> consensus plan (mask Jaccard >= 0.7 gate)
+#     -> dev LIBERO: v2 final plan vs uniform W6 vs random best/median/worst (same seed)
 #     -> freeze decisions (runs/v2_decisions.md)
-#     -> Long/90 final evaluation (held-out)
+#     -> final-holdout: libero_10 + libero_90, 3 seeds
 #
 # Usage:
-#   ./scripts/run_v2_gpu_experiment.sh <suite>            # one dev suite end-to-end
-#   ./scripts/run_v2_gpu_experiment.sh all-dev            # spatial+goal+object
-#   ./scripts/run_v2_gpu_experiment.sh final-holdout      # libero_10/90 acceptance only
-#   GPU=1 ./scripts/run_v2_gpu_experiment.sh spatial      # select GPU
+#   ./scripts/run_v2_gpu_experiment.sh all-dev          # spatial+goal+object
+#   ./scripts/run_v2_gpu_experiment.sh dev-accept       # run the dev LIBERO comparison table
+#   ./scripts/run_v2_gpu_experiment.sh final-holdout    # held-out acceptance (3 seeds)
+#   GR00T_GPU=1 ./scripts/run_v2_gpu_experiment.sh all-dev
 set -euo pipefail
 
 REPO=/home1/gyy/vla/QuantVLA
 cd "$REPO"
-export PYTHONPATH=$REPO/code:$REPO/scripts/tools:$PYTHONPATH
+export PYTHONPATH="$REPO/code:$REPO/scripts/tools:${PYTHONPATH:-}"
 PY=/home1/gyy/probe/miniforge3/envs/groot_test/bin/python
-GPU=${GR00T_GPU:-4}
-export CUDA_VISIBLE_DEVICES=$GPU
+export CUDA_VISIBLE_DEVICES=${GR00T_GPU:-4}
+PORT=5556
+LOG=/tmp/logs/v2_gpu
+mkdir -p "$LOG"
+export GR00T_ATM_ENABLE=0 GR00T_OHB_ENABLE=0   # core-method runs: NO scale correction
 
 DEV_SUITES=(spatial goal object)
 MODE="${1:-all-dev}"
@@ -36,87 +41,165 @@ run_selftests() {
     echo "=== [gate] CPU selftests ==="
     $PY -m gr00t.quantization.kernel_scores >/dev/null 2>&1
     $PY -m gr00t.quantization.duquant_layers >/dev/null 2>&1
-    $PY scripts/tools/gr00t_select_plan.py --selftest >/dev/null 2>&1
-    $PY scripts/tools/gr00t_sensitivity_probe.py --selftest >/dev/null 2>&1
-    $PY scripts/tools/gr00t_metric_audit.py --selftest >/dev/null 2>&1
-    $PY scripts/tools/gr00t_baselines.py --mode selftest >/dev/null 2>&1
-    $PY scripts/tools/gr00t_topk_scorer.py --selftest >/dev/null 2>&1
+    for s in gr00t_select_plan gr00t_sensitivity_probe gr00t_metric_audit \
+             gr00t_baselines gr00t_topk_scorer gr00t_consensus_plan gr00t_gate0_check; do
+        case $s in
+            gr00t_baselines) $PY scripts/tools/$s.py --mode selftest >/dev/null 2>&1 ;;
+            *) $PY scripts/tools/$s.py --selftest >/dev/null 2>&1 ;;
+        esac
+    done
     $PY scripts/tools/calibrate_atm_perstep_gr00t.py --selftest >/dev/null 2>&1
     echo "=== selftests: ALL PASS ==="
 }
 
-# $1 = suite; runs the full dev pipeline for one suite
+# --------------------------------------------------------------------------- #
+# Managed server lifecycle (real LIBERO runs)
+# --------------------------------------------------------------------------- #
+start_server() {
+    local suite=$1 plan=$2
+    local logf="$LOG/server_${suite}_$(basename "$plan").log"
+    echo "--- starting server: libero_$suite plan=$plan (log: $logf)"
+    GR00T_DUQUANT_PLAN="$plan" GR00T_GPU=${GR00T_GPU:-4} \
+        ./scripts/run_quantvla.sh "libero_$suite" >"$logf" 2>&1 &
+    SERVER_PID=$!
+    for _ in $(seq 1 150); do
+        if ss -tln 2>/dev/null | grep -q ":$PORT "; then return 0; fi
+        if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+            echo "!!! server exited early — tail of $logf:"; tail -25 "$logf"; return 1
+        fi
+        sleep 5
+    done
+    echo "!!! server port timeout"; return 1
+}
+
+stop_server() {
+    if [[ -n "${SERVER_PID:-}" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
+        kill "$SERVER_PID" 2>/dev/null || true
+        wait "$SERVER_PID" 2>/dev/null || true
+    fi
+    SERVER_PID=""
+    sleep 5
+}
+
+run_libbero() {
+    local suite=$1; shift
+    ./scripts/run_libero_eval.sh "libero_$suite" --headless "$@"
+}
+
+# --------------------------------------------------------------------------- #
 run_dev_suite() {
     local S=$1
+    local Ckpt=$REPO/checkpoints/gr00t/libero-$S
     local PK=$REPO/checkpoints/packs/gr00t/duquant_packed_libero_${S}_w4a8_b64c32ls015
     echo ""
     echo "############################################################"
     echo "# DEV PIPELINE: libero_$S"
     echo "############################################################"
 
-    echo "--- [gate 0] metric audit ($S, 30 layers × {2,4,6,8} × 3 seeds) ---"
+    echo "--- [gate 0] metric audit ($S) ---"
     $PY scripts/tools/gr00t_metric_audit.py --suite "$S" \
         --layers-subset 30 --bits 2,4,6,8 --n-seeds 3 --n-obs 8 --n-rollout-obs 4
-    echo ">>> GATE 0 CHECK: review metric_audit_libero_${S}.json — bit separation,"
-    echo ">>> W2-vs-W8 ratio, seed stability, guard fire on W2 — BEFORE continuing."
+    $PY scripts/tools/gr00t_gate0_check.py \
+        --audit "$REPO/checkpoints/packs/gr00t/metric_audit_libero_${S}.json" \
+        || { echo "!!! GATE 0 FAILED for $S — pipeline aborts"; exit 1; }
 
     echo "--- [probe] W4-only sensitivity ($S) ---"
     $PY scripts/tools/gr00t_sensitivity_probe.py --suite "$S" \
         --n-obs 16 --bits 4 --group 64 --n-rollout-obs 8 --cs-in-situ-check
-    local SENS=$REPO/checkpoints/packs/gr00t/sensitivity_libero_${S}_g64_b4.json
 
-    echo "--- [selector] binary W4/FP16 + guards + diverse TopK ($S) ---"
+    echo "--- [selector] binary W4/FP16 ($S) ---"
     $PY scripts/tools/gr00t_select_plan.py \
-        --sensitivity "$SENS" \
-        --ckpt $REPO/checkpoints/gr00t/libero-$([ "$S" = "10" ] && echo long || echo "$S") \
-        --out $REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}.json \
+        --sensitivity "$REPO/checkpoints/packs/gr00t/sensitivity_libero_${S}_g64_b4.json" \
+        --ckpt "$Ckpt" \
+        --out "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}.json" \
         --solver greedy --binary --min-bits 4 --emit-env
 
-    echo "--- [baselines] generate + stage-2 D_solver screening ($S) ---"
+    echo "--- [baselines] generate + stage-2 ($S) ---"
     $PY scripts/tools/gr00t_baselines.py --mode generate --suite "$S" \
-        --ckpt $REPO/checkpoints/gr00t/libero-$([ "$S" = "10" ] && echo long || echo "$S") \
-        --ref-plan $REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}.json \
-        --n-random 20 --out-dir $REPO/checkpoints/packs/gr00t/baselines_${S}
+        --ckpt "$Ckpt" \
+        --ref-plan "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}.json" \
+        --n-random 20 --out-dir "$REPO/checkpoints/packs/gr00t/baselines_${S}"
     $PY scripts/tools/gr00t_baselines.py --mode stage2 --suite "$S" \
-        --plans-dir $REPO/checkpoints/packs/gr00t/baselines_${S} \
-        --out $REPO/checkpoints/packs/gr00t/baselines_${S}_dsolver.json
+        --plans-dir "$REPO/checkpoints/packs/gr00t/baselines_${S}" \
+        --out "$REPO/checkpoints/packs/gr00t/baselines_${S}_dsolver.json"
 
-    echo "--- [TopK adjudication] D_solver + select_final ($S) ---"
+    echo "--- [TopK adjudication] ($S) ---"
     $PY scripts/tools/gr00t_topk_scorer.py \
-        --plan $REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}.json \
-        --ckpt $REPO/checkpoints/gr00t/libero-$([ "$S" = "10" ] && echo long || echo "$S") \
-        --suite "$S" --packdir "$PK" \
-        --out $REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}_adjudicated
+        --plan "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}.json" \
+        --ckpt "$Ckpt" --suite "$S" --packdir "$PK" \
+        --out "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}_adjudicated"
+}
 
-    echo "--- [dev LIBERO] final plan acceptance ($S, 50-rollout smoke) ---"
-    echo "    (run in two terminals; ATM/OHB off by default)"
-    echo "    export GR00T_DUQUANT_PLAN=$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}_adjudicated.final_plan.json"
-    echo "    terminal1: ./scripts/run_quantvla.sh libero_$S"
-    echo "    terminal2: ./scripts/run_libero_eval.sh libero_$S --headless"
+# --------------------------------------------------------------------------- #
+# dev LIBERO comparison table: v2 final vs uniform W6 vs random best/median/worst
+# --------------------------------------------------------------------------- #
+dev_accept() {
+    local S=${1:-spatial}
+    local FINAL="$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}_adjudicated.final_plan.json"
+    [[ -f "$FINAL" ]] || { echo "!!! final plan missing: $FINAL"; exit 1; }
+    local BDIR="$REPO/checkpoints/packs/gr00t/baselines_${S}"
+
+    # representative random masks from the stage-2 report
+    mapfile -t REPS < <($PY - "$BDIR/dsolver_report.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+rep = d["representatives"]
+print(rep["best"]["file"]); print(rep["median"]["file"]); print(rep["worst"]["file"])
+PY
+)
+    echo "--- dev LIBERO ($S): v2 final + uniform_w6 + random best/median/worst (seed 0) ---"
+    local PLAN
+    for PLAN in "$FINAL" "$BDIR/uniform_w6.json" \
+                "$BDIR/${REPS[0]}" "$BDIR/${REPS[1]}" "$BDIR/${REPS[2]}"; do
+        start_server "$S" "$PLAN" || exit 1
+        run_libbero "$S" --seed 0
+        stop_server
+    done
+    echo "--- dev LIBERO ($S) done; record numbers in runs/v2_decisions.md ---"
+}
+
+# --------------------------------------------------------------------------- #
+consensus_freeze() {
+    echo "--- [consensus] mask Jaccard gate + frozen unified plan ---"
+    $PY scripts/tools/gr00t_consensus_plan.py \
+        --plans "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_spatial.json" \
+                "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_goal.json" \
+                "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_object.json" \
+        --ckpt "$REPO/checkpoints/gr00t/libero-spatial" \
+        --budget uniform-w6 \
+        --out "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_consensus.json" \
+        || { echo "!!! consensus gate failed — masks not reproducible"; exit 1; }
+}
+
+final_holdout() {
+    local PLAN="$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_consensus.json"
+    [[ -f "$PLAN" ]] || { echo "!!! consensus plan missing — run all-dev first"; exit 1; }
+    for S in 10 90; do
+        for SEED in 0 1 2; do
+            echo "--- held-out: libero_$S seed=$SEED (frozen consensus plan, zero-shot) ---"
+            start_server "$S" "$PLAN" || exit 1
+            run_libbero "$S" --seed "$SEED"
+            stop_server
+        done
+    done
+    echo "--- held-out acceptance done; task-level cluster stats go into the paper report ---"
 }
 
 case "$MODE" in
     all-dev)
         run_selftests
         for S in "${DEV_SUITES[@]}"; do run_dev_suite "$S"; done
+        consensus_freeze
         echo ""
-        echo ">>> NEXT (manual, per §6.6 exit gates):"
-        echo ">>>   1. v2 >= uniform W6 AND v2 >= random mask (task-level paired test)"
-        echo ">>>   2. FP16-mask Jaccard >= 0.7 across 3 calibration seeds"
-        echo ">>>   3. record every switch decision in runs/v2_decisions.md"
-        echo ">>>   then: ./scripts/run_v2_gpu_experiment.sh final-holdout"
+        echo ">>> NEXT: ./scripts/run_v2_gpu_experiment.sh dev-accept <suite>"
+        echo ">>> then record decisions in runs/v2_decisions.md and run final-holdout"
         ;;
-    spatial|goal|object)
-        run_selftests
-        run_dev_suite "$MODE"
+    dev-accept)
+        for S in "${DEV_SUITES[@]}"; do dev_accept "$S"; done
         ;;
     final-holdout)
-        echo "=== held-out acceptance: libero_10 + libero_90 (final plans only) ==="
-        echo "    export GR00T_DUQUANT_PLAN=<adjudicated .final_plan.json>"
-        echo "    libero_10: run_quantvla.sh + run_libero_eval.sh libero_10 --headless (3 seeds x 50)"
-        echo "    libero_90: run_quantvla.sh + run_libero_eval.sh libero_90 --headless (3 seeds x 50)"
-        echo "    Long/90 MUST NOT be used for tuning — this is the frozen evaluation."
+        final_holdout
         ;;
     *)
-        echo "usage: $0 {spatial|goal|object|all-dev|final-holdout}"; exit 1 ;;
+        echo "usage: $0 {all-dev|dev-accept|final-holdout}"; exit 1 ;;
 esac

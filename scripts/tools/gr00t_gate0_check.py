@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""GR00T v2 gate-0 HARD check (review round 3, item 6).
+
+Reads a metric-audit JSON (gr00t_metric_audit.py output) and decides whether
+the gate-0 criteria pass. Exit code 0 = pass, 1 = fail. The orchestrator aborts
+the pipeline on failure — the audit is a GATE, not a signpost.
+
+Checks (thresholds are CLI-overridable):
+  1. finite metric rate == 1.0        (no NaN/inf contamination)
+  2. W2-vs-W8 rms_ratio median >= 2.0 (the metric can separate the known-bad
+                                       stress bit from W8; else the collection
+                                       pipeline cannot support bit decisions)
+  3. guard fire rate on W2 >= 0.5     (feasibility guards must fire on the
+                                       known-bad case — review P0 guard test)
+  4. cross-seed mask Jaccard >= 0.7   (ranking reproducibility)
+  5. Spearman(1-CKA, d_solver)@b4 >= 0.2 (directional sanity; absolute ranking
+                                       quality is judged against random masks)
+
+Usage:
+    python scripts/tools/gr00t_gate0_check.py --audit <metric_audit.json>
+    python scripts/tools/gr00t_gate0_check.py --selftest
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+
+def _num(v: Any) -> Optional[float]:
+    if v is None:
+        return None
+    try:
+        f = float(v)
+        return f if math.isfinite(f) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def check_gate0(
+    audit: Dict[str, Any],
+    min_finite: float = 1.0,
+    min_w2_w8_ratio: float = 2.0,
+    min_guard_fire: float = 0.5,
+    min_seed_jaccard: float = 0.7,
+    min_spearman: float = 0.2,
+) -> Dict[str, Any]:
+    """Returns {passed: bool, checks: {name: {value, threshold, passed}}}."""
+    checks: Dict[str, Any] = {}
+    seeds = audit.get("seeds", [])
+    last = seeds[-1]["stats"] if seeds else {}
+
+    finite = _num(last.get("finite_rate"))
+    checks["finite_rate"] = {
+        "value": finite, "threshold": min_finite,
+        "passed": finite is not None and finite >= min_finite,
+    }
+
+    w2 = (last.get("w2_vs_w8") or {}).get("rms_ratio") or {}
+    ratio = _num(w2.get("median_ratio"))
+    checks["w2_vs_w8_median_ratio"] = {
+        "value": ratio, "threshold": min_w2_w8_ratio,
+        "passed": ratio is not None and ratio >= min_w2_w8_ratio,
+    }
+
+    gf = last.get("guard_fire_w2") or {}
+    fire = _num(gf.get("rate"))
+    checks["guard_fire_w2_rate"] = {
+        "value": fire, "threshold": min_guard_fire,
+        "passed": fire is not None and fire >= min_guard_fire,
+    }
+
+    stab = audit.get("meta", {}).get("stability") or {}
+    jac = _num((stab.get("cka_loss") or {}).get("mask_jaccard_mean"))
+    checks["seed_mask_jaccard"] = {
+        "value": jac, "threshold": min_seed_jaccard,
+        "passed": jac is not None and jac >= min_seed_jaccard,
+    }
+
+    sp = _num((last.get("spearman") or {}).get("b4", {}).get("cka_loss"))
+    checks["spearman_cka_vs_dsolver_b4"] = {
+        "value": sp, "threshold": min_spearman,
+        "passed": sp is not None and sp >= min_spearman,
+    }
+
+    passed = all(c["passed"] for c in checks.values())
+    return {"passed": passed, "checks": checks}
+
+
+def _selftest() -> None:
+    import copy
+
+    base = {
+        "meta": {"stability": {"cka_loss": {"mask_jaccard_mean": 0.85}}},
+        "seeds": [{"stats": {
+            "finite_rate": 1.0,
+            "w2_vs_w8": {"rms_ratio": {"median_ratio": 5.0}},
+            "guard_fire_w2": {"rate": 0.9},
+            "spearman": {"b4": {"cka_loss": 0.6}},
+        }}],
+    }
+    res = check_gate0(base)
+    assert res["passed"], res
+    bad = copy.deepcopy(base)
+    bad["seeds"][0]["stats"]["guard_fire_w2"]["rate"] = 0.1
+    bad["seeds"][0]["stats"]["finite_rate"] = 0.9
+    bad["meta"]["stability"]["cka_loss"]["mask_jaccard_mean"] = 0.3
+    res2 = check_gate0(bad)
+    assert not res2["passed"], res2
+    assert not res2["checks"]["guard_fire_w2_rate"]["passed"]
+    assert not res2["checks"]["finite_rate"]["passed"]
+    assert not res2["checks"]["seed_mask_jaccard"]["passed"]
+    print("[gate0_check] selftest OK (pass case + three failing cases)")
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description="GR00T v2 gate-0 hard check")
+    p.add_argument("--audit", default=None, help="metric_audit_*.json")
+    p.add_argument("--min-finite", type=float, default=1.0)
+    p.add_argument("--min-w2-w8-ratio", type=float, default=2.0)
+    p.add_argument("--min-guard-fire", type=float, default=0.5)
+    p.add_argument("--min-seed-jaccard", type=float, default=0.7)
+    p.add_argument("--min-spearman", type=float, default=0.2)
+    p.add_argument("--selftest", action="store_true")
+    args = p.parse_args()
+
+    if args.selftest:
+        _selftest()
+        return
+    if not args.audit:
+        raise SystemExit("--audit required (or --selftest)")
+
+    audit = json.loads(Path(args.audit).read_text())
+    res = check_gate0(
+        audit,
+        min_finite=args.min_finite,
+        min_w2_w8_ratio=args.min_w2_w8_ratio,
+        min_guard_fire=args.min_guard_fire,
+        min_seed_jaccard=args.min_seed_jaccard,
+        min_spearman=args.min_spearman,
+    )
+    print("[gate0_check] checks:")
+    for name, c in res["checks"].items():
+        mark = "PASS" if c["passed"] else "FAIL"
+        print(f"  {mark}  {name}: value={c['value']} threshold={c['threshold']}")
+    if res["passed"]:
+        print("[gate0_check] GATE 0 PASS")
+        sys.exit(0)
+    print("[gate0_check] GATE 0 FAIL — aborting pipeline (fix the audit before probing)")
+    sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

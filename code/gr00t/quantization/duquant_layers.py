@@ -9,6 +9,7 @@ import os
 import re
 from dataclasses import dataclass
 import json
+from pathlib import Path
 
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -646,8 +647,32 @@ def static_calibrators_required(model: nn.Module) -> bool:
     )
 
 
-def save_act_scales(model: nn.Module, path: str) -> None:
-    """Persist frozen per-layer static A8 scales (review round 2, item 3)."""
+def static_scales_ready(model: nn.Module) -> bool:
+    """True when every STATIC-A8 layer has a usable frozen scale installed.
+
+    Review round 3, item 1: `all_calibrated()` checks calibrator.is_full(), but
+    a scale loaded from disk never re-runs the calibrator — so the loaded state
+    must be judged by `_act_scale_initialized`, not by the calibrator counter.
+    """
+    static_layers = [
+        m for m in model.modules()
+        if isinstance(m, DuQuantLinear) and m.calibrator is not None
+    ]
+    return bool(static_layers) and all(
+        m._act_scale_initialized and m._act_scale is not None for m in static_layers
+    )
+
+
+def save_act_scales(model: nn.Module, path: str, meta: Optional[Dict[str, Any]] = None) -> None:
+    """Persist frozen per-layer static A8 scales + a metadata sidecar.
+
+    Review round 3, item 4: the sidecar records the experiment identity
+    (plan/checkpoint/buffer/data-config/act settings) so a stale scale file can
+    never be silently reused for a different plan or calibration buffer.
+    """
+    import hashlib
+    import json
+
     import numpy as np
 
     scales: Dict[str, np.ndarray] = {}
@@ -657,11 +682,42 @@ def save_act_scales(model: nn.Module, path: str) -> None:
                 raise RuntimeError(f"layer {name} has no frozen act scale to save")
             scales[name] = m._act_scale.detach().float().cpu().numpy()
     np.savez(path, **scales)
+    meta = dict(meta or {})
+    meta.setdefault("n_static_layers", len(scales))
+    meta.setdefault("layer_names", sorted(scales))
+    sidecar = Path(str(path) + ".meta.json")
+    with open(sidecar, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2)
 
 
-def load_act_scales(model: nn.Module, path: str) -> None:
-    """Restore frozen static A8 scales; every static layer must be covered."""
+def load_act_scales(
+    model: nn.Module, path: str, require: Optional[Dict[str, Any]] = None
+) -> None:
+    """Restore frozen static A8 scales; every static layer must be covered.
+
+    Review round 3, item 1: after loading, the per-layer calibrators are marked
+    full so BOTH `all_calibrated()` (calibrator counter) and
+    `static_scales_ready()` (frozen-scale state) agree — the previous version
+    left calibrator.is_full() == False and the load path aborted with
+    'calibration incomplete' on the second server start.
+    `require` is a dict of sidecar fields that must match (e.g. buffer sha256,
+    plan hash) — a mismatch raises instead of silently reusing stale scales.
+    """
+    import json
+
     import numpy as np
+
+    if require:
+        sidecar = Path(str(path) + ".meta.json")
+        if not sidecar.exists():
+            raise RuntimeError(f"act-scale sidecar missing: {sidecar}")
+        with open(sidecar, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        for k, v in require.items():
+            if meta.get(k) != v:
+                raise RuntimeError(
+                    f"act-scale sidecar mismatch on '{k}': saved {meta.get(k)!r} != expected {v!r}"
+                )
 
     data = np.load(path, allow_pickle=False)
     missing = []
@@ -678,6 +734,9 @@ def load_act_scales(model: nn.Module, path: str) -> None:
             else:
                 m._act_scale.copy_(scale)
             m._act_scale_initialized = True
+            # mark the calibrator full: the frozen scale supersedes any future
+            # observation (and _get_act_scale short-circuits on initialized)
+            m.calibrator._seen = m.calibrator.max_batches
     if missing:
         raise RuntimeError(f"act-scale file missing {len(missing)} static layers: {missing[:5]}")
 
@@ -689,6 +748,7 @@ def selftest() -> None:
     Run: python -m gr00t.quantization.duquant_layers
     """
     import tempfile
+    from pathlib import Path
 
     torch.manual_seed(0)
     with tempfile.TemporaryDirectory() as tmp:
@@ -747,8 +807,32 @@ def selftest() -> None:
         layer2(torch.randn(8, 64) * 100.0)
         assert torch.equal(layer2._act_scale, s_frozen), "frozen scale changed after finalize"
 
+        # ---- round-3 regression: scale persistence round-trip ----
+        # A calibrated model saves its frozen scales; a FRESH model loads them
+        # with NO warmup and must be judged ready by BOTH all_calibrated() and
+        # static_scales_ready(), and produce identical outputs.
+        out_a = layer2(x).clone()  # frozen-scale forward on model A
+        scale_path = Path(tmp) / "act_scales.npz"
+        save_act_scales(layer2, str(scale_path), meta={"buffer_sha256": "test", "calib_batches": 4})
+        base3 = nn.Linear(64, 64, bias=False)
+        base3.weight.data.copy_(base2.weight.data)
+        layer3 = DuQuantLinear(base3, "selftest_a8_b", cfg2)
+        assert not static_scales_ready(layer3)
+        load_act_scales(layer3, str(scale_path))
+        assert static_scales_ready(layer3), "loaded scales must be ready"
+        assert all_calibrated(layer3), "loaded scales must satisfy all_calibrated"
+        out_b = layer3(x).clone()
+        assert torch.allclose(out_a, out_b, atol=1e-6), "round-trip outputs differ"
+        # sidecar mismatch must raise
+        try:
+            load_act_scales(layer3, str(scale_path), require={"buffer_sha256": "other"})
+            raise AssertionError("sidecar mismatch was not detected")
+        except RuntimeError:
+            pass
+        print("  scale round-trip OK (save -> load -> ready -> identical outputs; sidecar checked)")
+
     print("[duquant_layers] selftest OK (P0-1 weight immutability + bit-order invariance, "
-          "P0-2 act-scale calibration lifecycle)")
+          "P0-2 act-scale calibration lifecycle, round-3 scale persistence)")
 
 
 if __name__ == "__main__":

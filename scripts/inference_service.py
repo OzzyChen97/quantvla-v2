@@ -140,7 +140,7 @@ def _example_http_client_call(obs: dict, host: str, port: int, api_token: str):
         return {}
 
 
-def _maybe_close_a8_calibration(policy) -> None:
+def _maybe_close_a8_calibration(policy, data_config: str = "") -> None:
     """Static-A8 calibration closure before serving (review round 2, item 3).
 
     No-op for FP16 models (no GR00T_DUQUANT_* env) and for dynamic-act models
@@ -170,16 +170,32 @@ def _maybe_close_a8_calibration(policy) -> None:
     batch_size = 8
     horizon = int(policy.model.action_head.config.action_horizon)
     action_dim = int(policy.model.action_head.config.action_dim)
-    rng = np.random.default_rng(0)
+    # review round 3: self-contained seed-based buffer — identical data every
+    # start, so the sha256 + sidecar prove the scales match the experiment.
     warm_obs, warm_noises, sha = fixed_calibration_buffer(
-        rng, calib_steps * batch_size, horizon, action_dim, fmt="libero"
+        0, calib_steps * batch_size, horizon, action_dim, fmt="libero"
     )
+    import hashlib as _hl
+
+    plan_path = os.environ.get("GR00T_DUQUANT_PLAN")
+    plan_sha = None
+    if plan_path and os.path.exists(plan_path):
+        with open(plan_path, "rb") as f:
+            plan_sha = _hl.sha256(f.read()).hexdigest()[:16]
+    act_meta = {
+        "buffer_sha256": sha,
+        "data_config": data_config,
+        "act_percentile": float(os.environ.get("GR00T_DUQUANT_ACT_PCT", "99.9")),
+        "calib_batches": calib_steps,
+        "denoising_steps": int(os.environ.get("GR00T_DENOISING_STEPS", "8")),
+        "plan_sha256": plan_sha,
+    }
     print(f"[inference] static A8 calibration warmup: {calib_steps * batch_size} "
-          f"synthetic obs (buffer sha256 {sha[:16]}...)")
+          f"synthetic obs (buffer sha256 {sha[:16]}...; plan {plan_sha})")
     t0 = time.time()
     ensure_a8_calibrated(
         policy, warm_obs, warm_noises, batch_size,
-        act_dynamic=False, act_scale_path=scale_path,
+        act_dynamic=False, act_scale_path=scale_path, act_scale_meta=act_meta,
     )
     print(f"[inference] static A8 calibration complete in {time.time() - t0:.1f}s")
 
@@ -215,7 +231,7 @@ def main(args: ArgsConfig):
         # observations (model state changing during evaluation). A fixed
         # synthetic buffer (same sha256 across starts) completes the
         # calibration; GR00T_DUQUANT_ACT_SCALE_PATH persists it across runs.
-        _maybe_close_a8_calibration(policy)
+        _maybe_close_a8_calibration(policy, data_config=args.data_config)
 
         # Start the server
         if args.http_server:

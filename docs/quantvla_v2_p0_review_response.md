@@ -52,6 +52,20 @@ python scripts/tools/calibrate_atm_perstep_gr00t.py --selftest  # plan-aware 三
 | 6 | Goal suite 的 data config 不一致（工具 vs 服务） | ✅ `SUITE_DATA_CONFIG` 映射（goal→MeanStd）+ `resolve_data_config()`；probe/audit/baselines/topk_scorer/calibrator 的 `--data-config` 默认改为按 suite 解析 |
 | 7 | 编排脚本是旧流程；旧报告未作废 | ✅ `run_v2_gpu_experiment.sh` 重写为 gated 管线（selftests → gate 0 audit → dev probe → selector → baselines → TopK 裁决 → dev LIBERO → freeze → held-out Long/90）；`docs/quantvla_v2_gr00t_experiment_report.md` 顶部加 INVALIDATED banner |
 
+## 第三轮审查（3069a67 复核）回应
+
+| # | 审查项 | 状态 |
+|---|---|---|
+| 1 | `load_act_scales` 后 calibrator 未满 → 第二次启动 0/0 误报退出 | ✅ 加载时标记 calibrator full；新增 `static_scales_ready()` 作为加载态判据；round-trip 回归（A 校准→保存→B 加载→无 warmup 输出一致 + sidecar 不匹配报错） |
+| 2 | "固定 buffer" 不固定（全局 torch RNG / 调用者 RNG 已消耗 / hash 只含 noise） | ✅ `fixed_calibration_buffer(seed, ...)` 自包含（np_rng + 本地 torch.Generator）；sha256 覆盖 obs（图像/state/指令）+ noise + 形状/fmt 元数据；probe/audit/baselines/topk/calibrator/server 全部改用它 |
+| 3 | ATM/OHB 校准与部署 A8 scale 不一致 | ✅ calibrator 增加 `--act-scale-path`，在**与部署相同的 frozen A8 scale** 上采集 α/β；baselines/topk_scorer/server 同样支持；scale 文件带 sidecar 元数据（plan/checkpoint/buffer/data_config/act_pct/calib/denoising）并校验 |
+| 4（清单5） | padding mask + 模态分层采样未实现 | ✅ `pool_samples_stratified`：vision 前块 / text 后块各自 cap max_tokens/2（stride 子采样）+ 后块零行 padding mask；probe 三个采集点全接入；定位为 position-stratified 近似（vision-prefix layout） |
+| 5（清单6） | gate 0 只是路牌 | ✅ 新增 `gr00t_gate0_check.py` 硬门（finite=1.0 / W2-W8≥2× / 护栏点火率≥50% / 种子 Jaccard≥0.7 / Spearman≥0.2），编排失败即中止 |
+| 6（清单7） | 三套件无共识 plan | ✅ 新增 `gr00t_consensus_plan.py`：Jaccard≥0.7 硬门 + 多数投票 + 预算修复 + 冻结统一 plan（Long/90 zero-shot） |
+| 7（清单8/9） | LIBERO 只是打印命令；TopK 只有点估计+固定 5% | ✅ 编排脚本真实托管 server 生命周期并跑 v2/uniform W6/random best·median·worst 同 seed（eval 客户端新增 `--seed`）；TopK n-obs=16 + paired bootstrap（best vs runner-up 的 p 值）报告 |
+| 8（清单10） | ATM/OHB 核心实验必须关 | ✅ 编排脚本默认 `GR00T_ATM_ENABLE=0 GR00T_OHB_ENABLE=0`（核心方法对比全程无校正） |
+| 9 | 论文定位（完整版 vs 现状） | ✅ 设计文档新增 §9「论文定位与主张边界」：可主张 6 项 / 暂不主张 6 项 + 建议标题方向 |
+
 ## 仍需 GPU 验证（执行层，非代码正确性）
 
 1. 全模型 bit 扫描顺序不变性（[2,4,8] vs [8,4,2] 的 b4 一致）——layer 级已由 CPU selftest 覆盖；

@@ -242,24 +242,44 @@ def resolve_data_config(suite: str, arg: str | None) -> str:
 # --------------------------------------------------------------------------- #
 # A8 calibration closure (review round 2, items 1/3/4/5)
 # --------------------------------------------------------------------------- #
+def _hash_obs_dict(obs: Dict[str, Any], h: Any) -> None:
+    for key in sorted(obs):
+        v = obs[key]
+        h.update(key.encode())
+        if isinstance(v, np.ndarray):
+            h.update(v.tobytes())
+        elif isinstance(v, (list, tuple)):
+            h.update(repr(v).encode())
+        else:
+            h.update(str(v).encode())
+
+
 def fixed_calibration_buffer(
-    rng: np.random.Generator,
+    seed: int,
     n_obs: int,
     horizon: int,
     action_dim: int,
     fmt: str = "libero",
 ) -> tuple:
-    """Deterministic synthetic calibration buffer + its sha256 fingerprint.
+    """Deterministic, SELF-CONTAINED synthetic calibration buffer + sha256.
 
-    All plans/configs compared in one experiment MUST share ONE buffer (same
-    obs + same paired noises); the fingerprint lets stage2 / TopK scoring /
-    final deployment prove they calibrated on identical data.
+    Review round 3, item 2: the seed fully determines the buffer — no caller
+    RNG state, no process-global torch RNG (a local torch.Generator is used),
+    so the TOPK scorer, the baselines, the calibrator and the inference server
+    all reproduce the IDENTICAL obs+noise data from the same seed. The
+    fingerprint covers the observations (images/state/instruction), the noises
+    and the shape/format metadata — not just the noises.
     """
     import hashlib
 
-    obs_list = [make_obs(rng, fmt) for _ in range(n_obs)]
-    noises = [torch.randn(horizon, action_dim) for _ in obs_list]
+    np_rng = np.random.default_rng(seed)
+    torch_gen = torch.Generator(device="cpu").manual_seed(seed)
+    obs_list = [make_obs(np_rng, fmt) for _ in range(n_obs)]
+    noises = [torch.randn(horizon, action_dim, generator=torch_gen) for _ in range(n_obs)]
     h = hashlib.sha256()
+    h.update(f"{fmt}|{n_obs}|{horizon}|{action_dim}".encode())
+    for ob in obs_list:
+        _hash_obs_dict(ob, h)
     for nz in noises:
         h.update(nz.numpy().tobytes())
     return obs_list, noises, h.hexdigest()
@@ -294,6 +314,7 @@ def ensure_a8_calibrated(
     act_dynamic: bool = False,
     expected_wrapped: int | None = None,
     act_scale_path: str | None = None,
+    act_scale_meta: Dict[str, Any] | None = None,
 ) -> None:
     """Close the static-A8 calibration loop before any measurement/serving.
 
@@ -310,6 +331,7 @@ def ensure_a8_calibrated(
         load_act_scales,
         save_act_scales,
         static_calibrators_required,
+        static_scales_ready,
     )
 
     model = policy.model
@@ -323,13 +345,15 @@ def ensure_a8_calibrated(
         return  # dynamic act (or no static-A8 layers): nothing to freeze
 
     if act_scale_path and Path(act_scale_path).exists():
-        load_act_scales(model, act_scale_path)
-        if all_calibrated(model):
+        # review round 3, item 1: judge the LOADED state by static_scales_ready
+        # (frozen scales installed), not by the calibrator counter.
+        load_act_scales(model, act_scale_path, require=act_scale_meta)
+        if static_scales_ready(model) and all_calibrated(model):
             print(f"[a8-calib] loaded frozen A8 scales from {act_scale_path}")
             return
         raise SystemExit(f"[a8-calib] {act_scale_path} does not cover all static layers")
 
-    if all_calibrated(model):
+    if static_scales_ready(model):
         return
     warmup_forward(policy, warm_obs, warm_noises, batch_size)
     if not all_calibrated(model):
@@ -341,6 +365,6 @@ def ensure_a8_calibrated(
             f"{len(warm_obs)} obs / {len(warm_obs) // max(batch_size, 1)} batches"
         )
     if act_scale_path:
-        save_act_scales(model, act_scale_path)
+        save_act_scales(model, act_scale_path, meta=act_scale_meta)
         print(f"[a8-calib] frozen A8 scales saved -> {act_scale_path}")
     print(f"[a8-calib] static A8 calibration complete ({count_wrapped_layers(model)} wrapped layers)")

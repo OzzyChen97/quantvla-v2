@@ -623,7 +623,14 @@ skip（FP16）**不测量**——它是参照本身；plan 里才出现 skip 选
 | `scripts/run_quantvla.sh` | v2 plan 模式注释；ATM/OHB **opt-in**（默认关，开 ATM 无表即报错） | ✅ |
 | `scripts/inference_service.py` | **第二轮审查**：启动服务前闭环静态 A8 校准（固定合成 buffer + `all_calibrated` 强校验；`GR00T_DUQUANT_ACT_SCALE_PATH` 持久化/加载）；FP16 与 dynamic-act 模式 no-op | ✅ |
 | `scripts/run_v2_gpu_experiment.sh` | **第二轮审查**：重写为 gated 管线（selftests → gate 0 audit → dev probe → selector → baselines 两阶段 → TopK 裁决 → dev LIBERO → freeze → held-out Long/90） | ✅ |
-| `scripts/tools/gr00t_v2_common.py` | `SUITE_DATA_CONFIG`（goal→MeanStd）统一工具与服务坐标系；`fixed_calibration_buffer`（sha256 指纹）；`ensure_a8_calibrated`（static/dynamic 双态） | ✅ |
+| `scripts/tools/gr00t_v2_common.py` | `SUITE_DATA_CONFIG`（goal→MeanStd）统一工具与服务坐标系；`fixed_calibration_buffer`（**自包含 seed 纯函数**：本地 torch.Generator + obs/noise/meta 全量 sha256）；`ensure_a8_calibrated`（static/dynamic 双态 + sidecar 校验） | ✅ |
+| `code/gr00t/quantization/duquant_layers.py` | **第三轮**：`load_act_scales` 标记 calibrator full（修复"第二次启动 0/0 误报"）；`static_scales_ready()`；`save/load_act_scales` 带 sidecar 元数据（plan/checkpoint/buffer/data_config/act/denoising hash）并可校验 | ✅ round-trip 回归 |
+| `code/gr00t/quantization/kernel_scores.py` | **第三轮**：`pool_samples_stratified`——按位置模态分层子采样（vision 前块 / text 后块各自 cap max_tokens/2）+ 后块零行 padding mask | ✅ selftest |
+| `scripts/tools/gr00t_gate0_check.py`（新） | **第三轮**：gate 0 硬门（finite=1.0 / W2-W8 分离 ≥2× / W2 护栏点火率 ≥50% / 种子 mask Jaccard ≥0.7 / Spearman 方向 ≥0.2），exit 0/1，编排脚本失败即中止 | ✅ selftest |
+| `scripts/tools/gr00t_consensus_plan.py`（新） | **第三轮**：三开发套件 FP16 mask 两两 Jaccard ≥0.7 硬门 + 多数投票 + 预算修复 + **冻结统一 plan**（Long/90 zero-shot 使用） | ✅ selftest |
+| `scripts/tools/gr00t_topk_scorer.py` | **第三轮**：n-obs 默认 16 + best-vs-runner-up **paired bootstrap** 显著性报告；`--act-scale-path` | ✅ |
+| `scripts/run_v2_gpu_experiment.sh` | **第三轮**：真管线（gate 失败即中止、server 生命周期托管、v2 vs uniform W6 vs random best/median/worst 同 seed 对照、held-out 3 种子） | ✅ 语法检查 |
+| `code/examples/Libero/eval/*` | **第三轮**：eval 客户端 `--seed` 支持（同 seed 跨配置对照） | ✅ |
 
 **运行手册（groot_test 环境 + 空闲 GPU）**：
 
@@ -700,6 +707,36 @@ export GR00T_DUQUANT_PLAN=checkpoints/packs/gr00t/gr00t_quant_plan_libero_spatia
 3. Chen et al., *Q-DiT: Accurate Post-Training Quantization for Diffusion Transformers*, CVPR 2025 (arXiv:2406.17343). 本地：`docs/paper/2406.17343v2.pdf`
 4. QuantVLA（本仓库 v1 基线）, CVPR 2026 (arXiv:2602.20309)
 5. 相关延伸：QVLA（ICLR 2026, arXiv:2602.03782，通道级动作敏感度分配）、HoloQ-VLA（arXiv:2605.28803，per-step scaling）
+
+## 9. 论文定位与主张边界（v1.3，第三轮审查）
+
+当前实现是**分层多准则选择**：CKA/CS = 软代理、RMS/saturation = 硬可行性约束、
+d_solver_i = 动作重要性权重、D_solver(config) = 全局裁决、ATM/OHB = 选层后的部署期校正。
+它**不是**最初的 `D_i(b_i, α_i)` 联合优化框架。
+
+**可以主张（有实现支撑）**：
+- CKA/CS-based 层敏感度代理（定位为 **representation-stability proxy**，其与任务
+  鲁棒性的相关性由 metric audit 的 Spearman 与 random-mask baseline 证明，而非论文外推）；
+- action-weighted W4/FP16 二元分配（w_i 来自单层干预的 paired solver divergence）；
+- 幅度/饱和可行性护栏（硬约束，工程启发式）；
+- 预算约束二元选择（贪心 + 0-1 背包精确解 gap）；
+- config-level D_solver 裁决（TopK 八步管线，真实部署语义）；
+- plan-specific 静态 ATM/OHB 校正（部署版）。
+
+**暂不主张**：
+- general mixed-bit allocation（主路径只测 W4；{2,3,6,8} 仅 audit）；
+- joint bit-scale 联合优化（先选 mask、再单独校准 α/β，非联合搜索）；
+- action-distribution matching（固定噪声配对点估计，非分布散度）；
+- long-horizon 环境闭环轨迹（D_solver 是单 chunk 内 8 步去噪轨迹）；
+- Q-DiT 式 granularity allocation（g 固定 64，无 per-group 量化尺度搜索）；
+- 真实显存/时延优化（预算 = 理论静态权存字节；内核仍保留 FP 缓存权重，
+  验证的是 allocation policy，不是 INT4 kernel 的峰值显存/速度）。
+
+建议论文标题方向：**Action-Weighted Representation-Preserving Layer Selection
+for Post-Training Quantization of VLAs**（或 Geometry- and Distribution-Aware
+Binary Mixed-Precision Quantization for VLAs）。
+
+---
 
 ## 附录：术语表
 
