@@ -135,3 +135,13 @@ object v2 20eps SR 0.90、goal v2 15eps SR 0.80、long seed0 5eps SR 0.80——
 
 **下一步**：五路完成后用 `parse_libero_logs.py` 出五配置对照表 + task-level 汇总，
 填入 `docs/quantvla_v2_full_test_report.md`，并向用户交付最终汇总。
+
+## 2026-08-15：long held-out 二度卡死与 ZMQ 超时修复（D-012）
+
+**现象**：long 两片（GPU 5/4）卡在首个任务的第 5 trial 达两轮（tqdm 冻结、客户端 CPU 时间
+不涨、server 半闲置），dev 三路正常。
+**根因**：eval 客户端的 ZMQ `recv()` 无超时——server 端某请求挂起后客户端永久阻塞，
+整个 run 冻结。
+**修复**：`code/gr00t/eval/service.py` 的客户端 socket 设置 RCVTIMEO/SNDTIMEO
+（15000ms），超时抛 RuntimeError → 该 episode 记失败、run 继续下一 episode。
+long 两片已重启（GPU 5 seed0 / GPU 4 seed1-2），dev 三路不受影响继续。
