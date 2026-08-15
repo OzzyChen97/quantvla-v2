@@ -162,7 +162,7 @@ def rms_ratio_median(fp: torch.Tensor, q: torch.Tensor, eps: float = 1e-6) -> fl
 
 
 def sat_rate(fp: torch.Tensor, q: torch.Tensor, act_pct: float = 99.9,
-             qmax: float = 127.0) -> float:
+             qmax: float = 127.0, max_elem: int = 8_000_000) -> float:
     """D_sat guard: fraction of quantized outputs exceeding the next layer's
     static A8 range.
 
@@ -170,10 +170,20 @@ def sat_rate(fp: torch.Tensor, q: torch.Tensor, act_pct: float = 99.9,
     THIS layer: s_next = P_act_pct(|fp|) / qmax (data-free, consistent with the
     static A8 calibration used in deployment). Elements of q with |x| > qmax·s
     would saturate the downstream A8 quantizer.
+
+    Note: torch.quantile with a SCALAR q sorts the whole tensor and refuses
+    inputs above 2^24 elements — large DiT layers exceed that after pooling,
+    so the flattened values are deterministically stride-subsampled to
+    max_elem before the percentile (the mean-based saturation rate over q is
+    unaffected by size).
     """
     fp = fp.detach().to(torch.float32)
     q = q.detach().to(torch.float32)
-    s = torch.quantile(fp.flatten().abs(), act_pct / 100.0) / qmax
+    f = fp.flatten().abs()
+    if f.numel() > max_elem:
+        step = f.numel() // max_elem + 1
+        f = f[::step]
+    s = torch.quantile(f, act_pct / 100.0) / qmax
     if float(s) <= 0.0:
         return 0.0
     return float((q.abs() > qmax * s).to(torch.float32).mean())
@@ -553,6 +563,13 @@ def selftest() -> None:
         raise AssertionError("row-count mismatch not detected")
     except RuntimeError:
         pass
+
+    # sat_rate on a tensor above torch.quantile's 2^24-element limit
+    big = torch.randn(17_000_000)
+    big_q = big * 8.0
+    s_big = sat_rate(big, big_q)
+    assert 0.0 <= s_big <= 1.0, s_big
+    assert s_big > 0.5, f"scaled saturation should be large, got {s_big}"
 
     # --- v1.3 feasibility guards ---
     g_same = rms_ratio_median(x, x)
