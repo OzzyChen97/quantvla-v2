@@ -27,9 +27,11 @@ code/gr00t/                              # GR00T N1.5 stack (model, quantization
   quantization/kernel_scores.py          # CKA + CS divergence score bank (selftests)
   atm/dit_atm.py                         # ATM/OHB, per-step table support
 scripts/
-  tools/gr00t_sensitivity_probe.py       # P0-G: 3-protocol measurement (CKA/CS, w_i, D_solver)
-  tools/gr00t_select_plan.py             # P1-G: scoring, budget search, select_final()
-  tools/calibrate_atm_perstep_gr00t.py   # P2-G: data-free ATM/OHB calibration
+  tools/gr00t_sensitivity_probe.py       # P0-G: measurement (CKA/CS + v1.3 guards, w_i, D_solver)
+  tools/gr00t_select_plan.py             # P1-G: binary W4/FP16 + guards + milp + diverse TopK
+  tools/gr00t_metric_audit.py            # v1.3 gate 0: metric validity audit (§6.6.1)
+  tools/gr00t_baselines.py               # v1.3 baselines: random/size/manual/uniform + 2-stage D_solver
+  tools/calibrate_atm_perstep_gr00t.py   # P2-G: ATM/OHB calibration (+ plan-aware FP16-block skip, CV stats)
   tools/calc_gr00t_duquant_memory.py     # static weight-storage byte calculator
   tools/gr00t_v2_common.py               # shared utilities (obs/env/policy/noise)
   tools/gr1_env_smoke.py                 # GR1 tabletop env smoke test helper

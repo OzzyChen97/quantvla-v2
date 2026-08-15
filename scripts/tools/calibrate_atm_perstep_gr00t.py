@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -130,6 +131,124 @@ class StepRmsCollector:
 
 
 # --------------------------------------------------------------------------- #
+# v1.3: plan-aware all-FP16-block handling + per-step CV statistics (§5.4)
+# --------------------------------------------------------------------------- #
+def _is_all_fp16_block(plan: Optional[Dict[str, Any]], attn_name: str) -> bool:
+    """True when every projection of the attention block is FP16: either no
+    projection of this block is targeted by the plan at all, or all targeted
+    ones are skip."""
+    if not plan:
+        return False
+    layers = plan.get("layers", {})
+    proj = [k for k in layers if k.startswith(attn_name + ".")]
+    if not proj:
+        return True  # not targeted -> block is FP16 by construction
+    return all(layers[k].get("skip", False) for k in proj)
+
+
+def apply_plan_aware_neutral(
+    data: Dict[str, Dict[str, Any]],
+    plan: Optional[Dict[str, Any]],
+    neutral_alpha: float,
+    neutral_beta_log: float,
+) -> Dict[str, Dict[str, Any]]:
+    """Force α=β=1 on all-FP16 blocks whose calibration is neutral; keep (and
+    mark) drifted ones. Returns marks per layer."""
+    marks: Dict[str, Dict[str, Any]] = {}
+    if not plan:
+        return marks
+    for layer in list(data):
+        if not _is_all_fp16_block(plan, layer):
+            marks[layer] = {"fp16_block": False, "forced_neutral": False}
+            continue
+        entry = data[layer]
+        a = entry.get("all") or []
+        b = entry.get("beta_perhead") or []
+        a_neutral = all(abs(float(x) - 1.0) < neutral_alpha for x in a)
+        b_neutral = all(abs(math.log(max(float(x), 1e-9))) < neutral_beta_log for x in b)
+        if a_neutral and b_neutral:
+            entry["all"] = [1.0] * len(a)
+            entry["beta_perhead"] = [1.0] * len(b)
+            for st in entry.get("steps", {}).values():
+                if st.get("all") is not None:
+                    st["all"] = [1.0] * len(st["all"])
+                if st.get("beta_perhead") is not None:
+                    st["beta_perhead"] = [1.0] * len(st["beta_perhead"])
+            marks[layer] = {"fp16_block": True, "forced_neutral": True}
+        else:
+            marks[layer] = {
+                "fp16_block": True, "forced_neutral": False,
+                "note": "all-FP16 block but calibration drifted (upstream quantization) "
+                        "— correction kept; check whether α/β should be disabled",
+            }
+    return marks
+
+
+def compute_cv_stats(
+    data: Dict[str, Dict[str, Any]],
+    cv_threshold: float = 0.05,
+    head_fraction: float = 0.95,
+) -> Dict[str, Any]:
+    """CV_t(α_{l,h,t}) / CV_t(β_{l,h,t}) across denoising steps (§5.4 rule 4).
+
+    static_sufficient = True when ≥ head_fraction of heads have CV below the
+    threshold — the per-step table then only adds variance and complexity.
+    """
+    per_layer: Dict[str, Dict[str, Any]] = {}
+    n_a = n_a_below = n_b = n_b_below = 0
+    for layer, entry in data.items():
+        steps = entry.get("steps", {})
+        ts = sorted(steps)
+        if not ts:
+            continue
+        n_heads = len(entry.get("all") or [])
+
+        def rows(key):
+            out = []
+            for h in range(n_heads):
+                row = []
+                for t in ts:
+                    vals = steps[t].get(key)
+                    if vals is not None and h < len(vals):
+                        row.append(float(vals[h]))
+                out.append(row)
+            return out
+
+        def cv(row: List[float]) -> float:
+            if len(row) < 2:
+                return 0.0
+            mu = float(np.mean(row))
+            sd = float(np.std(row))
+            return sd / abs(mu) if abs(mu) > 1e-9 else sd
+
+        a_cvs = [cv(r) for r in rows("all")]
+        b_cvs = [cv(r) for r in rows("beta_perhead")]
+        per_layer[layer] = {
+            "alpha_cv_mean": float(np.mean(a_cvs)) if a_cvs else 0.0,
+            "alpha_cv_max": float(np.max(a_cvs)) if a_cvs else 0.0,
+            "beta_cv_mean": float(np.mean(b_cvs)) if b_cvs else 0.0,
+            "beta_cv_max": float(np.max(b_cvs)) if b_cvs else 0.0,
+        }
+        n_a += len(a_cvs)
+        n_a_below += sum(1 for c in a_cvs if c < cv_threshold)
+        n_b += len(b_cvs)
+        n_b_below += sum(1 for c in b_cvs if c < cv_threshold)
+    stats = {
+        "cv_threshold": cv_threshold,
+        "head_fraction_required": head_fraction,
+        "n_heads_alpha": n_a,
+        "n_heads_alpha_below": n_a_below,
+        "n_heads_beta": n_b,
+        "n_heads_beta_below": n_b_below,
+        "per_layer": per_layer,
+        "static_sufficient": (
+            True if n_a == 0 else (n_a_below / n_a) >= head_fraction
+        ),
+    }
+    return stats
+
+
+# --------------------------------------------------------------------------- #
 # Collection passes
 # --------------------------------------------------------------------------- #
 def run_collection_pass(
@@ -189,6 +308,18 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--beta-log-clamp", type=float, default=0.30)
     p.add_argument("--beta-neutral", type=float, default=0.03)
     p.add_argument("--scope", default="dit")
+    p.add_argument("--plan", default=None,
+                   help="v1.3: quant plan JSON (gr00t_quant_plan.json). Plan-aware "
+                        "calibration: attention blocks whose projections are all FP16 "
+                        "(absent or skip) and whose pooled |α−1|,|logβ| are below the "
+                        "neutral thresholds are forced to α=β=1 (do not corrupt "
+                        "lossless blocks). Drifted all-FP16 blocks keep their correction "
+                        "and are marked 'fp16_block_with_drift'.")
+    p.add_argument("--cv-threshold", type=float, default=0.05,
+                   help="v1.3: per-head CV_t(α/β) threshold for 'static is enough'.")
+    p.add_argument("--cv-head-fraction", type=float, default=0.95,
+                   help="v1.3: fraction of heads below --cv-threshold that makes "
+                        "the static table sufficient (per-step then only adds variance).")
     p.add_argument("--selftest", action="store_true", help="Unit-test the per-step builders and exit.")
     return p.parse_args()
 
@@ -214,7 +345,48 @@ def main() -> None:
         a2 = compute_per_step_alpha(t2, q2)
         assert a2["steps"]["0"]["all"] != a2["steps"]["125"]["all"], a2
         assert abs(a2["steps"]["0"]["all"][0] - 1.4) < 1e-5  # clamped
-        print("[calibrate-perstep] selftest OK")
+
+        # ---- v1.3 plan-aware neutral forcing ----
+        data3 = {
+            "attn_fp16_neutral": {"all": [1.001, 1.0005], "beta_perhead": [1.002, 0.999],
+                                  "steps": {"0": {"all": [1.001, 1.0005], "beta_perhead": [1.002, 0.999]}}},
+            "attn_fp16_drifted": {"all": [1.10], "beta_perhead": [0.95],
+                                  "steps": {"0": {"all": [1.10], "beta_perhead": [0.95]}}},
+            "attn_quantized": {"all": [1.10], "beta_perhead": [0.95],
+                               "steps": {"0": {"all": [1.10], "beta_perhead": [0.95]}}},
+        }
+        plan3 = {"layers": {
+            "attn_fp16_neutral.to_q": {"skip": True},
+            "attn_fp16_neutral.to_k": {"skip": True},
+            "attn_fp16_drifted.to_q": {"skip": True},
+            "attn_quantized.to_q": {"skip": False, "bits": 4},
+        }}
+        marks = apply_plan_aware_neutral(data3, plan3, 0.02, 0.03)
+        assert marks["attn_fp16_neutral"] == {"fp16_block": True, "forced_neutral": True}, marks
+        assert all(x == 1.0 for x in data3["attn_fp16_neutral"]["all"])
+        assert marks["attn_fp16_drifted"]["fp16_block"] is True
+        assert marks["attn_fp16_drifted"]["forced_neutral"] is False
+        assert data3["attn_fp16_drifted"]["all"] == [1.10]  # kept
+        assert marks["attn_quantized"] == {"fp16_block": False, "forced_neutral": False}
+        assert data3["attn_quantized"]["all"] == [1.10]  # untouched
+
+        # ---- v1.3 CV_t statistics ----
+        data4 = {
+            "low_cv": {"all": [1.0], "beta_perhead": [1.0],
+                       "steps": {"0": {"all": [1.0], "beta_perhead": [1.0]},
+                                 "125": {"all": [1.001], "beta_perhead": [0.999]}}},
+            "high_cv": {"all": [1.0], "beta_perhead": [1.0],
+                        "steps": {"0": {"all": [1.0], "beta_perhead": [1.0]},
+                                  "125": {"all": [1.3], "beta_perhead": [0.7]}}},
+        }
+        cv = compute_cv_stats(data4, cv_threshold=0.05, head_fraction=0.95)
+        assert cv["per_layer"]["low_cv"]["alpha_cv_mean"] < 0.05, cv
+        assert cv["per_layer"]["high_cv"]["alpha_cv_mean"] > 0.05, cv
+        assert cv["n_heads_alpha"] == 2 and cv["n_heads_alpha_below"] == 1, cv
+        assert cv["static_sufficient"] is False
+        cv2 = compute_cv_stats({"only_low": data4["low_cv"]}, 0.05, 0.95)
+        assert cv2["static_sufficient"] is True
+        print("[calibrate-perstep] selftest OK (v1.3 plan-aware + CV stats)")
         return
 
     suite_dir = SUITE_DIRS[args.suite]
@@ -316,11 +488,37 @@ def main() -> None:
             "steps": steps,
         }
 
+    # ---- v1.3: plan-aware all-FP16-block handling + per-step CV statistics ----
+    plan = None
+    marks: Dict[str, Dict[str, Any]] = {}
+    if args.plan:
+        with open(args.plan, "r", encoding="utf-8") as f:
+            plan = json.load(f)
+        marks = apply_plan_aware_neutral(data, plan, args.alpha_neutral, args.beta_neutral)
+        n_forced = sum(1 for m in marks.values() if m.get("forced_neutral"))
+        n_fp16 = sum(1 for m in marks.values() if m.get("fp16_block"))
+        print(f"[calibrate-perstep] plan-aware: {n_fp16} all-FP16 blocks, "
+              f"{n_forced} forced to α=β=1, {n_fp16 - n_forced} drifted (correction kept)")
+    cv_stats = compute_cv_stats(data, args.cv_threshold, args.cv_head_fraction)
+    print(f"[calibrate-perstep] CV_t stats: α heads below {args.cv_threshold}: "
+          f"{cv_stats['n_heads_alpha_below']}/{cv_stats['n_heads_alpha']} "
+          f"({(cv_stats['n_heads_alpha_below'] / max(cv_stats['n_heads_alpha'], 1)):.1%}); "
+          f"static_sufficient = {cv_stats['static_sufficient']}")
+
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+    sidecar = {
+        "plan": args.plan,
+        "plan_marks": marks,
+        "cv_stats": cv_stats,
+    }
+    side_path = str(args.out).replace(".json", ".cv_stats.json")
+    with open(side_path, "w", encoding="utf-8") as f:
+        json.dump(sidecar, f, indent=2)
     n_steps = {len(entry["steps"]) for entry in data.values()}
     print(f"[calibrate-perstep] saved {len(data)} layers -> {args.out} (steps per layer: {n_steps})")
+    print(f"[calibrate-perstep] plan-aware marks + CV stats -> {side_path}")
     print("[calibrate-perstep] serve with:")
     print(f"  export GR00T_ATM_ENABLE=1 GR00T_ATM_ALPHA_PATH={args.out}")
     print("  export GR00T_ATM_PER_STEP=1")

@@ -85,6 +85,46 @@ def _center(x: torch.Tensor) -> torch.Tensor:
     return x - x.mean(dim=0, keepdim=True)
 
 
+# --------------------------------------------------------------------------- #
+# v1.3 feasibility guards (design doc §5.1.3) — amplitude / saturation
+# --------------------------------------------------------------------------- #
+def rms_ratio_median(fp: torch.Tensor, q: torch.Tensor, eps: float = 1e-6) -> float:
+    """D_rms guard: median over output channels of |log(rms_q / rms_fp)|.
+
+    Per-channel RMS is computed over the pooled tokens. A uniform scaling by c
+    yields log(c) exactly. Reference semantics: pure FP16 (deployment pairing).
+    """
+    fp = fp.detach().to(torch.float32)
+    q = q.detach().to(torch.float32)
+    rms_fp = fp.square().mean(dim=0).sqrt()
+    rms_q = q.square().mean(dim=0).sqrt()
+    ratio = ((rms_q + eps) / (rms_fp + eps)).log().abs()
+    return float(ratio.median())
+
+
+def sat_rate(fp: torch.Tensor, q: torch.Tensor, act_pct: float = 99.9,
+             qmax: float = 127.0) -> float:
+    """D_sat guard: fraction of quantized outputs exceeding the next layer's
+    static A8 range.
+
+    The next layer's static activation scale is proxied from the FP16 output of
+    THIS layer: s_next = P_act_pct(|fp|) / qmax (data-free, consistent with the
+    static A8 calibration used in deployment). Elements of q with |x| > qmax·s
+    would saturate the downstream A8 quantizer.
+    """
+    fp = fp.detach().to(torch.float32)
+    q = q.detach().to(torch.float32)
+    s = torch.quantile(fp.flatten().abs(), act_pct / 100.0) / qmax
+    if float(s) <= 0.0:
+        return 0.0
+    return float((q.abs() > qmax * s).to(torch.float32).mean())
+
+
+def amax_ratio(fp: torch.Tensor, q: torch.Tensor, eps: float = 1e-6) -> float:
+    """Diagnostic: |q|_max / |fp|_max (not a hard guard, logged alongside D_rms)."""
+    return float(q.detach().to(torch.float32).abs().max() / (fp.detach().to(torch.float32).abs().max() + eps))
+
+
 def _fro2(mat: torch.Tensor) -> float:
     """Squared Frobenius norm of a possibly-large matrix (float)."""
     return float(torch.linalg.matrix_norm(mat, ord="fro")) ** 2
@@ -187,10 +227,16 @@ class LayerScoreBank:
     def evaluate(self, q_out: torch.Tensor) -> dict:
         """Score one quantized-config output tensor against the cached FP16 reference.
 
-        Returns {"cka": float, "cs": float}; values are None when the layer had
-        no usable FP samples.
+        Returns {"cka": float, "cs": float, "cs_cross": float}; values are None
+        when the layer had no usable FP samples.
+
+        cs_cross = -2·log<(1/MN)ΣΣκ(x,y)> is the CROSS term of D_CS alone
+        (v1.3): the full D_CS = log⟨q,q⟩ + log⟨p,p⟩ + cs_cross can hide a
+        scaling blow-up because the within-set term log⟨q,q⟩ collapses in the
+        opposite direction; the self-test battery asserts monotonicity on
+        cs_cross, not on the full divergence.
         """
-        result: dict = {"cka": None, "cs": None}
+        result: dict = {"cka": None, "cs": None, "cs_cross": None}
         if self._fp_centered is None or self.sigma is None:
             return result
 
@@ -211,7 +257,9 @@ class LayerScoreBank:
         # --- CS divergence ---
         log_yy = _log_mean_gaussian_kernel(y, None, self.sigma)
         log_xy = _log_mean_gaussian_kernel(self._fp_raw, y, self.sigma)
-        cs = self._log_xx + log_yy - 2.0 * log_xy
+        cs_cross = -2.0 * log_xy
+        cs = self._log_xx + log_yy + cs_cross
+        result["cs_cross"] = float(cs_cross)
         result["cs"] = float(max(cs, 0.0))
 
         return result
@@ -230,7 +278,14 @@ class LayerScoreBank:
 
 
 def selftest() -> None:
-    """Numerical sanity checks (run on CPU): python -m gr00t.quantization.kernel_scores"""
+    """Numerical sanity checks (run on CPU): python -m gr00t.quantization.kernel_scores
+
+    v1.3 battery (design doc §5.1.2): the scaling-ladder asserts monotonicity of
+    the CS CROSS term (not the full D_CS, whose within-set term collapses and
+    can mask a scaling blow-up), plus mean-shift / rotation / outlier /
+    covariance-change / permutation probes. Also checks the v1.3 feasibility
+    guard functions (§5.1.3).
+    """
     torch.manual_seed(0)
     x = torch.randn(256, 64)
 
@@ -242,6 +297,7 @@ def selftest() -> None:
     s_same = bank.evaluate(x)
     assert s_same["cka"] is not None and abs(s_same["cka"] - 1.0) < 1e-3, f"CKA(X,X)={s_same['cka']}"
     assert s_same["cs"] is not None and s_same["cs"] < 1e-3, f"CS(X,X)={s_same['cs']}"
+    assert s_same["cs_cross"] is not None
 
     s_scaled = bank.evaluate(x * 3.7)  # isotropic scaling must not change CKA
     assert s_scaled["cka"] is not None and abs(s_scaled["cka"] - 1.0) < 1e-2, (
@@ -249,24 +305,87 @@ def selftest() -> None:
     )
     assert s_scaled["cs"] is not None and s_scaled["cs"] > 1e-2, f"CS(X,3.7X)={s_scaled['cs']}"
 
-    y = torch.randn(256, 64) * 0.1  # shrunk, differently-shaped distribution
-    s_other = bank.evaluate(y)
-    assert s_other["cka"] is not None and s_other["cka"] < 0.99, f"CKA(X,0.1Y)={s_other['cka']}"
-    assert s_other["cs"] is not None and s_other["cs"] > 0.0, f"CS(X,0.1Y)={s_other['cs']}"
+    # v1.3 ladder: cs_cross must grow monotonically away from c=1 in BOTH
+    # directions (0.25 < 0.5 < 1 < 2 < 4 < 8). Full D_CS is reported only.
+    ladder = {}
+    for c in (0.25, 0.5, 1.0, 2.0, 4.0, 8.0):
+        r = bank.evaluate(x * c)
+        assert r["cs_cross"] is not None, f"cross(X,{c}X) is None"
+        ladder[c] = r["cs_cross"]
+    for a, b in ((0.25, 0.5), (0.5, 1.0), (1.0, 2.0), (2.0, 4.0), (4.0, 8.0)):
+        assert ladder[a] < ladder[b], f"cross ladder not monotonic: {ladder[a]:.4f} vs {ladder[b]:.4f}"
 
-    # CKA of a permuted/shuffled variant should be well below 1
-    xp = x[torch.randperm(256)]
-    s_perm = bank.evaluate(xp)
+    # mean shift: cross term must respond
+    s_shift = bank.evaluate(x + 2.0)
+    assert s_shift["cs_cross"] is not None and s_shift["cs_cross"] > s_same["cs_cross"], (
+        f"mean shift not detected: cross={s_shift['cs_cross']}"
+    )
+
+    # orthogonal rotation: CKA invariant, cross term responds. The response is
+    # inherently small at large N (rotation only kills the diagonal spike), so
+    # use a dedicated small bank (64 rows) and a modest margin.
+    x64 = torch.randn(64, 64)
+    bank64 = LayerScoreBank("rot", max_tokens=64)
+    bank64.accumulate_ref(x64)
+    bank64.finalize_ref()
+    qq, _ = torch.linalg.qr(torch.randn(64, 64))
+    s_rot_self = bank64.evaluate(x64)
+    s_rot = bank64.evaluate(x64 @ qq)
+    assert s_rot["cka"] is not None and abs(s_rot["cka"] - 1.0) < 1e-2, f"CKA(X,XR)={s_rot['cka']}"
+    assert s_rot["cs_cross"] is not None and s_rot["cs_cross"] > s_rot_self["cs_cross"] + 1e-2, (
+        f"rotation not detected by cross term: {s_rot_self['cs_cross']:.4f} vs {s_rot['cs_cross']:.4f}"
+    )
+
+    # few outliers: scores must stay finite (no inf/nan explosion)
+    x_out = x.clone()
+    x_out[:5] *= 100.0
+    s_out = bank.evaluate(x_out)
+    assert s_out["cka"] is not None and math.isfinite(s_out["cka"]), f"CKA outlier={s_out['cka']}"
+    assert s_out["cs"] is not None and math.isfinite(s_out["cs"]), f"CS outlier={s_out['cs']}"
+    assert s_out["cs_cross"] > s_same["cs_cross"], f"outlier injection not detected: {s_out['cs_cross']}"
+
+    # covariance change (per-dim variance preserved, correlation changed):
+    # y = x @ A with row-normalized random A -> each output dim keeps variance,
+    # but the cross structure differs -> cross term must respond.
+    A = torch.randn(64, 64)
+    A = A / A.norm(dim=1, keepdim=True)
+    s_cov_self = bank64.evaluate(x64)
+    s_cov = bank64.evaluate(x64 @ A)
+    assert s_cov["cs_cross"] is not None and s_cov["cs_cross"] > s_cov_self["cs_cross"] + 1e-2, (
+        f"covariance change not detected: {s_cov_self['cs_cross']:.4f} vs {s_cov['cs_cross']:.4f}"
+    )
+
+    # token permutation: the Gaussian-kernel cross term is a permutation-
+    # invariant mean over ALL pairs -> must stay (numerically) identical.
+    perm = torch.randperm(256)
+    s_perm = bank.evaluate(x[perm])
+    assert s_perm["cs_cross"] is not None
+    assert abs(s_perm["cs_cross"] - s_same["cs_cross"]) < 1e-3, (
+        f"cross term not permutation-invariant: {s_same['cs_cross']:.4f} vs {s_perm['cs_cross']:.4f}"
+    )
+    # (CKA is row-correspondence sensitive: permuting one side drops it.)
     assert s_perm["cka"] is not None and s_perm["cka"] < 0.9, f"CKA(X,perm(X))={s_perm['cka']}"
 
-    print("[kernel_scores] selftest OK")
+    # --- v1.3 feasibility guards ---
+    g_same = rms_ratio_median(x, x)
+    assert abs(g_same) < 1e-4, f"rms_ratio(X,X)={g_same}"
+    g8 = rms_ratio_median(x, x * 8.0)
+    assert abs(g8 - math.log(8.0)) < 1e-3, f"rms_ratio(X,8X)={g8} (expect log 8)"
+    sat_x = sat_rate(x, x)
+    sat_8 = sat_rate(x, x * 8.0)
+    assert sat_8 > sat_x, f"sat_rate not monotonic under scaling: {sat_x} vs {sat_8}"
+    amax8 = amax_ratio(x, x * 8.0)
+    assert abs(amax8 - 8.0) < 1e-2, f"amax_ratio(X,8X)={amax8} (expect ~8)"
+
+    print("[kernel_scores] selftest OK (v1.3 battery)")
     print(f"  CKA(X,X)      = {s_same['cka']:.6f}")
     print(f"  CKA(X,3.7X)   = {s_scaled['cka']:.6f}   (scale-invariant, expect ~1)")
-    print(f"  CKA(X,0.1Y)   = {s_other['cka']:.6f}")
-    print(f"  CKA(X,permX)  = {s_perm['cka']:.6f}")
+    print(f"  CKA(X,XR)     = {s_rot['cka']:.6f}   (rotation-invariant, expect ~1)")
+    print(f"  CKA(X,permX)  = {s_perm['cka']:.6f}   (row-correspondence sensitive)")
     print(f"  CS(X,X)       = {s_same['cs']:.6f}")
     print(f"  CS(X,3.7X)    = {s_scaled['cs']:.6f}")
-    print(f"  CS(X,0.1Y)    = {s_other['cs']:.6f}")
+    print(f"  cross ladder  = {['%.2f' % ladder[c] for c in (0.25, 0.5, 1.0, 2.0, 4.0, 8.0)]}  (monotonic)")
+    print(f"  guards        rms(X,8X)={g8:.4f} amax(X,8X)={amax8:.2f} sat {sat_x:.2e}->{sat_8:.2e}")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GR00T v2 sensitivity probe (P0-G measurement layer, v1.2 reference protocol).
+"""GR00T v2 sensitivity probe (P0-G measurement layer, v1.2 reference + v1.3 guards).
 
 Scores (all computed as REFERENCE-vs-intervention differences on identical
 synthetic inputs — data-free, the only external reference is the model itself):
@@ -11,6 +11,19 @@ synthetic inputs — data-free, the only external reference is the model itself)
                action, T+1 states). Solver-level metric, NOT an environment
                long-horizon rollout; the long-horizon link is validated by
                LIBERO evaluation, not measured here.
+
+v1.3 additions (design doc §6.2 / §5.1.2–5.1.3):
+  - feasibility guards per layer per bit, vs the PURE FP16 model (deployment
+    reference): D_rms (median |log rms ratio| over channels), D_sat (fraction
+    of outputs exceeding the downstream static-A8 range, proxied from the FP16
+    output P99.9), amax ratio. Guard thresholds τ = P99(W4 candidates)×1.5 are
+    written into meta for the selector's hard filtering.
+  - main probe scans W4 only (--bits default "4"); --layers-subset N enables
+    the audit mode on a deterministic stride-N layer subset.
+  - w_i sampling norm: --n-rollout-obs 8 obs × 2 paired noises per obs
+    (median aggregation, std recorded).
+  - CS in-situ scaling check (--cs-in-situ-check): the cross term must respond
+    monotonically when a real layer output is scaled by 2/4/8.
 
 v1.2 reference protocol (fixes the set_all_bits(16) ambiguity):
   - REFERENCE R = the quantized pipeline with EVERY target layer at
@@ -34,7 +47,7 @@ noise, index T = final action) — no off-by-one in per-step weighting:
     div_k = ||x_k^R − x_k^q||² / (||x_k^R||² + ε),  w_k ∝ γ^{k+1} (normalized).
 
 Paired noise gives pointwise pairs; conditional action-DISTRIBUTION divergence
-is NOT estimated here (needs multiple noise samples per obs — P4 extension).
+is NOT estimated here (needs multiple noise samples per obs — third-stage ext).
 
 Design doc: docs/quantvla_v2_design.md §6.2 (schema in §6.2.6).
 
@@ -43,7 +56,7 @@ Usage (groot_test env, one idle GPU):
     cd /home1/gyy/vla/QuantVLA
     export PYTHONPATH=/home1/gyy/vla/QuantVLA/code:$PYTHONPATH
     python scripts/tools/gr00t_sensitivity_probe.py --suite spatial \
-        --n-obs 16 --bits 2,3,4,6,8 --group 64 --out <json>
+        --n-obs 16 --bits 4 --group 64 --out <json>
 """
 
 from __future__ import annotations
@@ -292,6 +305,27 @@ def solver_divergence(
     return float(per_obs.mean()), [float(v) for v in per_obs]
 
 
+def subset_names(names: List[str], k: Optional[int]) -> List[str]:
+    """Deterministic stride subset (v1.3 --layers-subset / audit mode)."""
+    if not k or k <= 0 or k >= len(names):
+        return list(names)
+    idx = np.unique(np.linspace(0, len(names) - 1, k).astype(int))
+    return [names[i] for i in idx]
+
+
+def guard_metrics(fp_out: Optional[torch.Tensor], q_out: Optional[torch.Tensor]) -> Dict[str, Optional[float]]:
+    """v1.3 feasibility guards vs the PURE FP16 reference (deployment pairing)."""
+    from gr00t.quantization.kernel_scores import amax_ratio, rms_ratio_median, sat_rate
+
+    if fp_out is None or q_out is None:
+        return {"rms_ratio": None, "amax_ratio": None, "sat_rate": None}
+    return {
+        "rms_ratio": rms_ratio_median(fp_out, q_out),
+        "amax_ratio": amax_ratio(fp_out, q_out),
+        "sat_rate": sat_rate(fp_out, q_out),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Main probe
 # --------------------------------------------------------------------------- #
@@ -312,7 +346,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--denoising-steps", type=int, default=8)
     p.add_argument("--n-obs", type=int, default=16, help="Synthetic observations (CKA/CS + global D_solver).")
     p.add_argument("--batch-size", type=int, default=8, help="Obs batch size for one forward pass.")
-    p.add_argument("--bits", default="2,3,4,6,8", help="Weight bit widths to scan (reference is weight_bits=0).")
+    p.add_argument("--bits", default="4", help="Weight bit widths to scan (v1.3 main probe: 4; audit mode: 2,4,6,8). Reference is weight_bits=0.")
     p.add_argument("--group", type=int, default=64, help="DuQuant rotation block size (fixed for the whole scan).")
     p.add_argument("--ls", type=float, default=0.15)
     p.add_argument("--act-pct", type=float, default=99.9)
@@ -321,7 +355,18 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-tokens", type=int, default=1024, help="Token cap per layer for CKA/CS pools.")
     p.add_argument("--gamma", type=float, default=1.2, help="Late-denoising-step weight for solver divergence.")
     p.add_argument("--per-layer-bits", default="4", help="Probing bits for per-layer solver-divergence importance weights.")
-    p.add_argument("--n-rollout-obs", type=int, default=4, help="Obs count for per-layer rollouts.")
+    p.add_argument("--n-rollout-obs", type=int, default=8,
+                   help="Obs count for per-layer rollouts (v1.3: 8–16; 2 paired noises per obs).")
+    p.add_argument("--n-noises-per-obs", type=int, default=2,
+                   help="v1.3: paired-noise repeats per obs for w_i (median aggregation).")
+    p.add_argument("--layers-subset", type=int, default=0,
+                   help="v1.3 audit mode: restrict attribution + importance rollouts to a "
+                        "deterministic stride subset of N layers (0 = all).")
+    p.add_argument("--cs-in-situ-check", action="store_true",
+                   help="v1.3: verify the CS cross term responds monotonically when a real "
+                        "layer output is scaled by 2/4/8 (closing criterion, §5.1.2).")
+    p.add_argument("--guard-margin", type=float, default=1.5,
+                   help="v1.3: τ = P99(W4 guard candidates) × margin, written into meta.")
     p.add_argument("--include", default=DEFAULT_INCLUDE)
     p.add_argument("--exclude", default=DEFAULT_EXCLUDE)
     p.add_argument("--packdir", default=None, help="DuQuant pack dir (default derives from suite/group/calib/ls).")
@@ -340,6 +385,23 @@ def main() -> None:
         from gr00t.quantization.kernel_scores import selftest
 
         selftest()
+        # v1.3 offline helpers
+        names = [f"L{i}" for i in range(100)]
+        sub = subset_names(names, 20)
+        assert len(sub) == 20 and sub[0] == names[0] and sub[-1] == names[-1], sub
+        assert subset_names(names, 0) == names and subset_names(names, 500) == names
+        x = torch.randn(256, 64)
+        g = guard_metrics(x, x * 8.0)
+        assert abs(g["rms_ratio"] - 2.0794) < 1e-3 and g["amax_ratio"] > 7.0 and g["sat_rate"] > 0.5, g
+        g_none = guard_metrics(None, x)
+        assert g_none == {"rms_ratio": None, "amax_ratio": None, "sat_rate": None}
+        # solver_divergence: identical trajectories -> 0
+        t = torch.randn(9, 4, 16, 6)  # T+1=9, B=4, H=16, D=6
+        m, per = solver_divergence(t, t, gamma=1.2)
+        assert m == 0.0 and all(p == 0.0 for p in per)
+        m2, per2 = solver_divergence(t, t * 2.0, gamma=1.2)
+        assert m2 > 0.0 and len(per2) == 4
+        print("[probe] selftest OK (offline helpers)")
         return
 
     args.bits = [int(x) for x in args.bits.split(",") if x.strip()]
@@ -395,11 +457,24 @@ def main() -> None:
     obs_list = [make_obs(rng, args.obs_format) for _ in range(n_total)]
     # 每个 obs 一个 2D 噪声 (H, D)：chunked 打包时叠加 batch 维 → (B, H, D)
     noises = [torch.randn(horizon, action_dim) for _ in obs_list]
+    # v1.3: 每个 obs 2 个配对噪声（w_i 中位数聚合，降低单噪声方差）
+    if args.n_noises_per_obs >= 2:
+        noises_b = [torch.randn(horizon, action_dim) for _ in obs_list]
+    else:
+        noises_b = None
 
-    print("[probe] FP16 pass: paired trajectories for global D_solver ...")
+    print("[probe] FP16 pass: paired trajectories for global D_solver (+ guard reference outputs) ...")
     t0 = time.time()
     fp_traj = run_rollouts(model_fp, policy_fp, obs_list[: args.n_obs], noises[: args.n_obs], args.batch_size)
-    print(f"[probe] FP16 pass done in {time.time() - t0:.1f}s; fp_traj {tuple(fp_traj.shape)} (T+1 states)")
+    # v1.3: also collect per-layer FP16 outputs (guards are measured vs pure FP16)
+    fp_col = _LayerCollector(target_names, mode="q", banks={}, max_tokens=args.max_tokens)
+    fp_col.install(model_fp)
+    run_activations(model_fp, policy_fp, obs_list[: args.n_obs], noises[: args.n_obs], args.batch_size)
+    fp_out = {n: fp_col.pooled(n) for n in target_names}
+    fp_col.remove()
+    n_fp_out = sum(1 for v in fp_out.values() if v is not None)
+    print(f"[probe] FP16 pass done in {time.time() - t0:.1f}s; fp_traj {tuple(fp_traj.shape)} "
+          f"(T+1 states); guard refs collected {n_fp_out}/{len(target_names)}")
 
     del model_fp, policy_fp
     gc.collect()
@@ -450,6 +525,8 @@ def main() -> None:
             "group": args.group,
             "n_obs": args.n_obs,
             "n_rollout_obs": args.n_rollout_obs,
+            "n_noises_per_obs": args.n_noises_per_obs,
+            "layers_subset": args.layers_subset,
             "batch_size": args.batch_size,
             "max_tokens": args.max_tokens,
             "gamma": args.gamma,
@@ -461,6 +538,8 @@ def main() -> None:
             "reference_protocol": "wrapped pipeline, all target layers weight_bits=0, A8 static act, rotations active",
             "base_mode": "ATM OFF, OHB OFF, per-step OFF, static activation scale",
             "global_dsolver_pairing": "pure FP16 model vs full config",
+            "guard_reference": "pure FP16 model (deployment pairing); D_sat proxied by P99.9(|fp_out|)/127",
+            "guard_thresholds": None,  # filled at the end: τ = P99(W4 candidates) × margin
         },
         "layers": {n: {} for n in banks},
         "global": {},
@@ -489,12 +568,39 @@ def main() -> None:
     n_ready = sum(1 for b in banks.values() if b.ready)
     print(f"[probe] REFERENCE pass done in {time.time() - t0:.1f}s; banks ready {n_ready}/{len(banks)}")
 
-    # ---- per-layer CKA/CS attribution (single-layer intervention vs R) ----
+    # ---- v1.3 CS in-situ scaling check (closing criterion, §5.1.2) ----
+    if args.cs_in_situ_check:
+        check_bank = next((b for b in banks.values() if b.ready and b._fp_raw is not None), None)
+        if check_bank is None:
+            print("[probe] CS in-situ check: no ready bank, skipped")
+            results["meta"]["cs_in_situ_check"] = {"status": "skipped"}
+        else:
+            vals = {}
+            base = check_bank.evaluate(check_bank._fp_raw)
+            for c in (2.0, 4.0, 8.0):
+                r = check_bank.evaluate(check_bank._fp_raw * c)
+                vals[str(c)] = {"cs_cross": r.get("cs_cross"), "cs": r.get("cs")}
+            crosses = [vals[str(c)]["cs_cross"] for c in (2.0, 4.0, 8.0) if vals[str(c)]["cs_cross"] is not None]
+            monotonic = all(a < b for a, b in zip(crosses, crosses[1:]))
+            results["meta"]["cs_in_situ_check"] = {
+                "layer": check_bank.name, "base_cs_cross": base.get("cs_cross"),
+                "scaled": vals, "cross_monotonic": monotonic,
+            }
+            print(f"[probe] CS in-situ check ({check_bank.name}): cross monotonic = {monotonic}, {vals}")
+            if not monotonic:
+                print("[probe] WARNING: CS cross term does not respond to output scaling — "
+                      "selector should disable CS (λ_cs=0) and report the negative result (§5.1.2)")
+
+    # ---- per-layer CKA/CS + guards attribution (single-layer intervention vs R) ----
     if not args.skip_per_layer:
+        attr_names = subset_names(target_names, args.layers_subset)
+        if len(attr_names) != len(target_names):
+            print(f"[probe] --layers-subset {args.layers_subset}: attribution on "
+                  f"{len(attr_names)}/{len(target_names)} layers")
         for b in args.bits:
             t0 = time.time()
             set_all_bits(model_q, REF_BITS)
-            for name in target_names:
+            for name in attr_names:
                 set_single_layer_bits(model_q, name, b)
                 col = _LayerCollector([name], mode="q", banks=banks, max_tokens=args.max_tokens)
                 col.install(model_q)
@@ -502,9 +608,11 @@ def main() -> None:
                 set_single_layer_bits(model_q, name, REF_BITS)
                 pooled = col.pooled(name)
                 col.remove()
-                results["layers"][name][f"b{b}"] = (
-                    banks[name].evaluate(pooled) if pooled is not None else {"cka": None, "cs": None}
-                )
+                scores = banks[name].evaluate(pooled) if pooled is not None else {"cka": None, "cs": None, "cs_cross": None}
+                # v1.3 feasibility guards vs the pure FP16 reference
+                guards = guard_metrics(fp_out.get(name), pooled)
+                scores.update(guards)
+                results["layers"][name][f"b{b}"] = scores
             save_incremental()
             print(f"[probe] per-layer attribution b={b} done in {time.time() - t0:.1f}s")
 
@@ -541,26 +649,71 @@ def main() -> None:
         save_incremental()
         print(f"[probe] global D_solver b={b} done in {time.time() - t0:.1f}s")
 
-    # ---- per-layer D_solver importance (single-layer intervention vs R) ----
+    # ---- per-layer D_solver importance (single-layer intervention vs R;
+    #      v1.3: n_rollout_obs obs × n_noises_per_obs paired noises, median) ----
     if not args.skip_layer_rollouts:
+        w_names = subset_names(target_names, args.layers_subset)
+        if len(w_names) != len(target_names):
+            print(f"[probe] --layers-subset {args.layers_subset}: importance rollouts on "
+                  f"{len(w_names)}/{len(target_names)} layers")
         for b in args.per_layer_bits:
-            for name in target_names:
+            for name in w_names:
                 set_all_bits(model_q, REF_BITS)
                 if not set_single_layer_bits(model_q, name, b):
                     continue
-                q_traj = run_rollouts(
-                    model_q, policy_q, obs_list[: args.n_rollout_obs], noises[: args.n_rollout_obs], args.batch_size
-                )
                 ref_sub = ref_traj[:, : args.n_rollout_obs]
-                mean_div, per_obs = solver_divergence(ref_sub, q_traj, args.gamma)
-                results["layers"][name][f"d_solver_b{b}"] = mean_div
-                results["layers"][name][f"d_solver_b{b}_std"] = (
-                    float(np.std(per_obs)) if len(per_obs) > 1 else 0.0
+                all_per_obs: List[float] = []
+                q_traj = run_rollouts(
+                    model_q, policy_q, obs_list[: args.n_rollout_obs],
+                    noises[: args.n_rollout_obs], args.batch_size
                 )
+                _, per_obs_a = solver_divergence(ref_sub, q_traj, args.gamma)
+                all_per_obs.extend(per_obs_a)
                 del q_traj
+                if noises_b is not None:
+                    q_traj_b = run_rollouts(
+                        model_q, policy_q, obs_list[: args.n_rollout_obs],
+                        noises_b[: args.n_rollout_obs], args.batch_size
+                    )
+                    _, per_obs_b = solver_divergence(ref_sub, q_traj_b, args.gamma)
+                    all_per_obs.extend(per_obs_b)
+                    del q_traj_b
                 gc.collect()
+                # median over (obs, noise) — robust aggregation, std recorded
+                mean_div = float(np.median(all_per_obs))
+                std_div = float(np.std(all_per_obs)) if len(all_per_obs) > 1 else 0.0
+                results["layers"][name][f"d_solver_b{b}"] = mean_div
+                results["layers"][name][f"d_solver_b{b}_std"] = std_div
             save_incremental()
             print(f"[probe] per-layer importance rollouts b={b} done")
+
+    # ---- v1.3 guard thresholds: τ = P99 of the measured W4 candidates × margin ----
+    if not args.skip_per_layer:
+        guard_bit = 4 if 4 in args.bits else args.bits[0]
+        rms_vals: List[float] = []
+        sat_vals: List[float] = []
+        for n in target_names:
+            entry = results["layers"].get(n, {}).get(f"b{guard_bit}", {})
+            for key, lst in (("rms_ratio", rms_vals), ("sat_rate", sat_vals)):
+                v = entry.get(key)
+                if v is not None:
+                    lst.append(float(v))
+
+        def _p99(vals: List[float]) -> Optional[float]:
+            if not vals:
+                return None
+            s = sorted(vals)
+            idx = max(0, min(len(s) - 1, int(np.ceil(0.99 * len(s))) - 1))
+            return s[idx] * args.guard_margin
+
+        results["meta"]["guard_thresholds"] = {
+            "tau_rms": _p99(rms_vals),
+            "tau_sat": _p99(sat_vals),
+            "guard_bit": guard_bit,
+            "estimation": f"P99 of W4 candidates × {args.guard_margin}",
+            "n_candidates": len(rms_vals),
+        }
+        print(f"[probe] guard thresholds: {results['meta']['guard_thresholds']}")
 
     save_incremental()
     print("[probe] done.")

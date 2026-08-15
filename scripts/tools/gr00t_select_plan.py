@@ -58,7 +58,9 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import random
 import re
+import statistics
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -67,6 +69,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "code"))
 
 BITS_ORDER = [8, 6, 4, 3, 2]  # quantization options (b=16 dominated by skip=FP16)
+BINARY_BITS = [4]  # v1.3 main path: binary W4/FP16 selection (design doc §1.3.1)
 
 
 # --------------------------------------------------------------------------- #
@@ -187,18 +190,37 @@ def build_scores(
     return scores
 
 
-def build_weights(sensitivity: Dict[str, Any], layer_names: List[str]) -> Dict[str, float]:
-    """Layer importance weights from the single-layer solver divergence measured
-    at one fixed probing bit (default b=4, intervention-vs-reference). Ranking
-    weight only — NOT a per-bit distortion.
+def _weight_stats(values: Dict[str, float]) -> Dict[str, float]:
+    """min/max/mean/std over a weight dict (v1.3 w_i three-stage logging, §5.2)."""
+    if not values:
+        return {"min": None, "max": None, "mean": None, "std": None}
+    vals = list(values.values())
+    return {
+        "min": min(vals),
+        "max": max(vals),
+        "mean": statistics.fmean(vals),
+        "std": statistics.pstdev(vals) if len(vals) > 1 else 0.0,
+    }
+
+
+def build_weights_with_log(
+    sensitivity: Dict[str, Any], layer_names: List[str]
+) -> Tuple[Dict[str, float], Dict[str, Any]]:
+    """Layer importance weights + the v1.3 mandatory three-stage log.
 
     Definition (v1.2, boundary cases closed):
       w_i = n·d_i / Σ_j d_j, with
       - Σ_j d_j ≤ 0  -> all w_i = 1 (uniform);
       - layers without a measurement get the mean d;
       - winsorize to [0.5, 2.0] after normalization so a single extreme layer
-        cannot zero out every other weight (n_rollout_obs=4 is a small sample;
-        weight variance is recorded and sample size should grow in P4)."""
+        cannot zero out every other weight.
+
+    v1.3 (§5.2): the selector MUST log raw / normalized-before-clip / final
+    statistics — the experiment report's "w_i ∈ [0.0002, 0.0010]" was the RAW
+    d_solver, not the normalized weights, which made it impossible to verify
+    that action importance actually entered the search. The log enforces
+    mean(final) ≈ 1 and 0.5 ≤ final ≤ 2.
+    """
     lay = sensitivity.get("layers", {})
     raw: Dict[str, float] = {}
     for n in layer_names:
@@ -211,19 +233,41 @@ def build_weights(sensitivity: Dict[str, Any], layer_names: List[str]) -> Dict[s
         if d is not None:
             raw[n] = d
     if not raw:
-        return {n: 1.0 for n in layer_names}
+        w = {n: 1.0 for n in layer_names}
+        log = {
+            "raw_d_solver": _weight_stats(raw),
+            "normalized_before_clip": _weight_stats(w),
+            "final": _weight_stats(w),
+            "note": "no d_solver measurements -> uniform weights",
+        }
+        return w, log
     mean_d = sum(raw.values()) / len(raw)
     filled = {n: raw.get(n, mean_d) for n in layer_names}
     s = sum(filled.values())
     if s <= 0:
         # boundary: all divergences zero (or negative) -> uniform weights
-        return {n: 1.0 for n in layer_names}
-    w = {n: v / s * len(layer_names) for n, v in filled.items()}
-    # outlier protection: winsorize to [0.5, 2.0] so a single extreme layer
-    # (e.g. tiny ||x_fp|| denominator) cannot zero out every other weight.
-    # NOTE: n_rollout_obs=4 is a small sample — weight variance is recorded in
-    # the plan (weight_std) and the sample size should grow in P4.
-    return {n: min(2.0, max(0.5, v)) for n, v in w.items()}
+        w = {n: 1.0 for n in layer_names}
+        log = {
+            "raw_d_solver": _weight_stats(raw),
+            "normalized_before_clip": _weight_stats(w),
+            "final": _weight_stats(w),
+            "note": "Σ d ≤ 0 -> uniform weights",
+        }
+        return w, log
+    w_norm = {n: v / s * len(layer_names) for n, v in filled.items()}
+    # outlier protection: winsorize to [0.5, 2.0]
+    w_final = {n: min(2.0, max(0.5, v)) for n, v in w_norm.items()}
+    log = {
+        "raw_d_solver": _weight_stats(raw),
+        "normalized_before_clip": _weight_stats(w_norm),
+        "final": _weight_stats(w_final),
+    }
+    return w_final, log
+
+
+def build_weights(sensitivity: Dict[str, Any], layer_names: List[str]) -> Dict[str, float]:
+    """Back-compat wrapper: weights only (log dropped)."""
+    return build_weights_with_log(sensitivity, layer_names)[0]
 
 
 def select_final(topk: List[Dict[str, Any]], tol: float = 0.05) -> Optional[Dict[str, Any]]:
@@ -250,6 +294,310 @@ def select_final(topk: List[Dict[str, Any]], tol: float = 0.05) -> Optional[Dict
         if float(c["d_solver"]) <= d_min + tol * max(d_min, 1e-12)
     ]
     return min(ties, key=lambda c: float(c.get("proxy", float("inf"))))
+
+
+# --------------------------------------------------------------------------- #
+# v1.3: feasibility-guard hard filtering (design doc §3.1, constraints 3a/3b)
+# --------------------------------------------------------------------------- #
+def estimate_guard_thresholds(
+    sensitivity: Dict[str, Any],
+    layer_names: List[str],
+    bit: int = 4,
+    margin: float = 1.5,
+) -> Tuple[Optional[float], Optional[float]]:
+    """τ_rms / τ_sat = P99 of the W4 candidates × margin (design doc §5.1.3).
+
+    Thresholds are estimated from the measured W4 guard values when the probe
+    did not already write them into meta["guard_thresholds"].
+    """
+    vals_rms: List[float] = []
+    vals_sat: List[float] = []
+    for n in layer_names:
+        entry = sensitivity.get("layers", {}).get(n, {}).get(f"b{bit}", {})
+        for key, lst in (("rms_ratio", vals_rms), ("sat_rate", vals_sat)):
+            v = entry.get(key)
+            if v is not None:
+                lst.append(float(v))
+
+    def p99(vals: List[float]) -> Optional[float]:
+        if not vals:
+            return None
+        s = sorted(vals)
+        idx = max(0, min(len(s) - 1, math.ceil(0.99 * len(s)) - 1))
+        return s[idx] * margin
+
+    return p99(vals_rms), p99(vals_sat)
+
+
+def filter_guarded(
+    scores: Dict[str, Dict[int, float]],
+    sensitivity: Dict[str, Any],
+    layer_names: List[str],
+    tau_rms: Optional[float],
+    tau_sat: Optional[float],
+    bit: int = 4,
+) -> Tuple[Dict[str, Dict[int, float]], List[Dict[str, Any]]]:
+    """Remove guard-violating layers from the search space (HARD constraint).
+
+    Violating layers lose all bit options -> they stay FP16 (skip). This is a
+    feasibility cut, NOT a weighted penalty: the W2 collapse showed that
+    CKA/CS/action scores must not be allowed to vote a blown-up layer back in.
+    """
+    filtered: Dict[str, Dict[int, float]] = {n: dict(scores.get(n, {})) for n in layer_names}
+    removed: List[Dict[str, Any]] = []
+    for n in layer_names:
+        entry = sensitivity.get("layers", {}).get(n, {}).get(f"b{bit}", {})
+        r = entry.get("rms_ratio")
+        s = entry.get("sat_rate")
+        bad = (tau_rms is not None and r is not None and float(r) > tau_rms) or (
+            tau_sat is not None and s is not None and float(s) > tau_sat
+        )
+        if bad:
+            removed.append({"layer": n, "rms_ratio": r, "sat_rate": s})
+            filtered[n] = {}
+    return filtered, removed
+
+
+# --------------------------------------------------------------------------- #
+# v1.3: binary solvers — 0-1 knapsack exact solve + perturbed neighbors + λ sweep
+# --------------------------------------------------------------------------- #
+def milp_binary_plan(
+    shapes: Dict[str, Dict[str, Any]],
+    scores: Dict[str, Dict[int, float]],
+    weights: Dict[str, float],
+    budget: float,
+    row_rot: str,
+    group: int = 64,
+) -> Tuple[Optional[Dict[str, Any]], Optional[float]]:
+    """Exact 0-1 knapsack via scipy milp (v1.3, design doc §5.3).
+
+    min Σ_i x_i·w_i·S_i(W4)  s.t. Σ_i x_i·(C_fp − C_w4) ≥ (C_all_fp − budget),
+    x_i ∈ {0,1}. Returns (plan, objective); (None, None) when scipy is missing
+    or the problem is infeasible. Used to certify the greedy gap.
+    """
+    try:
+        import numpy as np
+        from scipy.optimize import Bounds, LinearConstraint, milp
+    except Exception:
+        return None, None
+
+    names = [n for n in shapes if scores.get(n, {}).get(4) is not None]
+    if not names:
+        return None, None
+    fp_total = sum(layer_bytes_fp16(s["out"], s["in"], s["has_bias"]) for s in shapes.values())
+    need = fp_total - budget
+    if need <= 0:
+        plan = {n: {"bits": None, "group": group, "skip": True} for n in shapes}
+        return plan, 0.0
+    c = np.array([weights[n] * scores[n][4] for n in names], dtype=float)
+    savings = np.array(
+        [
+            layer_bytes_fp16(shapes[n]["out"], shapes[n]["in"], shapes[n]["has_bias"])
+            - layer_bytes_quant(shapes[n]["out"], shapes[n]["in"], shapes[n]["has_bias"], 4, group, row_rot=row_rot)
+            for n in names
+        ],
+        dtype=float,
+    )
+    usable = [n for i, n in enumerate(names) if savings[i] > 0]
+    if not usable:
+        return None, None
+    keep = [names.index(n) for n in usable]
+    c = c[keep]
+    savings = savings[keep]
+    A = savings.reshape(1, -1)  # Σ savings·x ≥ need  (lb ≤ A@x ≤ ub)
+    res = milp(
+        c=c,
+        constraints=LinearConstraint(A, lb=[need], ub=[np.inf]),
+        integrality=np.ones(len(usable)),
+        bounds=Bounds(np.zeros(len(usable)), np.ones(len(usable))),
+    )
+    if not res.success:
+        return None, None
+    x = np.round(res.x)
+    plan = {n: {"bits": None, "group": group, "skip": True} for n in shapes}
+    for i, n in enumerate(usable):
+        if x[i] >= 0.5:
+            plan[n] = {"bits": 4, "group": group, "skip": False}
+    return plan, float(res.fun)
+
+
+def perturbed_plans(
+    shapes: Dict[str, Dict[str, Any]],
+    scores: Dict[str, Dict[int, float]],
+    weights: Dict[str, float],
+    budget: float,
+    row_rot: str,
+    n: int = 10,
+    sigma: float = 0.1,
+    seed: int = 0,
+) -> List[Dict[str, Any]]:
+    """Score-perturbation neighbors: S_i × (1+δ), δ ~ N(0, σ) (design §5.3).
+
+    Probes plan robustness against proxy-score noise; candidates feed the
+    diversity-filtered TopK pipeline.
+    """
+    rng = random.Random(seed)
+    out: List[Dict[str, Any]] = []
+    for _ in range(n):
+        ps = {
+            nm: {b: max(0.0, v * (1.0 + rng.gauss(0.0, sigma))) for b, v in sd.items()}
+            for nm, sd in scores.items()
+        }
+        plan, obj = greedy_plan(shapes, ps, weights, budget, row_rot)
+        out.append({"plan": plan, "objective": obj, "source": "perturbed"})
+    return out
+
+
+def lambda_sweep_plans(
+    shapes: Dict[str, Dict[str, Any]],
+    sensitivity: Dict[str, Any],
+    layer_names: List[str],
+    weights: Dict[str, float],
+    budget: float,
+    row_rot: str,
+    pairs: Tuple[Tuple[float, float], ...] = ((1.0, 1.0), (1.0, 0.5), (0.5, 1.0), (1.0, 2.0), (2.0, 1.0)),
+) -> List[Dict[str, Any]]:
+    """λ-sweep candidates: plan diversity is generated by the sweep; the FINAL
+    choice is NOT a λ pick — it is made by D_solver adjudication (§3.1)."""
+    out: List[Dict[str, Any]] = []
+    for lc, ls in pairs:
+        sc = build_scores(sensitivity, layer_names, lc, ls)
+        plan, obj = greedy_plan(shapes, sc, weights, budget, row_rot)
+        out.append({"plan": plan, "objective": obj, "source": f"lambda({lc},{ls})"})
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# v1.3: TopK diversity + stability (design doc §5.3 / §5.2)
+# --------------------------------------------------------------------------- #
+def plan_mask(plan: Dict[str, Any]) -> Tuple[str, ...]:
+    """FP16 (skip) layer set of a plan — the diversity unit."""
+    return tuple(sorted(n for n, e in plan.items() if e.get("skip")))
+
+
+def hamming(m1: Tuple[str, ...], m2: Tuple[str, ...]) -> int:
+    return len(set(m1) ^ set(m2))
+
+
+def select_diverse(
+    candidates: List[Dict[str, Any]],
+    k: int = 10,
+    min_hamming: int = 1,
+) -> List[Dict[str, Any]]:
+    """Greedy diverse TopK: lowest objective first, accept only when the FP16
+    mask differs from every accepted plan by ≥ min_hamming layers."""
+    chosen: List[Dict[str, Any]] = []
+    seen: set = set()
+    for c in sorted(candidates, key=lambda c: c["objective"]):
+        mask = plan_mask(c["plan"])
+        if mask in seen:
+            continue
+        if all(hamming(mask, plan_mask(x["plan"])) >= min_hamming for x in chosen):
+            chosen.append(c)
+            seen.add(mask)
+        if len(chosen) >= k:
+            break
+    return chosen
+
+
+def _spearman(a: List[float], b: List[float]) -> float:
+    """Rank correlation between two equal-length lists (ties -> average ranks)."""
+    if len(a) < 2 or len(set(a)) < 2 or len(set(b)) < 2:
+        return 1.0
+    n = len(a)
+
+    def ranks(v: List[float]) -> List[float]:
+        order = sorted(range(n), key=lambda i: v[i])
+        r = [0.0] * n
+        i = 0
+        while i < n:
+            j = i
+            while j + 1 < n and v[order[j + 1]] == v[order[i]]:
+                j += 1
+            avg = (i + j) / 2.0 + 1.0
+            for t in range(i, j + 1):
+                r[order[t]] = avg
+            i = j + 1
+        return r
+
+    ra, rb = ranks(a), ranks(b)
+    ma, mb = statistics.fmean(ra), statistics.fmean(rb)
+    num = sum((x - ma) * (y - mb) for x, y in zip(ra, rb))
+    den = math.sqrt(sum((x - ma) ** 2 for x in ra) * sum((y - mb) ** 2 for y in rb))
+    return num / den if den > 1e-12 else 1.0
+
+
+def bootstrap_stability(
+    sensitivity: Dict[str, Any],
+    shapes: Dict[str, Dict[str, Any]],
+    scores: Dict[str, Dict[int, float]],
+    budget: float,
+    row_rot: str,
+    n: int = 100,
+    seed: int = 0,
+) -> Dict[str, Any]:
+    """w_i estimation stability (v1.3, §5.2): parametric bootstrap over the
+    per-layer d_solver measurements (mean ± std from the probe), re-running the
+    binary greedy plan each draw. Reports FP16-mask Jaccard vs the base plan and
+    weight-ranking Spearman. "A method whose FP16 mask changes half its layers
+    under a new calibration draw is not usable yet." """
+    rng = random.Random(seed)
+    lay = sensitivity.get("layers", {})
+    raw: Dict[str, float] = {}
+    std: Dict[str, float] = {}
+    for nm in shapes:
+        d = s = None
+        for k, v in lay.get(nm, {}).items():
+            if k.startswith("d_solver_b") and k.endswith("_std"):
+                s = float(v)
+            elif k.startswith("d_solver_b") or k.startswith("d_action_b"):
+                d = float(v)
+        if d is not None:
+            raw[nm] = d
+            std[nm] = s if s is not None else 0.0
+
+    base_weights = build_weights(sensitivity, list(shapes))
+    base_plan, _ = greedy_plan(shapes, scores, base_weights, budget, row_rot)
+    base_mask = plan_mask(base_plan)
+
+    def weights_from_draw(draw: Dict[str, float]) -> Dict[str, float]:
+        if not draw:
+            return {n: 1.0 for n in shapes}
+        mean_d = statistics.fmean(draw.values())
+        filled = {n: draw.get(n, mean_d) for n in shapes}
+        s = sum(filled.values())
+        if s <= 0:
+            return {n: 1.0 for n in shapes}
+        w = {n: v / s * len(shapes) for n, v in filled.items()}
+        return {n: min(2.0, max(0.5, v)) for n, v in w.items()}
+
+    jaccards: List[float] = []
+    spearmans: List[float] = []
+    for _ in range(n):
+        draw: Dict[str, float] = {}
+        for nm, d in raw.items():
+            sd = std[nm] if std[nm] > 0 else max(d, 1e-12) * 0.1
+            draw[nm] = max(0.0, rng.gauss(d, sd))
+        w_b = weights_from_draw(draw)
+        plan_b, _ = greedy_plan(shapes, scores, w_b, budget, row_rot)
+        m_b = plan_mask(plan_b)
+        inter = len(set(base_mask) & set(m_b))
+        union = len(set(base_mask) | set(m_b))
+        jaccards.append(inter / union if union else 1.0)
+        # rank correlation on measured layers
+        common = [nm for nm in raw if nm in draw]
+        if len(common) >= 2:
+            spearmans.append(_spearman([draw[nm] for nm in common], [base_weights[nm] for nm in common]))
+    jaccards.sort()
+    return {
+        "n_draws": n,
+        "jaccard": {
+            "mean": statistics.fmean(jaccards) if jaccards else None,
+            "p05": jaccards[max(0, len(jaccards) // 20)] if jaccards else None,
+            "p95": jaccards[min(len(jaccards) - 1, int(0.95 * (len(jaccards) - 1)))] if jaccards else None,
+        },
+        "spearman_mean": statistics.fmean(spearmans) if spearmans else None,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -420,36 +768,139 @@ def evolution_plan(
 # Main
 # --------------------------------------------------------------------------- #
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="GR00T v2 mixed-precision plan selector (P1-G)")
-    p.add_argument("--sensitivity", required=True, help="gr00t_sensitivity.json from P0-G.")
-    p.add_argument("--ckpt", required=True, help="Checkpoint dir (or single safetensors).")
-    p.add_argument("--out", required=True, help="Output plan JSON path.")
+    p = argparse.ArgumentParser(description="GR00T v2 plan selector (P1-G, v1.3 binary default)")
+    p.add_argument("--sensitivity", default=None, help="gr00t_sensitivity.json from P0-G.")
+    p.add_argument("--ckpt", default=None, help="Checkpoint dir (or single safetensors).")
+    p.add_argument("--out", default=None, help="Output plan JSON path.")
     p.add_argument("--include", default=r".*(backbone\.eagle_model\.language_model\..*\.(q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj)|action_head\.model\.transformer_blocks\.\d+\.ff\.net\.(0\.proj|2)).*")
     p.add_argument("--exclude", default=r"(?:^|\.)(vision|radio|norm|ln|layernorm|embed|lm_head|attn1)(?:\.|$)")
     p.add_argument("--lambda-cka", type=float, default=1.0, help="Weight of the (1-CKA) proxy term.")
     p.add_argument("--lambda-cs", type=float, default=1.0, help="Weight of the CS-divergence proxy term.")
     p.add_argument("--group", type=int, default=64, help="DuQuant rotation block size (all plan layers; multi-block is P4).")
     p.add_argument("--row-rot", default="restore")
-    p.add_argument("--budget", default="auto", help="Static byte budget or 'auto' (= v1 W4A8 plan bytes).")
+    p.add_argument("--budget", default="uniform-w6",
+                   help="'uniform-w6' (v1.3 default: uniform-W6 static bytes), "
+                        "'v1-w4' (v1 W4A8 plan bytes) or a float byte budget.")
+    p.add_argument("--binary", action=argparse.BooleanOptionalAction, default=True,
+                   help="v1.3 main path: binary W4/FP16 selection (--no-binary restores the mixed-bit space).")
     p.add_argument("--min-bits", type=int, default=4,
-                   help="最低 bit 档（默认 4）：v1.2 实测发现 CKA/CS 对 W2/W3 的"
+                   help="最低 bit 档（默认 4，v1.3 正式安全约束）：CKA/CS 对 W2/W3 的"
                         "输出幅度爆炸失明（几何保持但幅度放大数倍 → 下游 A8 饱和 → "
-                        "成功率崩溃），故默认把搜索空间限制在 v1 验证过的区间。"
-                        "设 2 可恢复全搜索空间（实验用）。")
+                        "成功率崩溃）。重开 W2/W3 需过设计文档 §1.3.2 的六项实验。")
     p.add_argument("--solver", default="greedy", choices=["greedy", "evolution"])
     p.add_argument("--npop", type=int, default=20)
     p.add_argument("--niter", type=int, default=10)
     p.add_argument("--topk", type=int, default=5)
+    p.add_argument("--n-topk", type=int, default=10, help="v1.3: diverse TopK size for D_solver adjudication.")
+    p.add_argument("--min-hamming", type=int, default=None,
+                   help="v1.3: min FP16-mask Hamming distance between TopK plans "
+                        "(default: max(3, 10%% of layers)).")
+    p.add_argument("--n-perturb", type=int, default=10, help="v1.3: score-perturbation neighbor count.")
+    p.add_argument("--perturb-sigma", type=float, default=0.1)
+    p.add_argument("--lambda-pairs", default="1,1;1,0.5;0.5,1;1,2;2,1",
+                   help="v1.3: λ-sweep pairs for candidate diversity (semicolon-separated 'cka,cs').")
+    p.add_argument("--no-milp", action="store_true", help="v1.3: skip the scipy-milp exact 0-1 solve.")
+    p.add_argument("--n-bootstrap", type=int, default=100, help="v1.3: w_i stability bootstrap draws.")
+    p.add_argument("--guard-margin", type=float, default=1.5,
+                   help="v1.3: guard threshold multiplier on the W4 P99 (τ = P99 × margin).")
     p.add_argument("--packdir", default=None, help="DuQuant pack dir recorded in the plan.")
     p.add_argument("--emit-env", action="store_true", help="Print export lines for run_quantvla.sh.")
+    p.add_argument("--selftest", action="store_true", help="Run offline v1.3 pipeline selftest and exit.")
     return p.parse_args()
+
+
+def _selftest() -> None:
+    """Offline pipeline test (CPU): synthetic sensitivity + shapes through the
+    v1.3 path — guards, binary greedy, milp gap, diversity, w_i log, bootstrap."""
+    import numpy as np
+
+    BITS_ORDER[:] = BINARY_BITS  # selftest runs the v1.3 binary path
+    rng = random.Random(0)
+    names = [f"L{i}" for i in range(100)]  # realistic scale: P99 estimator needs n ≫ 1/0.01
+    shapes = {n: {"out": 4096, "in": 4096, "has_bias": False} for n in names}
+    sens_layers: Dict[str, Any] = {}
+    for n in names:
+        cka = 0.9 + rng.random() * 0.09
+        cs = rng.random() * 0.5
+        sens_layers[n] = {
+            "b4": {"cka": cka, "cs": cs, "rms_ratio": 0.05 + rng.random() * 0.15,
+                   "sat_rate": 1e-4 + rng.random() * 1e-3},
+            "d_solver_b4": 0.001 + rng.random() * 0.05,
+            "d_solver_b4_std": 0.0005 + rng.random() * 0.002,
+        }
+    sens_layers["L3"]["b4"]["rms_ratio"] = 2.5  # known bad layer -> guard must fire
+    sens = {"layers": sens_layers, "meta": {}}
+
+    scores = build_scores(sens, names, 1.0, 1.0)
+    weights, wlog = build_weights_with_log(sens, names)
+    assert abs(wlog["final"]["mean"] - 1.0) < 0.35, wlog["final"]
+    assert 0.5 <= wlog["final"]["min"] and wlog["final"]["max"] <= 2.0, wlog["final"]
+
+    tau_rms, tau_sat = estimate_guard_thresholds(sens, names)
+    filtered, removed = filter_guarded(scores, sens, names, tau_rms, tau_sat)
+    assert any(r["layer"] == "L3" for r in removed), f"guard did not fire on L3: {removed}"
+    assert filtered["L3"] == {}, "guarded layer must leave the search space"
+
+    fp_total = sum(layer_bytes_fp16(s["out"], s["in"], s["has_bias"]) for s in shapes.values())
+    budget = fp_total * 0.55
+    g_plan, g_obj = greedy_plan(shapes, filtered, weights, budget, "restore")
+    assert plan_total_bytes(g_plan, shapes, "restore") <= budget + 1e-3
+    assert g_plan["L3"]["skip"] is True, "guarded layer must stay FP16"
+
+    m_plan, m_obj = milp_binary_plan(shapes, filtered, weights, budget, "restore")
+    if m_plan is not None:
+        assert m_obj <= g_obj + 1e-6, f"milp obj {m_obj} > greedy obj {g_obj}"
+        assert plan_total_bytes(m_plan, shapes, "restore") <= budget + 1e-3
+
+    cands: List[Dict[str, Any]] = [
+        {"plan": g_plan, "objective": g_obj, "source": "greedy"},
+        {"plan": m_plan, "objective": m_obj, "source": "milp"},
+    ] if m_plan is not None else [{"plan": g_plan, "objective": g_obj, "source": "greedy"}]
+    cands += perturbed_plans(shapes, filtered, weights, budget, "restore", n=6, seed=1)
+    cands += lambda_sweep_plans(shapes, sens, names, weights, budget, "restore",
+                                pairs=((1.0, 1.0), (0.5, 1.0), (1.0, 0.5)))
+    top = select_diverse(cands, k=8, min_hamming=3)
+    assert len(top) >= 3, f"diverse topk too small: {len(top)}"
+    masks = [plan_mask(c["plan"]) for c in top]
+    for i in range(len(masks)):
+        for j in range(i + 1, len(masks)):
+            assert hamming(masks[i], masks[j]) >= 3, "hamming diversity violated"
+
+    bs = bootstrap_stability(sens, shapes, filtered, budget, "restore", n=20, seed=2)
+    assert bs["jaccard"]["mean"] is not None and 0.0 <= bs["jaccard"]["mean"] <= 1.0, bs
+    assert bs["spearman_mean"] is not None and 0.0 <= bs["spearman_mean"] <= 1.0, bs
+
+    print("[select] selftest OK (v1.3 binary pipeline)")
+    print(f"  guards        removed {len(removed)} layer(s): {[r['layer'] for r in removed]}")
+    print(f"  w_i log       raw[{wlog['raw_d_solver']['min']:.4f},{wlog['raw_d_solver']['max']:.4f}] "
+          f"final mean {wlog['final']['mean']:.3f} ∈ [0.5,2.0]")
+    print(f"  greedy obj    {g_obj:.4f} | milp obj {m_obj:.4f} (gap {max(0.0, g_obj - m_obj):.4f})" if m_plan is not None
+          else f"  greedy obj    {g_obj:.4f} | milp unavailable")
+    print(f"  diverse topk  {len(top)} plans, min hamming 3")
+    print(f"  bootstrap     jaccard mean {bs['jaccard']['mean']:.3f}, spearman {bs['spearman_mean']:.3f}")
+
+
+def _parse_lambda_pairs(spec: str) -> Tuple[Tuple[float, float], ...]:
+    out = []
+    for part in spec.split(";"):
+        a, b = part.split(",")
+        out.append((float(a), float(b)))
+    return tuple(out)
 
 
 def main() -> None:
     args = parse_args()
 
-    # 搜索空间按 --min-bits 收紧（见参数说明：CKA/CS 对低 bit 的幅度失真失明）
+    if args.selftest:
+        _selftest()
+        return
+
+    if not args.sensitivity or not args.ckpt or not args.out:
+        raise SystemExit("--sensitivity/--ckpt/--out are required (or use --selftest)")
+    # 搜索空间按 --min-bits 收紧（v1.3 正式安全约束，见参数说明）
     BITS_ORDER[:] = [b for b in BITS_ORDER if b >= args.min_bits]
+    if args.binary:
+        BITS_ORDER[:] = BINARY_BITS  # v1.3 main path: W4 / skip only
     if not BITS_ORDER:
         raise SystemExit(f"--min-bits {args.min_bits} 过滤后无可用 bit 档")
 
@@ -464,43 +915,124 @@ def main() -> None:
     shapes = {n: s for n, s in shapes.items() if n in sens_names}
     print(f"[select] layers in sensitivity ∩ checkpoint: {len(shapes)}")
 
-    scores = build_scores(sens, list(shapes), args.lambda_cka, args.lambda_cs)
-    weights = build_weights(sens, list(shapes))
+    layer_names = list(shapes)
+    scores = build_scores(sens, layer_names, args.lambda_cka, args.lambda_cs)
+    weights, w_log = build_weights_with_log(sens, layer_names)
+    print("[select] w_i three-stage log (v1.3, §5.2):")
+    print(f"  raw_d_solver:            min {w_log['raw_d_solver']['min']:.6g} / "
+          f"max {w_log['raw_d_solver']['max']:.6g} / mean {w_log['raw_d_solver']['mean']:.6g}")
+    print(f"  normalized_before_clip:  min {w_log['normalized_before_clip']['min']:.4f} / "
+          f"max {w_log['normalized_before_clip']['max']:.4f} / mean {w_log['normalized_before_clip']['mean']:.4f}")
+    print(f"  final_w_i:               min {w_log['final']['min']:.4f} / "
+          f"max {w_log['final']['max']:.4f} / mean {w_log['final']['mean']:.4f}")
 
-    if args.budget == "auto":
-        # v1 reference: every target layer at W4 g=64, everything else FP16
+    # ---- v1.3 feasibility guards (hard constraint, §3.1) ----
+    meta_thr = sens.get("meta", {}).get("guard_thresholds", {})
+    tau_rms = meta_thr.get("tau_rms")
+    tau_sat = meta_thr.get("tau_sat")
+    if tau_rms is None or tau_sat is None:
+        est_rms, est_sat = estimate_guard_thresholds(sens, layer_names, margin=args.guard_margin)
+        tau_rms = tau_rms if tau_rms is not None else est_rms
+        tau_sat = tau_sat if tau_sat is not None else est_sat
+        print(f"[select] guard thresholds auto-estimated (P99 × {args.guard_margin}): "
+              f"τ_rms={tau_rms:.4f} τ_sat={tau_sat:.3e}")
+    scores, removed = filter_guarded(scores, sens, layer_names, tau_rms, tau_sat)
+    if removed:
+        print(f"[select] guard filter removed {len(removed)} layer(s) from the search space "
+              f"(stay FP16): {[r['layer'] for r in removed[:5]]}{' ...' if len(removed) > 5 else ''}")
+    else:
+        print("[select] guard filter: no violations")
+
+    fp_total = sum(layer_bytes_fp16(s["out"], s["in"], s["has_bias"]) for s in shapes.values())
+    if args.budget == "uniform-w6":
+        # v1.3 primary budget: uniform-W6 static weight bytes (862.9 MB GR00T)
+        w6 = {n: {"bits": 6, "group": args.group, "skip": False} for n in shapes}
+        budget = plan_total_bytes(w6, shapes, args.row_rot)
+        print(f"[select] budget (uniform-W6 static-byte reference, v1.3): {budget / 1e6:.1f} MB")
+    elif args.budget == "v1-w4":
         v1 = {n: {"bits": 4, "group": args.group, "skip": False} for n in shapes}
         budget = plan_total_bytes(v1, shapes, args.row_rot)
         print(f"[select] budget (v1 W4A8 static-byte reference): {budget / 1e6:.1f} MB")
     else:
         budget = float(args.budget)
+    budget_fraction = budget / fp_total if fp_total > 0 else None
 
+    # ---- candidate generation (v1.3: greedy + milp + perturbed + λ sweep) ----
+    candidates: List[Dict[str, Any]] = []
     if args.solver == "greedy":
-        plan, obj = greedy_plan(shapes, scores, weights, budget, args.row_rot)
+        g_plan, g_obj = greedy_plan(shapes, scores, weights, budget, args.row_rot)
+        candidates.append({"plan": g_plan, "objective": g_obj, "source": "greedy"})
     else:
-        plan, obj = evolution_plan(shapes, scores, weights, budget, args.row_rot, args.npop, args.niter, args.topk)
+        e_plan, e_obj = evolution_plan(shapes, scores, weights, budget, args.row_rot,
+                                       args.npop, args.niter, args.topk)
+        candidates.append({"plan": e_plan, "objective": e_obj, "source": "evolution"})
+        g_plan, g_obj = greedy_plan(shapes, scores, weights, budget, args.row_rot)
+        candidates.append({"plan": g_plan, "objective": g_obj, "source": "greedy"})
 
+    if args.binary and not args.no_milp:
+        m_plan, m_obj = milp_binary_plan(shapes, scores, weights, budget, args.row_rot, group=args.group)
+        if m_plan is not None:
+            candidates.append({"plan": m_plan, "objective": m_obj, "source": "milp"})
+            print(f"[select] milp exact 0-1 solve: obj {m_obj:.6f} (greedy gap {max(0.0, g_obj - m_obj):.6f})")
+        else:
+            print("[select] milp: unavailable/infeasible — greedy result stands")
+
+    candidates += perturbed_plans(shapes, scores, weights, budget, args.row_rot,
+                                  n=args.n_perturb, sigma=args.perturb_sigma, seed=1)
+    candidates += lambda_sweep_plans(shapes, sens, layer_names, weights, budget, args.row_rot,
+                                     pairs=_parse_lambda_pairs(args.lambda_pairs))
+
+    min_hamming = args.min_hamming if args.min_hamming is not None else max(3, math.ceil(0.1 * len(shapes)))
+    topk = select_diverse(candidates, k=args.n_topk, min_hamming=min_hamming)
+    print(f"[select] diverse TopK: {len(topk)}/{len(candidates)} candidates (min hamming {min_hamming})")
+
+    # ---- primary plan: lowest objective among candidates (proxy only; the
+    #      FINAL choice is D_solver adjudication on the TopK, §3.1) ----
+    primary = min(candidates, key=lambda c: c["objective"])
+    plan = primary["plan"]
+    obj = primary["objective"]
     total = plan_total_bytes(plan, shapes, args.row_rot)
     n_quant = sum(1 for v in plan.values() if not v["skip"])
-    print(f"[select] plan: {n_quant}/{len(shapes)} layers quantized, "
+    n_skip = sum(1 for v in plan.values() if v["skip"])
+    print(f"[select] primary plan (source={primary['source']}): {n_quant} W4 / {n_skip} skip, "
           f"bytes {total / 1e6:.1f} MB (budget {budget / 1e6:.1f} MB), proxy objective {obj:.4f}")
+
+    # ---- w_i stability bootstrap (v1.3, §5.2) ----
+    bs = bootstrap_stability(sens, shapes, scores, budget, args.row_rot, n=args.n_bootstrap, seed=2)
+    print(f"[select] bootstrap ({bs['n_draws']} draws): mask Jaccard mean {bs['jaccard']['mean']:.3f} "
+          f"[p05 {bs['jaccard']['p05']:.3f}, p95 {bs['jaccard']['p95']:.3f}], "
+          f"weight Spearman {bs['spearman_mean']:.3f}")
 
     out_plan: Dict[str, Any] = {
         "meta": {
             "sensitivity": args.sensitivity,
             "ckpt": args.ckpt,
             "solver": args.solver,
+            "binary": args.binary,
+            "min_bits": args.min_bits,
             "lambda": {"cka": args.lambda_cka, "cs": args.lambda_cs},
             "row_rot": args.row_rot,
-            "objective": "Σ w_i·S_i(b_i) — 层代理目标（一阶归因）；全局 D_solver 需对完整配置做 GPU 配对 rollout 裁决",
+            "objective": "Σ w_i·S_i(b_i) — 层代理目标（一阶归因）；全局 D_solver 需对 TopK 完整配置做 GPU 配对 rollout 裁决（八步管线，设计文档 §3.1）",
             "budget_semantics": "静态权重存储字节（理论紧密打包；不含激活/峰值显存/时延/BitOps）",
-            "skip_semantics": "不量化、保留 FP16（成本 2·d_out·d_in+bias 字节，失真 0）；0-bit 剪枝为 P4 独立选项",
+            "budget_reference": args.budget,
+            "budget_fraction_of_fp16": budget_fraction,
+            "skip_semantics": "不量化、保留 FP16（成本 2·d_out·d_in+bias 字节，失真 0）；0-bit 剪枝为第三阶段独立选项",
+            "guard_thresholds": {"tau_rms": tau_rms, "tau_sat": tau_sat,
+                                 "semantics": "硬约束（§3.1 3a/3b）：违例层从搜索空间删除、保留 FP16"},
+            "guard_filtered_layers": [r["layer"] for r in removed],
+            "w_i_log": w_log,
+            "w_i_log_note": "raw_d_solver 是原始单层散度（实验报告曾误报该值为 w_i）；"
+                            "final_w_i 才是进入搜索的权重，必须满足 mean≈1 且 ∈[0.5,2]",
         },
         "budget_bytes": budget,
+        "fp16_total_bytes": fp_total,
         "total_bytes": total,
         "objective": obj,
+        "primary_source": primary["source"],
         "packdirs": {str(args.group): args.packdir} if args.packdir else {},
         "layers": {},
+        "topk": [],
+        "bootstrap": bs,
     }
     for n, s in shapes.items():
         entry = plan[n]
@@ -522,8 +1054,20 @@ def main() -> None:
             "weight_std": d_ref_std,
             "cka": lay.get(key, {}).get("cka") if key else None,
             "cs": lay.get(key, {}).get("cs") if key else None,
+            "rms_ratio": lay.get(key, {}).get("rms_ratio") if key else None,
+            "sat_rate": lay.get(key, {}).get("sat_rate") if key else None,
             "d_solver_ref": d_ref,
         }
+    for c in topk:
+        out_plan["topk"].append({
+            "source": c["source"],
+            "objective": c["objective"],
+            "bytes": plan_total_bytes(c["plan"], shapes, args.row_rot),
+            "n_skip": sum(1 for v in c["plan"].values() if v["skip"]),
+            "skip_layers": list(plan_mask(c["plan"])),
+            "d_solver": None,  # GPU 配对 rollout 后回填（TopK 裁决）
+            "d_solver_std": None,
+        })
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
