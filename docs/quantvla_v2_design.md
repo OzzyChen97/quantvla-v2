@@ -280,6 +280,7 @@ D^sat_{i,b} = mean_o [ #{ x ∈ out_i : |x| > q_max · s^{A8}_{i+1} } / #x ]    
 ```
 
 - **参考系**：两者均对**纯 FP16** 测量（部署可行性语义，§3.1 表）；采集可与 CKA/CS 同一 pass 完成（FP16 参照 pass 缓存复用）；
+- **护栏是工程启发式，不是精确测量（P0 审查 §九，如实声明）**：D_sat 用单一标量 P99.9 代理下游 A8 范围（真实 A8 是 per-channel、且部分输出并不直接进入下一个量化 Linear）；guard 的量化侧上游仍含 wrapper/A8，深层会混入累计漂移。论文中必须如实表述为"估计的下游饱和代理"，不得宣称精确 clipping 测量；
 - **阈值确定**：在指标审计集（§6.6.1）上取全部 W4 候选的 **P99 再加 margin（×1.5）**，写入 sensitivity.json meta 并随表记录——不拍脑袋；
 - **点火测试（护栏自身的验收）**：护栏必须在已知坏例（W2 层）上触发。W2 不触发 = 采集位置/阈值/scale 语义有误，修好前不信任护栏（W2/W3 重开门槛 §1.3.2 的前提）；
 - **与度量的分工**：CKA = 几何、CS = 分布、D_rms/D_sat = 可行性护栏、D_solver = 最终行为裁决。比"再加一个 λ_scale 塞进加权和"更稳定。
@@ -609,11 +610,14 @@ skip（FP16）**不测量**——它是参照本身；plan 里才出现 skip 选
 | `code/gr00t/atm/dit_atm.py` | per-step 查表应用（缺失 fallback）；step 采集回调；`compute_per_step_alpha/beta` | ✅ 单测（相同统计→α=β=1；回退三态） |
 | `scripts/tools/gr00t_v2_common.py`（新） | 共享工具（obs/env/policy/噪声） | ✅ |
 | `scripts/tools/gr00t_sensitivity_probe.py`（新） | 三协议测量（v1.2 参照 = weight_bits=0 管线；单层干预 CKA/CS、w_i 探测 vs 参照 R、全局 D_solver = 纯 FP16 vs 配置）；轨迹 T+1 状态；权重 γ^{k+1} 归一化；基准模式 ATM/OHB 关 + 静态 act（写入 meta） | ✅ transform 管线 CPU 验证；GPU 实跑待做 |
-| 同上 | **v1.3 增项**：D_rms/D_sat 护栏采集（vs FP16 参照，同 pass）；主 probe 只测 W4（`--bits` 默认 4）；`--layers-subset` audit 模式；`--n-rollout-obs` 默认 8、每 obs 2 噪声（中位数聚合）；D_solver per-obs std；CS 就地缩放验证；τ=P99×margin 写入 meta | ✅ 离线单测全过；GPU 实跑待做 |
+| 同上 | **v1.3 增项**：D_rms/D_sat 护栏采集（vs FP16 参照，同 pass）；主 probe 只测 W4（`--bits` 默认 4）；`--layers-subset` audit 模式；`--n-rollout-obs` 默认 8、每 obs 2 噪声（**各自配对参照轨迹**，中位数聚合）；D_solver per-obs std；CS 就地缩放验证；τ=P99×margin 写入 meta | ✅ 离线单测全过（含 P0-3 sum 断言）；GPU 实跑待做 |
+| 同上 | **P0 修复**：A8 校准在 weight_bits=0 参照态下跑满 calib_steps 个真实 batch（calib_steps×batch_size 个 obs）并强校验 `all_calibrated()`；`solver_divergence` 加权和（Σw·div） | ✅ selftest：D_solver(2·ref)=1.0 精确 |
 | `scripts/tools/gr00t_select_plan.py`（新） | v1.2 目标：联合归一化 + w_i·S_i（w_i winsorize [0.5,2.0]、Σ=0 回退）；贪心/进化（过滤 Δbyte≤0）；`select_final()` TopK 字典序裁决规则；skip=FP16 语义；`--min-bits`（默认 4，已存在） | ✅ 真实 116 层形状端到端；select_final/权重边界单测通过 |
 | 同上 | **v1.3 增项**：二元模式（`--binary` 默认）；护栏硬过滤（τ 自动估计）；scipy milp 0-1 背包（gap 报告）；扰动近邻 + λ 扫描；FP16 mask Hamming 多样性 → Top10；w_i 三段日志 + bootstrap 稳定性输出；预算默认 `uniform-w6` | ✅ selftest 全过（护栏点火、milp gap、diversity、bootstrap） |
 | `scripts/tools/gr00t_metric_audit.py`（新） | 指标有效性实验（§6.6.1）：子集层 × {2,4,6,8} × 指标 + Spearman vs d_solver/bit 单调性/W2-vs-W8 分离度/3 种子稳定性；`--layers-subset` stride 子集 | ✅ 离线统计 selftest 通过；GPU 实跑待做 |
-| `scripts/tools/gr00t_baselines.py`（新） | 基线生成与两阶段评测：random mask（同 W4 层数）×20 → D_solver 分布 → best/median/worst 上 LIBERO；按层大小贪心；v1 手工 mask（qkv 保留 FP16 启发式）；uniform W4/W6 计划；`--mode generate\|stage2` | ✅ 生成器 + 代表选取 selftest 通过；GPU 实跑待做 |
+| `scripts/tools/gr00t_baselines.py`（新） | 基线生成与两阶段评测：random mask（同 W4 层数 + **字节匹配 ≤0.5%**）×20 → D_solver 分布 → best/median/worst 上 LIBERO；按层大小贪心；v1 手工 mask（qkv 保留 FP16 启发式）；uniform W4/W6 计划；stage2 走 **GR00T_DUQUANT_PLAN 真实部署语义** + `n_applied==expected` 强校验 + A8 校准完成断言 | ✅ 生成器 + 代表选取 selftest 通过；GPU 实跑待做 |
+| `scripts/tools/gr00t_topk_scorer.py`（新） | TopK D_solver 裁决（八步管线第 4–7 步）：逐计划物化 GR00T_DUQUANT_PLAN → 真实部署语义加载（wrap 数强校验）→ D_solver → `select_final()` → 最终 plan | ✅ 离线 selftest（物化 + 平局集）；GPU 实跑待做 |
+| `code/gr00t/quantization/duquant_layers.py` | **P0 修复**：`transform_weight_for_forward_optimized` 先 clone 再旋转（权重不可变）；`_get_act_scale` 满批前只给临时 scale 不冻结；`all_calibrated()`/`calibration_progress()` 助手 | ✅ CPU 回归：顺序不变性 + 校准生命周期 |
 | `scripts/tools/calibrate_atm_perstep_gr00t.py`（新） | data-free ATM/OHB 校准（静态/per-step） | ✅ selftest；GPU 待做 |
 | 同上 | **v1.3 增项**：`--plan` plan-aware 校准（全 FP16 block 中性值强制 α=β=1、漂移值保留并标记）；CV_t(α/β) 统计 + `static_sufficient` 判定，sidecar 输出 `<out>.cv_stats.json` | ✅ selftest 全过（plan-aware 三态 + CV 统计） |
 | `scripts/run_quantvla.sh` | v2 plan 模式注释 | ✅ |
@@ -780,5 +784,7 @@ export GR00T_DUQUANT_PLAN=checkpoints/packs/gr00t/gr00t_quant_plan_libero_spatia
 v1.2 的度量与选择代码闭环已完成（probe 三协议、selector 贪心/进化/select_final、min-bits 护栏、per-step 校准器），并已产出首轮 LIBERO 结果（avg 87.0%、Long 76%，见 `docs/quantvla_v2_gr00t_experiment_report.md`）。该轮同时暴露了三个必须修正的问题：**CKA/CS 对低 bit 幅度爆炸失明、w_i 报告口径与定义脱节、缺乏同预算/随机对照**。
 
 v1.3 据此将方法收敛为"**动作加权 W4/FP16 二元选层 + 幅度/饱和硬护栏 + 部署期 plan-specific 静态 ATM/OHB**"，并把下一步工作组织为四阶段（含 gate 0 指标有效性实验）。**v1.3 全部代码增项已于 2026-08-15 实现并通过 CPU 单测**：kernel_scores 自测电池（cross 项阶梯严格单调）、probe 护栏采集/主 W4/audit 子集/w_i 8×2 噪声规范/CS 就地验证、selector 二元模式 + 护栏硬过滤 + milp + 扰动/λ + Hamming 多样性 + w_i 三段日志 + bootstrap、`gr00t_metric_audit.py`、`gr00t_baselines.py`、calibrator plan-aware 全 FP16 block 跳过 + CV_t 统计。
+
+**P0 正确性审查（2026-08-15）后的修复已全部落地并通过 CPU 回归**：权重不可变性 + bit 顺序不变性、A8 满批校准生命周期、D_solver 加权和与第二组噪声真正配对、metric audit 的 bit 复位顺序、run_quantvla.sh 默认关 ATM/OHB、baseline 字节匹配与真实部署语义、selector 的 missing-score/guard 继承/canonical 重打分/预算断言、新增 TopK 裁决工具 `gr00t_topk_scorer.py`、calibrator 真实 plan 加载与 α/β 拆分判定。细节见 `docs/quantvla_v2_p0_review_response.md`；受污染的旧 sensitivity/plan/ATM JSON 已移入 `checkpoints/packs/gr00t/deprecated_v1.2/` 作废。
 
 剩余工作为**执行层**（GPU 实跑）：Phase 1 先跑 gate 0 指标审计与护栏点火验证，再按八步管线做 TopK D_solver 裁决与基线矩阵对照。**进入 Phase 1 的判据**：指标审计（分数区分 bit、W2 分离度）+ 护栏点火测试通过；**离开 Phase 1 的判据**：v2 ≥ uniform W6 且 ≥ random mask（task-level 配对检验）、跨 3 个校准种子 FP16 mask Jaccard ≥ 0.7。全部判据满足后，方法才具备论文级评测资格；文档定位：**Phase 1 执行前的最终设计稿**。

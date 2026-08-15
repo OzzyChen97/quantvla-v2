@@ -233,6 +233,8 @@ def compute_cv_stats(
         n_a_below += sum(1 for c in a_cvs if c < cv_threshold)
         n_b += len(b_cvs)
         n_b_below += sum(1 for c in b_cvs if c < cv_threshold)
+    alpha_ok = True if n_a == 0 else (n_a_below / n_a) >= head_fraction
+    beta_ok = True if n_b == 0 else (n_b_below / n_b) >= head_fraction
     stats = {
         "cv_threshold": cv_threshold,
         "head_fraction_required": head_fraction,
@@ -241,9 +243,11 @@ def compute_cv_stats(
         "n_heads_beta": n_b,
         "n_heads_beta_below": n_b_below,
         "per_layer": per_layer,
-        "static_sufficient": (
-            True if n_a == 0 else (n_a_below / n_a) >= head_fraction
-        ),
+        # P0-8: the verdict must check BOTH α and β (the first version only
+        # looked at α).
+        "alpha_static_sufficient": alpha_ok,
+        "beta_static_sufficient": beta_ok,
+        "static_sufficient": alpha_ok and beta_ok,
     }
     return stats
 
@@ -383,9 +387,12 @@ def main() -> None:
         assert cv["per_layer"]["low_cv"]["alpha_cv_mean"] < 0.05, cv
         assert cv["per_layer"]["high_cv"]["alpha_cv_mean"] > 0.05, cv
         assert cv["n_heads_alpha"] == 2 and cv["n_heads_alpha_below"] == 1, cv
+        assert cv["alpha_static_sufficient"] is False
+        assert cv["beta_static_sufficient"] is False
         assert cv["static_sufficient"] is False
         cv2 = compute_cv_stats({"only_low": data4["low_cv"]}, 0.05, 0.95)
         assert cv2["static_sufficient"] is True
+        assert cv2["alpha_static_sufficient"] and cv2["beta_static_sufficient"]
         print("[calibrate-perstep] selftest OK (v1.3 plan-aware + CV stats)")
         return
 
@@ -438,12 +445,26 @@ def main() -> None:
         act_pct=args.act_pct, calib_steps=args.calib_steps, row_rot=args.row_rot,
         act_dynamic=args.act_dynamic,
     )
+    # P0-8 (correctness review): the quant model must be loaded WITH the final
+    # mixed plan (GR00T_DUQUANT_PLAN) so the attention statistics are collected
+    # on the ACTUAL W4/FP16 deployment, not on a uniform-W4 stand-in whose JSON
+    # is only post-processed afterwards.
+    if args.plan:
+        import os as _os
+
+        _os.environ["GR00T_DUQUANT_PLAN"] = _os.path.abspath(args.plan)
+        print(f"[calibrate-perstep] plan-aware: quant model loads with GR00T_DUQUANT_PLAN={args.plan}")
     policy_q = load_policy(args.model_path, data_config=args.data_config, denoising_steps=args.denoising_steps, device=args.device)
     use_autocast = str(policy_q.device).startswith("cuda")
 
-    print(f"[calibrate-perstep] warmup {args.calib_steps} forwards for activation calibration ...")
-    warm_obs = [make_l1_obs(rng) for _ in range(args.calib_steps)]
-    warm_noises = make_noises(policy_q.model, args.calib_steps, seed=1)
+    # P0-2: A8 calibration to completion (cfg.calib_batches real batches) in
+    # the deployment (plan) state before any statistics are collected.
+    from gr00t.quantization.duquant_layers import all_calibrated, calibration_progress
+
+    n_warm_obs = args.calib_steps * args.batch_size
+    print(f"[calibrate-perstep] A8 calibration: {n_warm_obs} obs = {args.calib_steps} batches ...")
+    warm_obs = [make_l1_obs(rng) for _ in range(n_warm_obs)]
+    warm_noises = make_noises(policy_q.model, n_warm_obs, seed=1)
     for batched_obs, batched_noise in chunked(warm_obs, warm_noises, args.batch_size):
         norm = policy_q.apply_transforms(batched_obs)
         with torch.inference_mode():
@@ -452,6 +473,9 @@ def main() -> None:
                     policy_q.model.get_action(norm, action_noise=batched_noise)
             else:
                 policy_q.model.get_action(norm, action_noise=batched_noise)
+    full, total = calibration_progress(policy_q.model)
+    if not all_calibrated(policy_q.model):
+        raise SystemExit(f"[calibrate-perstep] A8 calibration incomplete: {full}/{total}")
 
     print("[calibrate-perstep] quant pass ...")
     t0 = time.time()
@@ -503,7 +527,11 @@ def main() -> None:
     print(f"[calibrate-perstep] CV_t stats: α heads below {args.cv_threshold}: "
           f"{cv_stats['n_heads_alpha_below']}/{cv_stats['n_heads_alpha']} "
           f"({(cv_stats['n_heads_alpha_below'] / max(cv_stats['n_heads_alpha'], 1)):.1%}); "
-          f"static_sufficient = {cv_stats['static_sufficient']}")
+          f"β: {cv_stats['n_heads_beta_below']}/{cv_stats['n_heads_beta']} "
+          f"({(cv_stats['n_heads_beta_below'] / max(cv_stats['n_heads_beta'], 1)):.1%}); "
+          f"α_static={cv_stats['alpha_static_sufficient']} "
+          f"β_static={cv_stats['beta_static_sufficient']} "
+          f"overall={cv_stats['static_sufficient']}")
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:

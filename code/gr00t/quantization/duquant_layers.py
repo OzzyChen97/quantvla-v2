@@ -274,7 +274,13 @@ class DuQuantLinear(nn.Module):
             return self._act_scale
 
         with torch.no_grad():
-            if self.calibrator is not None and not self.calibrator.is_full():
+            if self.calibrator is not None:
+                # P0-2 (correctness review): the scale must NOT freeze on the
+                # first batch. Keep observing until the calibrator is full
+                # (cfg.calib_batches batches); until then return a PROVISIONAL
+                # per-forward scale computed from the current batch WITHOUT
+                # setting _act_scale_initialized. Only a full calibration
+                # finalizes and freezes the scale.
                 self.calibrator.observe(x)
                 if self.calibrator.is_full():
                     p_vec = self.calibrator.finalize()
@@ -286,7 +292,17 @@ class DuQuantLinear(nn.Module):
                     else:
                         self._act_scale.copy_(scale)
                     self._act_scale_initialized = True
+                    return self._act_scale
+                # provisional scale (not frozen)
+                x_abs = torch.abs(x.detach().to(torch.float32))
+                C = x_abs.shape[-1]
+                x2d = x_abs.reshape(-1, C)
+                p_vec = torch.quantile(x2d, self.cfg.act_percentile / 100.0, dim=0)
+                max_q = qmax(self.cfg.act_bits)
+                scale = torch.clamp(p_vec / max_q, min=1e-6)
+                return scale.to(dtype=x.dtype, device=x.device).clone()
 
+            # no calibrator (should not happen in static mode, kept as fallback)
             if not self._act_scale_initialized:
                 x_abs = torch.abs(x.detach().to(torch.float32))
                 C = x_abs.shape[-1]
@@ -598,3 +614,95 @@ def enable_duquant_if_configured(model: nn.Module) -> None:
         wrap_duquant(model, layer_names, cfg, per_layer_wbits, per_layer_cfg, dry_run=True)
         return
     wrap_duquant(model, layer_names, cfg, per_layer_wbits, per_layer_cfg, dry_run=False)
+
+
+# --------------------------------------------------------------------------- #
+# v1.3 helpers: calibration lifecycle (P0-2)
+# --------------------------------------------------------------------------- #
+def calibration_progress(model: nn.Module) -> Tuple[int, int]:
+    """(fully_calibrated, total) act calibrators across DuQuantLinear layers."""
+    total = full = 0
+    for m in model.modules():
+        if isinstance(m, DuQuantLinear) and m.calibrator is not None:
+            total += 1
+            if m.calibrator.is_full():
+                full += 1
+    return full, total
+
+
+def all_calibrated(model: nn.Module) -> bool:
+    full, total = calibration_progress(model)
+    return total > 0 and full == total
+
+
+def selftest() -> None:
+    """P0 regression tests (CPU): weight immutability + bit-order invariance
+    (P0-1) and act-scale calibration lifecycle (P0-2).
+
+    Run: python -m gr00t.quantization.duquant_layers
+    """
+    import tempfile
+
+    torch.manual_seed(0)
+    with tempfile.TemporaryDirectory() as tmp:
+        base = nn.Linear(64, 64, bias=False)
+        base.weight.data.normal_()
+        cfg = DuQuantConfig(
+            weight_bits=4, act_bits=0, block_size=16, block_out_size=16,
+            enable_permute=False, pack_dir=tmp, row_rot_mode="restore",
+            act_dynamic=False, calib_batches=4, lambda_smooth=0.15,
+        )
+        layer = DuQuantLinear(base, "selftest_w", cfg)
+        w0 = layer._weight.clone()
+        x = torch.randn(8, 64)
+
+        # P0-1a: weight buffer must never change under bit switching
+        layer.weight_bits = 4
+        y4a = layer(x).clone()
+        assert torch.equal(layer._weight, w0), "weight buffer mutated after bits=4"
+        layer.weight_bits = 8
+        y8 = layer(x).clone()
+        assert torch.equal(layer._weight, w0), "weight buffer mutated after bits=8"
+        layer.weight_bits = 4
+        y4b = layer(x).clone()
+        assert torch.equal(layer._weight, w0), "weight buffer mutated after bits=4 (second pass)"
+        # P0-1b: bit-order invariance — second W4 forward equals the first
+        assert torch.allclose(y4a, y4b, atol=1e-5), "bit-order invariance violated (4->8->4)"
+        # P0-1c: weight_bits=0 twice identical
+        layer.weight_bits = 0
+        y0a = layer(x).clone()
+        layer.weight_bits = 4
+        layer.weight_bits = 0
+        y0b = layer(x).clone()
+        assert torch.allclose(y0a, y0b, atol=1e-5), "weight_bits=0 path not repeatable"
+
+        # P0-2: static A8 scale must accumulate cfg.calib_batches batches and
+        # only freeze afterwards; provisional scales must NOT freeze.
+        base2 = nn.Linear(64, 64, bias=False)
+        base2.weight.data.normal_()
+        cfg2 = DuQuantConfig(
+            weight_bits=0, act_bits=8, block_size=16, block_out_size=16,
+            enable_permute=False, pack_dir=tmp, row_rot_mode="restore",
+            act_dynamic=False, calib_batches=4, act_percentile=99.9, lambda_smooth=0.15,
+        )
+        layer2 = DuQuantLinear(base2, "selftest_a8", cfg2)
+        layer2(x)
+        layer2(x * 2.0)  # batches 1-2 observed, NOT frozen
+        assert not layer2._act_scale_initialized, "act scale froze too early (P0-2)"
+        s1 = layer2._get_act_scale(x)  # batch 3 -> provisional, still not frozen
+        assert not layer2._act_scale_initialized, "provisional scale must not freeze"
+        s2 = layer2._get_act_scale(x * 3.0)  # batch 4 -> calibrator full -> freeze
+        assert layer2.calibrator.is_full() and layer2._act_scale_initialized, (
+            "scale did not freeze after full calibration"
+        )
+        assert not torch.allclose(s1, s2), "frozen scale should reflect all 4 batches"
+        s_frozen = layer2._act_scale.clone()
+        layer2(torch.randn(8, 64) * 100.0)
+        assert torch.equal(layer2._act_scale, s_frozen), "frozen scale changed after finalize"
+
+    print("[duquant_layers] selftest OK (P0-1 weight immutability + bit-order invariance, "
+          "P0-2 act-scale calibration lifecycle)")
+
+
+if __name__ == "__main__":
+    selftest()

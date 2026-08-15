@@ -125,12 +125,23 @@ export GR00T_DUQUANT_PACKDIR="/home1/gyy/vla/QuantVLA/checkpoints/packs/gr00t/du
 # export GR00T_ATM_SCOPE=${GR00T_ATM_SCOPE:-dit}
 
 
-export GR00T_ATM_ALPHA_PATH=/home1/gyy/vla/QuantVLA/checkpoints/packs/gr00t/atm_alpha_beta_long.json
-export GR00T_ATM_ENABLE=1
+# ATM/OHB configuration — OPT-IN ONLY (P0-5, correctness review).
+# The core v2 selection method must be evaluated WITHOUT scale corrections;
+# the previous script force-enabled ATM/OHB with the LONG-suite table for every
+# suite, which contradicted the experiment report's "v2 without ATM/OHB" claim
+# and polluted spatial/goal/object runs with the wrong calibration table.
+# Enable explicitly for the deployment-version ablation:
+#   export GR00T_ATM_ALPHA_PATH=<suite/plan-specific json>
+#   export GR00T_ATM_ENABLE=1
+#   export GR00T_OHB_ENABLE=1
+export GR00T_ATM_ENABLE=${GR00T_ATM_ENABLE:-0}
+export GR00T_OHB_ENABLE=${GR00T_OHB_ENABLE:-0}
+if [[ "${GR00T_ATM_ENABLE}" == "1" && -z "${GR00T_ATM_ALPHA_PATH:-}" ]]; then
+    echo "ERROR: GR00T_ATM_ENABLE=1 but GR00T_ATM_ALPHA_PATH is not set (no table to apply)."
+    exit 1
+fi
 export GR00T_ATM_SCOPE=${GR00T_ATM_SCOPE:-dit}
-
-export GR00T_OHB_ENABLE=1
-export GR00T_OHB_FALLBACK=1.0      # JSON 缺层时使用
+export GR00T_OHB_FALLBACK=${GR00T_OHB_FALLBACK:-1.0}
 export GR00T_OHB_SCOPE=${GR00T_OHB_SCOPE:-dit}
 
 # Disable torch.compile for compatibility

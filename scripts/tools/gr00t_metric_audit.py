@@ -281,18 +281,21 @@ def collect_one_seed(
             col = _LayerCollector([name], mode="q", banks=banks, max_tokens=max_tokens)
             col.install(model_q)
             run_activations(model_q, policy_q, obs_list, noises, batch_size)
-            set_single_layer_bits(model_q, name, REF_BITS)
             pooled = col.pooled(name)
             col.remove()
             s = banks[name].evaluate(pooled) if pooled is not None else {"cka": None, "cs": None, "cs_cross": None}
             s.update(guard_metrics(fp_out.get(name), pooled))
             s["nmse"] = _nmse(fp_out[name], pooled) if fp_out.get(name) is not None and pooled is not None else None
-            layers.setdefault(name, {})[f"b{bit}"] = s
 
-            # single-layer d_solver at THIS bit (intervention vs R)
+            # single-layer d_solver at THIS bit (intervention vs R).
+            # P0-4 (correctness review): the target bit must stay active while
+            # the q_traj rollout runs — the old code reset the layer to REF_BITS
+            # first, so d_solver measured D(R, R) ≈ 0.
             q_traj = run_rollouts(model_q, policy_q, obs_list[:n_rollout_obs], noises[:n_rollout_obs], batch_size)
             ref_sub = ref_traj[:, :n_rollout_obs]
             mean_div, _ = solver_divergence(ref_sub, q_traj, gamma)
+            set_single_layer_bits(model_q, name, REF_BITS)
+            layers.setdefault(name, {})[f"b{bit}"] = s
             layers[name][f"d_solver_b{bit}"] = mean_div
             del q_traj
             gc.collect()
@@ -441,6 +444,19 @@ def main() -> None:
         policy_q = load_policy(args.model_path, data_config=args.data_config, denoising_steps=args.denoising_steps, device=args.device)
         model_q = policy_q.model
         set_all_bits(model_q, 4)
+
+        # P0-2: static A8 calibration must reach cfg.calib_batches batches in
+        # the all-zero reference state before any measurement.
+        from gr00t.quantization.duquant_layers import all_calibrated, calibration_progress
+
+        set_all_bits(model_q, REF_BITS)
+        n_warm_obs = args.calib_steps * args.batch_size
+        warm_obs = [make_obs(rng, "libero") for _ in range(n_warm_obs)]
+        warm_noises = [torch.randn(horizon, action_dim) for _ in warm_obs]
+        run_rollouts(model_q, policy_q, warm_obs, warm_noises, args.batch_size, return_trajectory=False)
+        full, total = calibration_progress(model_q)
+        if not all_calibrated(model_q):
+            raise SystemExit(f"[metric_audit] A8 calibration incomplete: {full}/{total}")
 
         t0 = time.time()
         layers = collect_one_seed(

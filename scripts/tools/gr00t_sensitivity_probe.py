@@ -291,7 +291,14 @@ def solver_divergence(
 
     Trajectories are (T+1, B, H, D): index 0 = noise, index T = final action.
     Weights w_k ∝ γ^{k+1} are normalized over the T+1 states, so the final
-    action step gets the largest weight. Returns (mean_over_obs, per_obs_list).
+    action step gets the largest weight.
+
+    P0-3 (correctness review): the weighted per-step divergences are SUMMED
+    (Σ_k w_k·div_k, Σw = 1), not averaged. With q = 2·ref every step's relative
+    error is exactly 1, so the result must be exactly 1 — the previous
+    mean(dim=0) returned 1/(T+1).
+
+    Returns (mean_over_obs, per_obs_list).
     """
     ref = ref_traj.float()[:, : q_traj.shape[1]]
     q = q_traj.float()
@@ -301,7 +308,7 @@ def solver_divergence(
     k_steps = rel.shape[0]  # T+1
     weights = torch.tensor([gamma ** (k + 1) for k in range(k_steps)])
     weights = weights / weights.sum()  # 归一化：跨 T 近似可比（不同 T 仍是不同积分网格，见设计文档）
-    per_obs = (rel * weights[:, None]).mean(dim=0)  # (B,)
+    per_obs = (rel * weights[:, None]).sum(dim=0)  # Σ_k w_k·div_k（P0-3：不是平均）
     return float(per_obs.mean()), [float(v) for v in per_obs]
 
 
@@ -401,7 +408,10 @@ def main() -> None:
         assert m == 0.0 and all(p == 0.0 for p in per)
         m2, per2 = solver_divergence(t, t * 2.0, gamma=1.2)
         assert m2 > 0.0 and len(per2) == 4
-        print("[probe] selftest OK (offline helpers)")
+        # P0-3: q = 2·ref -> every step's relative error is exactly 1 ->
+        # weighted SUM (weights normalized) is exactly 1, NOT 1/(T+1).
+        assert abs(m2 - 1.0) < 1e-6, f"P0-3: D_solver(2·ref) = {m2}, expected 1.0"
+        print("[probe] selftest OK (offline helpers + P0-3 sum fix)")
         return
 
     args.bits = [int(x) for x in args.bits.split(",") if x.strip()]
@@ -500,13 +510,29 @@ def main() -> None:
     n_wrapped = set_all_bits(model_q, args.bits[0])
     print(f"[probe] quant model loaded, DuQuantLinear wrapped: {n_wrapped}")
 
-    # warmup for activation calibration (static act scales frozen afterwards)
-    print(f"[probe] warmup {args.calib_steps} forwards for activation calibration ...")
+    # P0-2 (correctness review): the static A8 calibration must accumulate
+    # cfg.calib_batches REAL batches (each forward pass = one observe per
+    # layer) IN THE ALL-ZERO REFERENCE STATE, and only then freeze. The old
+    # code froze on the first batch AND calibrated under bits[0] (W4) — both
+    # wrong for the reference protocol.
+    set_all_bits(model_q, REF_BITS)
+    from gr00t.quantization.duquant_layers import all_calibrated, calibration_progress
+
+    n_warm_batches = args.calib_steps  # GR00T_DUQUANT_CALIB_STEPS = batch count
+    n_warm_obs = n_warm_batches * args.batch_size
+    print(f"[probe] A8 calibration: {n_warm_obs} obs = {n_warm_batches} batches "
+          f"(state = weight_bits=0 reference) ...")
     t0 = time.time()
-    warm_obs = [make_obs(rng, args.obs_format) for _ in range(args.calib_steps)]
+    warm_obs = [make_obs(rng, args.obs_format) for _ in range(n_warm_obs)]
     warm_noises = [torch.randn(horizon, action_dim) for _ in warm_obs]
     run_rollouts(model_q, policy_q, warm_obs, warm_noises, args.batch_size, return_trajectory=False)
-    print(f"[probe] warmup done in {time.time() - t0:.1f}s")
+    full, total = calibration_progress(model_q)
+    if not all_calibrated(model_q):
+        raise SystemExit(
+            f"[probe] A8 calibration incomplete: {full}/{total} layers full after "
+            f"{n_warm_batches} batches — calibration state invalid for measurement"
+        )
+    print(f"[probe] A8 calibration done in {time.time() - t0:.1f}s ({full}/{total} layers frozen)")
 
     from gr00t.quantization.kernel_scores import LayerScoreBank
     from gr00t.atm import clear_atm_capture, register_output_capture
@@ -567,6 +593,17 @@ def main() -> None:
         bank.finalize_ref()
     n_ready = sum(1 for b in banks.values() if b.ready)
     print(f"[probe] REFERENCE pass done in {time.time() - t0:.1f}s; banks ready {n_ready}/{len(banks)}")
+
+    # P0-3: the second paired-noise set needs its OWN reference trajectory
+    # (D(x^R(ε_b), x^Q(ε_b))), computed while every layer is still at
+    # weight_bits=0 and the collectors are removed (banks already finalized).
+    ref_traj_b = None
+    if noises_b is not None:
+        ref_traj_b = run_rollouts(
+            model_q, policy_q, obs_list[: args.n_rollout_obs],
+            noises_b[: args.n_rollout_obs], args.batch_size
+        )
+        print(f"[probe] reference trajectory for noise set B: {tuple(ref_traj_b.shape)}")
 
     # ---- v1.3 CS in-situ scaling check (closing criterion, §5.1.2) ----
     if args.cs_in_situ_check:
@@ -661,21 +698,26 @@ def main() -> None:
                 set_all_bits(model_q, REF_BITS)
                 if not set_single_layer_bits(model_q, name, b):
                     continue
-                ref_sub = ref_traj[:, : args.n_rollout_obs]
                 all_per_obs: List[float] = []
+                # noise set A: paired against the main reference trajectory
+                ref_sub_a = ref_traj[:, : args.n_rollout_obs]
                 q_traj = run_rollouts(
                     model_q, policy_q, obs_list[: args.n_rollout_obs],
                     noises[: args.n_rollout_obs], args.batch_size
                 )
-                _, per_obs_a = solver_divergence(ref_sub, q_traj, args.gamma)
+                _, per_obs_a = solver_divergence(ref_sub_a, q_traj, args.gamma)
                 all_per_obs.extend(per_obs_a)
                 del q_traj
-                if noises_b is not None:
+                # noise set B: paired against ITS OWN reference trajectory
+                # (P0-3: D(x^R(ε_b), x^Q(ε_b)) — the old code compared ε_b
+                # quantized rollouts against the ε_a reference, which measured
+                # noise mismatch, not quantization)
+                if noises_b is not None and ref_traj_b is not None:
                     q_traj_b = run_rollouts(
                         model_q, policy_q, obs_list[: args.n_rollout_obs],
                         noises_b[: args.n_rollout_obs], args.batch_size
                     )
-                    _, per_obs_b = solver_divergence(ref_sub, q_traj_b, args.gamma)
+                    _, per_obs_b = solver_divergence(ref_traj_b, q_traj_b, args.gamma)
                     all_per_obs.extend(per_obs_b)
                     del q_traj_b
                 gc.collect()

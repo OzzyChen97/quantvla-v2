@@ -661,8 +661,15 @@ def transform_weight_for_forward_optimized(
     block_size: int,
     block_out_size: int,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Optimized version using pre-cached torch tensors."""
-    W_t = W
+    """Optimized version using pre-cached torch tensors.
+
+    P0-1 (correctness review): W is cloned BEFORE any in-place block rotation.
+    Previously `W_t = W` mutated the caller's weight buffer, so every
+    weight_bits switch re-rotated the ALREADY-rotated weights
+    (W -> R_out W R_in -> R_out² W R_in² -> ...), making the scan order
+    change the results and corrupting all bit-switch-based measurements.
+    """
+    W_t = W.detach().clone()
 
     # Apply permutation using cached tensor
     if perm_cache is not None:

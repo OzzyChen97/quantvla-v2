@@ -31,6 +31,7 @@ scripts/
   tools/gr00t_select_plan.py             # P1-G: binary W4/FP16 + guards + milp + diverse TopK
   tools/gr00t_metric_audit.py            # v1.3 gate 0: metric validity audit (§6.6.1)
   tools/gr00t_baselines.py               # v1.3 baselines: random/size/manual/uniform + 2-stage D_solver
+  tools/gr00t_topk_scorer.py             # v1.3 TopK adjudicator: D_solver + select_final (8-step pipeline)
   tools/calibrate_atm_perstep_gr00t.py   # P2-G: ATM/OHB calibration (+ plan-aware FP16-block skip, CV stats)
   tools/calc_gr00t_duquant_memory.py     # static weight-storage byte calculator
   tools/gr00t_v2_common.py               # shared utilities (obs/env/policy/noise)
@@ -38,9 +39,9 @@ scripts/
   run_quantvla.sh / run_libero_eval.sh / run_inference_server.sh / run_v2_gpu_experiment.sh
   inference_service.py / simulation_service.py   # ZMQ server/client eval harness
 checkpoints/packs/gr00t/
-  sensitivity_libero_*.json              # probe outputs (4 suites)
-  gr00t_quant_plan_*.json                # generated W4/FP16 plans (4 suites)
-  atm_alpha_beta_*.json                  # ATM/OHB calibration tables (4 suites)
+  deprecated_v1.2/                       # INVALIDATED artifacts (pre-P0-fix probes/plans/ATM)
+                                         # — see docs/quantvla_v2_p0_review_response.md
+  (fresh sensitivity/plan/ATM artifacts must be regenerated with the P0-fixed code)
 ```
 
 ## Quickstart (GR00T + LIBERO)
