@@ -137,13 +137,18 @@ run_libbero() {
 run_eval_watchdog() {
     local suite=$1; shift
     local stall_limit=${STALL_LIMIT:-1800}
+    # the ACTUAL run log: shard jobs redirect their stdout to
+    # liberos_<suite>_s<N>.log, so the launcher must export LIBERO_RUN_LOG to
+    # the same path — watching the wrong (stale) file makes the watchdog kill
+    # healthy evals every 30 minutes.
+    local elog="${LIBERO_RUN_LOG:-$LOG/liberos_${suite}.log}"
     local attempt
     for attempt in 1 2; do
         run_libbero "$suite" "$@" &
         local EVAL_PID=$!
         local last=-1 now=0 stall=0
         while kill -0 "$EVAL_PID" 2>/dev/null; do
-            now=$(grep -c "episodes completed so far" "$LOG/liberos_${suite}.log" 2>/dev/null || true)
+            now=$(grep -c "episodes completed so far" "$elog" 2>/dev/null || true)
             if [[ "$now" != "$last" ]]; then last=$now; stall=0; else stall=$((stall + 60)); fi
             if [[ $stall -ge $stall_limit ]]; then
                 echo "!!! watchdog: no episode growth for ${stall}s (attempt $attempt) — dumping diagnostics"
@@ -157,14 +162,15 @@ run_eval_watchdog() {
             sleep 60
         done
         if ! kill -0 "$EVAL_PID" 2>/dev/null; then
-            wait "$EVAL_PID" 2>/dev/null && return 0 || {
-                [[ $attempt -eq 2 ]] && { echo "!!! eval failed twice — aborting"; return 1; }
-                echo "!!! eval attempt $attempt failed — retrying once"
-                stop_server
-                continue
-            }
+            wait "$EVAL_PID" 2>/dev/null && { stop_server; return 0; } || true
         fi
-        [[ $attempt -eq 2 ]] && { echo "!!! watchdog fired twice — aborting"; return 1; }
+        stop_server
+        if [[ $attempt -eq 2 ]]; then
+            echo "!!! eval failed twice — aborting"
+            return 1
+        fi
+        echo "!!! eval attempt $attempt failed/stalled — restarting server and retrying once"
+        start_server "$suite" "${WATCHDOG_PLAN}" || return 1
     done
     return 1
 }
@@ -234,9 +240,8 @@ PY
     local PLAN
     for PLAN in "$FINAL" "$BDIR/uniform_w6.json" \
                 "$BDIR/${REPS[0]}" "$BDIR/${REPS[1]}" "$BDIR/${REPS[2]}"; do
-        start_server "$S" "$PLAN" || exit 1
-        run_eval_watchdog "$S" --seed 0
-        stop_server
+        WATCHDOG_PLAN="$PLAN" start_server "$S" "$PLAN" || exit 1
+        WATCHDOG_PLAN="$PLAN" run_eval_watchdog "$S" --seed 0
     done
     echo "--- dev LIBERO ($S) done; record numbers in runs/v2_decisions.md ---"
 }
@@ -274,9 +279,8 @@ final_holdout() {
         for SEED in ${HOLD_SEEDS:-0 1 2}; do
             for PLAN2 in "${PLANS[@]}"; do
                 echo "--- held-out: libero_$S seed=$SEED plan=$(basename "$PLAN2") ---"
-                start_server "$S" "$PLAN2" || exit 1
-                run_eval_watchdog "$S" --seed "$SEED"
-                stop_server
+                WATCHDOG_PLAN="$PLAN2" start_server "$S" "$PLAN2" || exit 1
+                WATCHDOG_PLAN="$PLAN2" run_eval_watchdog "$S" --seed "$SEED"
             done
         done
     done

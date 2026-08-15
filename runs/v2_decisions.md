@@ -193,3 +193,16 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   object 片0/1（GPU1:5558/5563）、long 片0/1（GPU5:5560/GPU4:5561，各 5 任务 ×
   2 配置 × 3 种子）；
 - parser 完整性阈值参数化（分片 = 25eps/5tasks）；墙钟时间预计减半。
+
+## 2026-08-15：watchdog 监控目标修正 + 全队重启（D-017）
+
+- **Bug（D-014 修复不彻底）**：`run_eval_watchdog` 监控 `liberos_${suite}.log`（无分片后缀），
+  分片部署后该文件是启动前的陈旧日志（计数冻结），watchdog 会在 t≈30min 把健康
+  eval 误判为卡死并 kill，且 attempt-2 重试路径不复位 server 客户端（server 仍在
+  但旧 client 已死）→ 第二次重试必然全挂；
+- **修复**：launcher 以 `LIBERO_RUN_LOG=<分片日志路径>` 环境变量显式传入被监控日志
+  （默认回退旧规则），`run_eval_watchdog` 读取该变量；重试路径改为每 attempt 用
+  `WATCHDOG_PLAN` 重启 server（复用 start_server 的端口释放/模型校验逻辑）；
+- **行动**：发现时舰队仅运行 ~14min（server 13:37、client ~9min），kill 全部 63 个
+  进程，用修复后脚本重部署 8 分片；确认 8 server + 8 client 全部就位、分片过滤生效
+  （进度条 0/5）、LIBERO_RUN_LOG 指向各自分片日志。
