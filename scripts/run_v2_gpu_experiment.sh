@@ -58,13 +58,24 @@ run_selftests() {
 # --------------------------------------------------------------------------- #
 start_server() {
     local suite=$1 plan=$2
+    local model_suffix=$suite
+    [[ "$suite" == "10" ]] && model_suffix="long"
     local logf="$LOG/server_${suite}_$(basename "$plan").log"
     echo "--- starting server: libero_$suite plan=$plan (log: $logf)"
     GR00T_DUQUANT_PLAN="$plan" GR00T_GPU=${GR00T_GPU:-4} GR00T_PORT="$PORT" \
         ./scripts/run_quantvla.sh "libero_$suite" >"$logf" 2>&1 &
     SERVER_PID=$!
     for _ in $(seq 1 150); do
-        if ss -tln 2>/dev/null | grep -q ":$PORT "; then return 0; fi
+        # port up AND the log must show the CORRECT suite checkpoint (guards
+        # against stale/leftover servers answering on the port)
+        if ss -tln 2>/dev/null | grep -q ":$PORT "; then
+            if grep -q "Model: .*libero-$model_suffix" "$logf" 2>/dev/null; then
+                return 0
+            fi
+            echo "!!! port $PORT answered but log does not show libero-$suite model — killing and retrying"
+            kill "$SERVER_PID" 2>/dev/null || true
+            return 1
+        fi
         if ! kill -0 "$SERVER_PID" 2>/dev/null; then
             echo "!!! server exited early — tail of $logf:"; tail -25 "$logf"; return 1
         fi

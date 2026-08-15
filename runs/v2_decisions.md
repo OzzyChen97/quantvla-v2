@@ -75,3 +75,12 @@ gate 语义从"worst-seed ≥0.2"改为 **"均值 ≥0.2 且 min ≥0（无符�
   → **层敏感度是 checkpoint 特异的**（各套件 probe 各自的敏感度），选层不具备跨套件普适可复现性。
   按设计不冻结统一 plan：dev 三套件各用本套件裁决 plan；**held-out Long 用 spatial 裁决 plan zero-shot**
   （spatial 是主套件、协议最完整；决策理由见 D-008）。
+
+## 2026-08-15：dev LIBERO 启动（D-009 三处 harness 修复）
+
+1. 客户端 state 必须 float32（LIBERO env 输出 float64 → 服务端 transform 全灭）→ 所有 state key 显式 float32；
+2. PyAV 视频录制 libx264 缺失 → `save_video` 默认 False（成功率日志仍完整）；
+3. numba 缓存目录指向仓库内（后台任务 /tmp 受限 → "no locator available"）；
+4. start_server 增加端口应答 + **模型路径校验**（防止陈旧 server 误答）。
+修复后三套件 dev-accept 并行（GPU 7/3/1，端口 5556/7/8）：
+spatial 首任务 5/5、goal 4/5、object 4/5——正式对照进行中。

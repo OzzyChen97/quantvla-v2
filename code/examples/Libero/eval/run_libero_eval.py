@@ -60,6 +60,7 @@ class GenerateConfig:
     num_steps_wait: int = 10                         # Number of steps to wait for objects to stabilize in sim
     num_trials_per_task: int = 5                     # Number of rollouts per task
     seed: int = 0                                  # Env seed (same-seed comparisons across configs)
+    save_video: bool = False                       # PyAV video recording (libx264 missing in some envs -> off by default)
     #################################################################################################################
     # fmt: on
     """Port to connect to."""
@@ -109,16 +110,19 @@ class GR00TPolicy:
         rpy = quat2axisangle(obs["robot0_eef_quat"])
         gripper = obs["robot0_gripper_qpos"]
         img, wrist_img = get_libero_image(obs)
+        # LIBERO env states are float64; the GR00T server transforms require
+        # float32 for every state key (otherwise every rollout dies with
+        # "All states corresponding to the same key must be of the same dtype")
         new_obs = {
             "video.image": np.expand_dims(img, axis=0),
             "video.wrist_image": np.expand_dims(wrist_img, axis=0),
-            "state.x": np.array([[xyz[0]]]),
-            "state.y": np.array([[xyz[1]]]),
-            "state.z": np.array([[xyz[2]]]),
-            "state.roll": np.array([[rpy[0]]]),
-            "state.pitch": np.array([[rpy[1]]]),
-            "state.yaw": np.array([[rpy[2]]]),
-            "state.gripper": np.expand_dims(gripper, axis=0),
+            "state.x": np.array([[xyz[0]]], dtype=np.float32),
+            "state.y": np.array([[xyz[1]]], dtype=np.float32),
+            "state.z": np.array([[xyz[2]]], dtype=np.float32),
+            "state.roll": np.array([[rpy[0]]], dtype=np.float32),
+            "state.pitch": np.array([[rpy[1]]], dtype=np.float32),
+            "state.yaw": np.array([[rpy[2]]], dtype=np.float32),
+            "state.gripper": np.expand_dims(np.asarray(gripper, dtype=np.float32), axis=0),
             "annotation.human.action.task_description": [lang],
         }
         if not self.headless:
@@ -249,14 +253,15 @@ def eval_libero(cfg: GenerateConfig) -> None:
             total_episodes += 1
 
             # Save a replay video of the episode
-            save_rollout_video(
-                top_view,
-                wrist_view,
-                total_episodes,
-                success=done,
-                task_description=task_description,
-                log_file=log_file,
-            )
+            if cfg.save_video:
+                save_rollout_video(
+                    top_view,
+                    wrist_view,
+                    total_episodes,
+                    success=done,
+                    task_description=task_description,
+                    log_file=log_file,
+                )
 
             # Log current results
             print(f"Success: {done}")
