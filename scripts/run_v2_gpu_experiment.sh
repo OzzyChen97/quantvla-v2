@@ -30,7 +30,8 @@ export PYTHONPATH="$REPO/code:$REPO/scripts/tools:${PYTHONPATH:-}"
 PY=/home1/gyy/probe/miniforge3/envs/groot_test/bin/python
 export CUDA_VISIBLE_DEVICES=${GR00T_GPU:-4}
 PORT=5556
-LOG=/tmp/logs/v2_gpu
+LOG="$REPO/runs/v2_gpu_logs"
+export LIBERO_LOG_DIR="$REPO/runs/libero_logs"
 mkdir -p "$LOG"
 export GR00T_ATM_ENABLE=0 GR00T_OHB_ENABLE=0   # core-method runs: NO scale correction
 

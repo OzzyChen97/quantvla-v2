@@ -191,13 +191,13 @@ def _maybe_close_a8_calibration(policy, data_config: str = "") -> None:
         "plan_sha256": plan_sha,
     }
     print(f"[inference] static A8 calibration warmup: {calib_steps * batch_size} "
-          f"synthetic obs (buffer sha256 {sha[:16]}...; plan {plan_sha})")
+          f"synthetic obs (buffer sha256 {sha[:16]}...; plan {plan_sha})", flush=True)
     t0 = time.time()
     ensure_a8_calibrated(
         policy, warm_obs, warm_noises, batch_size,
         act_dynamic=False, act_scale_path=scale_path, act_scale_meta=act_meta,
     )
-    print(f"[inference] static A8 calibration complete in {time.time() - t0:.1f}s")
+    print(f"[inference] static A8 calibration complete in {time.time() - t0:.1f}s", flush=True)
 
 
 def main(args: ArgsConfig):

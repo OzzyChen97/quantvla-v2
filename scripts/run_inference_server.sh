@@ -62,7 +62,8 @@ echo "=========================================="
 
 cd /home1/gyy/vla/QuantVLA
 
-python scripts/inference_service.py \
+PY_BIN=${PY_BIN:-/home1/gyy/probe/miniforge3/envs/groot_test/bin/python}
+$PY_BIN scripts/inference_service.py \
     --model_path $MODEL_PATH \
     --server \
     --data_config $DATA_CONFIG \

@@ -17,7 +17,7 @@ cd "$REPO"
 export PYTHONPATH="$REPO/code:$REPO/scripts/tools:${PYTHONPATH:-}"
 PY=/home1/gyy/probe/miniforge3/envs/groot_test/bin/python
 export CUDA_VISIBLE_DEVICES=${GR00T_GPU:-7}
-LOG=/tmp/logs/v2_smoke
+LOG="$REPO/runs/v2_smoke_logs"
 mkdir -p "$LOG"
 export GR00T_ATM_ENABLE=0 GR00T_OHB_ENABLE=0
 SCALE_PATH="$LOG/a8_scales_spatial.npz"
@@ -82,7 +82,7 @@ GR00T_DUQUANT_ACT_SCALE_PATH="$SCALE_PATH" \
 SRV=$!
 ok=0
 for _ in $(seq 1 150); do
-    if grep -q "frozen A8 scales saved" "$LOG/server_start1.log"; then ok=1; break; fi
+    if grep -q "frozen A8 scales saved" "$LOG/server_start1.log" || [[ -f "$SCALE_PATH" ]]; then ok=1; break; fi
     if ! kill -0 "$SRV" 2>/dev/null; then echo "!!! start#1 died"; tail -20 "$LOG/server_start1.log"; exit 1; fi
     sleep 5
 done

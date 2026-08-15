@@ -197,7 +197,9 @@ export GR00T_DUQUANT_DRYRUN=1
 export GR00T_MODEL_PATH="$MODEL_PATH"
 export GR00T_DATA_CONFIG="$DATA_CONFIG"
 
-python - <<'PY'
+PY_BIN=${PY_BIN:-/home1/gyy/probe/miniforge3/envs/groot_test/bin/python}
+$PY_BIN - <<'PY'
+# -*- coding: utf-8 -*-
 import os
 from gr00t.model.policy import Gr00tPolicy
 from gr00t.experiment.data_config import load_data_config
