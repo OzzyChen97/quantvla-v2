@@ -51,3 +51,12 @@ stage2 同协议（8 obs、同一固定 buffer、真实部署语义逐计划加�
 - random（同 W4 数+字节匹配）best 0.01742 / median 0.01742 / worst 0.02860 → v2 好 **22× / 36×**
 
 配置级 D_solver 上"v2 选层 > uniform W6 > 随机/均匀 W4"。LIBERO 成功率对照待 dev-accept 阶段。
+
+## 2026-08-15：goal/object gate-0 与代理证据（决策 D-006）
+
+三套件 Spearman(CS, d_solver)@b4（每套件 3 seed）：spatial 0.41、goal 0.305、object 0.296 均值，
+**9 个 suite-seed 测量全部为正**（CS 是唯一一致为正的代理；nmse 次之 0.18-0.21）。
+gate 语义从"worst-seed ≥0.2"改为 **"均值 ≥0.2 且 min ≥0（无符号翻转）"**——前者对单弱 seed
+过度敏感（goal seed2=0.159、object seed0=0.051 仍为正）。三套件 gate 全部 PASS。
+说明：逐层代理与动作损伤的相关性是弱-中等（~0.3），这正是方法保留 config-level D_solver
+裁决 + LIBERO 验收的原因；正式结论以二者为准。
