@@ -184,8 +184,13 @@ consensus_freeze() {
 }
 
 final_holdout() {
-    local PLAN="$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_consensus.json"
-    [[ -f "$PLAN" ]] || { echo "!!! consensus plan missing — run all-dev first"; exit 1; }
+    # D-008: the 3-suite consensus Jaccard gate FAILED (0.39-0.50 < 0.7) — layer
+    # sensitivity is checkpoint-specific, so no unified plan was frozen. The
+    # held-out Long suite therefore runs the SPATIAL adjudicated plan zero-shot
+    # (spatial = primary suite, most-developed protocol; recorded in
+    # runs/v2_decisions.md D-008).
+    local PLAN="$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_spatial_adjudicated.final_plan.json"
+    [[ -f "$PLAN" ]] || { echo "!!! spatial adjudicated plan missing — run spatial pipeline first"; exit 1; }
     for S in 10 90; do
         for SEED in 0 1 2; do
             echo "--- held-out: libero_$S seed=$SEED (frozen consensus plan, zero-shot) ---"
