@@ -543,3 +543,15 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   同条件对照）；绝对 SR 与官方 68.5% 的差异需官方 harness/data-config 对齐
   （上游 12-key state modality 等），列为后续对齐项，不阻塞 criterion-4 裁决；
 - 图像原生 256 分支（ROBOCASA365_IMG=native）已加入 data config 供后续 A/B。
+
+## 2026-08-16：criterion-4 首轮作废——预修复配置运行（D-036）
+
+- **关键发现**：D-035a 的 action-key 顺序修复（~19:45）晚于 criterion-4 五台
+  server 的启动（~16:50）——首轮 5 配置（fp16/W6/CS-only/CS+CKA/CKA-only 共
+  57/60 trials）全部在**错位 action 切片**配置下运行，结果作废（全部 0% 是
+  预期产物，无判别力）；
+- **行动**：kill 旧 4 台量化 server（5571-5574），以修复后配置重启
+  （GPU4/6）；fp16 使用已修复的 5567；**criterion-4 全量重跑**
+  （4 任务 × 3 trials × 5 配置，预期 ~5-6h）；
+- 注：修复后配置的单 trial 探针（OpenCabinet×1）仍 0/1——修复是必要条件但
+  单 trial 不足以判断充分性；重跑数据将给出裁决。
