@@ -905,6 +905,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--weight-metric", default="d_solver", choices=["d_solver", "d_func"],
                    help="v1.4: per-layer functional divergence source for w_i "
                         "(d_func = tail-aware metric from gr00t_func_metrics).")
+    p.add_argument("--no-weights", action="store_true",
+                   help="v1.4 ablation: uniform w_i = 1 (CS-only search, no action weighting).")
     p.add_argument("--solver", default="greedy", choices=["greedy", "evolution"])
     p.add_argument("--npop", type=int, default=20)
     p.add_argument("--niter", type=int, default=10)
@@ -1086,15 +1088,26 @@ def main() -> None:
 
     layer_names = list(shapes)
     scores = build_scores(sens, layer_names, args.lambda_cka, args.lambda_cs, args.cka_field)
-    weights, w_log = build_weights_with_log(sens, layer_names, args.weight_metric)
+    if args.no_weights:
+        weights = {n: 1.0 for n in layer_names}
+        w_log = {
+            "raw_d_solver": None, "normalized_before_clip": None,
+            "final": {"min": 1.0, "max": 1.0, "mean": 1.0},
+            "note": "--no-weights ablation: uniform w_i = 1 (CS-only search)",
+        }
+    else:
+        weights, w_log = build_weights_with_log(sens, layer_names, args.weight_metric)
     raw_key = f"raw_{args.weight_metric}"
-    print(f"[select] w_i three-stage log (metric={args.weight_metric}):")
-    print(f"  {raw_key}:              min {w_log[raw_key]['min']:.6g} / "
-          f"max {w_log[raw_key]['max']:.6g} / mean {w_log[raw_key]['mean']:.6g}")
-    print(f"  normalized_before_clip:  min {w_log['normalized_before_clip']['min']:.4f} / "
-          f"max {w_log['normalized_before_clip']['max']:.4f} / mean {w_log['normalized_before_clip']['mean']:.4f}")
-    print(f"  final_w_i:               min {w_log['final']['min']:.4f} / "
-          f"max {w_log['final']['max']:.4f} / mean {w_log['final']['mean']:.4f}")
+    if args.no_weights:
+        print(f"[select] w_i: UNIFORM (--no-weights ablation, w_i = 1)")
+    else:
+        print(f"[select] w_i three-stage log (metric={args.weight_metric}):")
+        print(f"  {raw_key}:              min {w_log[raw_key]['min']:.6g} / "
+              f"max {w_log[raw_key]['max']:.6g} / mean {w_log[raw_key]['mean']:.6g}")
+        print(f"  normalized_before_clip:  min {w_log['normalized_before_clip']['min']:.4f} / "
+              f"max {w_log['normalized_before_clip']['max']:.4f} / mean {w_log['normalized_before_clip']['mean']:.4f}")
+        print(f"  final_w_i:               min {w_log['final']['min']:.4f} / "
+              f"max {w_log['final']['max']:.4f} / mean {w_log['final']['mean']:.4f}")
 
     # ---- v1.3 feasibility guards (hard constraint, §3.1) ----
     meta_thr = sens.get("meta", {}).get("guard_thresholds", {})
@@ -1187,7 +1200,9 @@ def main() -> None:
             f"[select] FATAL: primary plan exceeds budget "
             f"({total / 1e6:.1f} MB > {budget / 1e6:.1f} MB) — no feasible plan found"
         )
-    print(f"[select] primary plan (source={primary['source']}): {n_quant} W4 / {n_skip} skip, "
+    n_bits = {b: sum(1 for v in plan.values() if not v["skip"] and v["bits"] == b) for b in BITS_ORDER}
+    bits_str = " ".join(f"W{b}={n_bits.get(b, 0)}" for b in BITS_ORDER)
+    print(f"[select] primary plan (source={primary['source']}): {bits_str} / {n_skip} skip, "
           f"bytes {total / 1e6:.1f} MB (budget {budget / 1e6:.1f} MB), proxy objective {obj:.4f}")
 
     # ---- w_i stability bootstrap (v1.3, §5.2) ----

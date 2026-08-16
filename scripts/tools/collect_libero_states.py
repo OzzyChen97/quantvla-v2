@@ -29,6 +29,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -47,8 +48,8 @@ def _process_env_obs(obs: dict, lang: str) -> dict:
     gripper = obs["robot0_gripper_qpos"]
     img, wrist_img = get_libero_image(obs)
     return {
-        "video.image": np.expand_dims(img, axis=0).astype(np.float32),
-        "video.wrist_image": np.expand_dims(wrist_img, axis=0).astype(np.float32),
+        "video.image": np.expand_dims(img, axis=0),  # keep uint8 (server expects it)
+        "video.wrist_image": np.expand_dims(wrist_img, axis=0),
         "state.x": np.array([[xyz[0]]], dtype=np.float32),
         "state.y": np.array([[xyz[1]]], dtype=np.float32),
         "state.z": np.array([[xyz[2]]], dtype=np.float32),
@@ -61,27 +62,24 @@ def _process_env_obs(obs: dict, lang: str) -> dict:
 
 
 def collect_env(suite: str, port: int, tasks: list[int], steps: int, out: Path) -> None:
-    import libero
     from libero.libero import benchmark
 
+    from examples.Libero.eval.utils import get_libero_env
     from gr00t.eval.service import ExternalRobotInferenceClient
 
     benchmark_dict = benchmark.get_benchmark_dict()
     task_suite = benchmark_dict[f"libero_{suite}"]()
     client = ExternalRobotInferenceClient(host="localhost", port=port)
     entries: list[dict] = []
-    tasks = tasks or list(range(min(3, len(task_suite.tasks))))
+    tasks = tasks or list(range(min(3, task_suite.n_tasks)))
     for t in tasks:
         task = task_suite.get_task(t)
-        task_suite.set_task(t)
-        env = task_suite.env
+        initial_states = task_suite.get_task_init_states(t)
+        env, _ = get_libero_env(task, resolution=256, seed=0)
         env.reset()
-        init_states = task_suite.get_task_init_states(t)
-        env.set_init_state(init_states[0])
-        env.seed(0)
+        env.set_init_state(initial_states[0])
         obs = env.reset()
         lang = task.language
-        done = False
         for _ in range(steps):
             entries.append(_process_env_obs(obs, lang))
             a = client.get_action(entries[-1])
@@ -93,6 +91,10 @@ def collect_env(suite: str, port: int, tasks: list[int], steps: int, out: Path) 
             obs, reward, done, info = env.step(action)
             if done:
                 break
+        try:
+            env.close()  # offscreen EGL teardown can throw at exit — nonfatal
+        except Exception as e:  # noqa: BLE001
+            print(f"[collect] env.close() teardown error (ignored): {str(e)[:80]}")
         print(f"[collect] task {t}: {len(entries)} obs total")
     save(entries, out)
 
@@ -135,14 +137,19 @@ def collect_dataset(suite: str, max_episodes: int, max_steps: int, out: Path) ->
 def save(entries: list[dict], out: Path) -> None:
     keys = sorted(entries[0].keys())
     arrays = {}
+    langs = None
     for k in keys:
         vals = [e[k] for e in entries]
         if isinstance(vals[0], np.ndarray):
             arrays[k] = np.stack(vals, axis=0)
         else:
-            arrays[k] = np.array(vals, dtype=object)
+            langs = [str(v[0]) for v in vals] if vals and isinstance(vals[0], (list, tuple)) else vals
     out.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(out, **arrays)
+    np.savez_compressed(out, **arrays)  # numeric arrays only — no object dtype
+    if langs is not None:
+        sidecar = out.with_suffix(".lang.json")
+        sidecar.write_text(json.dumps(langs), encoding="utf-8")
+        print(f"[collect] language sidecar -> {sidecar}")
     print(f"[collect] saved {len(entries)} obs -> {out}")
 
 

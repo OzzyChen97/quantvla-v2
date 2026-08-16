@@ -390,3 +390,19 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   后续层出现 CUDA driver error（首个失败层后的状态污染）——Audit 5 继续调试，
   不影响已完成的 audit 1-4 与 gate 1/2/3/5 结论；
 - 其余全部进度已同步 GitHub（D-020…D-024）。
+
+## 2026-08-16：Audit 5 完成 + v1.4 计划生成 + L2 管线打通（D-026）
+
+- **Audit 5（action-conditioned 子空间）**：vjp 路径因 DuQuant unsafe-view 链
+  的 autograd 报错弃用（三处修复后仍失败，记录在案）；改用计划中的**线性探针
+  回退**（ridge W: H→a_T，TopSV 投影）——三套件 30 层全跑通，结果：投影子空间
+  CKA 与 d_solver 相关 -0.21/-0.04/0.003，**无新增信号**（1−CKA 量级 1e-4~1e-2，
+  噪声主导）。结论：plain dit_output CKA（ρ 0.72-0.95）仍是唯一有效 CKA 变体；
+- **L2/L3 管线**：collect_libero_states.py 修复（env 构造/numba cache/EGL
+  teardown 容错/uint8 图像/语言 sidecar）——L2 已采集 128 条真实 rollout 状态
+  （2 tasks × 64 steps）；audit --obs-source l2 运行中；
+- **v1.4 计划生成完成**（tri-state {W6,W4,FP16}，w_i=d_func，预算=uniform-W6
+  862.9MB）：spatial W6=91/W4=14/FP16=11；goal W6=100?/…；object …（详见各
+  plan JSON）；CS-only 消融（--no-weights）与 spatial CS+CKA（--cka-field
+  cka_dit, λ_cka=1）计划同步生成，进入 D_func 裁决（7 组 × TopK，GPU4/5 并行）；
+- selector 打印修正（按 bit 分列）；--no-weights 消融开关落地。

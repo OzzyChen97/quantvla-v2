@@ -399,6 +399,12 @@ def main() -> None:
         z = np.load(args.obs_npz, allow_pickle=False)
         keys = list(z.keys())
         obs_list = [{k: z[k][i] for k in keys} for i in range(min(args.n_obs, len(z[keys[0]])))]
+        # language travels in a sidecar (npz cannot hold object arrays)
+        sidecar = Path(args.obs_npz).with_suffix(".lang.json")
+        if sidecar.exists():
+            langs = json.loads(sidecar.read_text())
+            for i, o in enumerate(obs_list):
+                o["annotation.human.action.task_description"] = [langs[i % len(langs)]]
         print(f"[cka-audit] Audit-3 {args.obs_source.upper()}: {len(obs_list)} obs from {args.obs_npz}")
 
     noises = [torch.randn(horizon, action_dim) for _ in obs_list]
@@ -505,21 +511,13 @@ def main() -> None:
         jac_noises = noises[: args.jacobian_n_obs]
         results["audit"]["5_action_conditioned"] = {}
         set_all_bits(model, REF_BITS)
-        # the action head's get_action is @torch.no_grad()-wrapped; call the
-        # UNWRAPPED function so the denoising graph is available for the vjp
-        # (the returned trajectory entries are detached anyway — Audit 5 uses
-        # the non-detached action_pred instead)
-        ah = model.action_head
-        wrapped = getattr(ah.get_action, "__wrapped__", None)
-        if wrapped is None:
-            raise SystemExit("[cka-audit] Audit-5: cannot unwrap no_grad get_action")
-        import types
-
-        ah.get_action = types.MethodType(wrapped, ah)
-        # calibration-time caches (A8 scales/rotations) are inference tensors;
-        # the grad-enabled Jacobian pass cannot save them for backward
-        n_deinf = _deinference_duquant_tensors(model)
-        print(f"[cka-audit] Audit-5: de-inferenced {n_deinf} DuQuant tensor attrs")
+        # vjp attempt abandoned (D-025): torch.autograd.grad through sliced
+        # views of the DuQuant-wrapped hook outputs raises "not used in the
+        # graph" (unsafe-view chains) even though the whole-tensor graph is
+        # connected. Audit 5 falls back to the plan's documented LINEAR PROBE:
+        # W: H -> a_T ridge-regressed on collected (hidden, final-action)
+        # pairs, U = TopSV(W) = the hidden directions that drive the action.
+        # This needs no backward pass at all.
         fp_pools5: Dict[str, Dict[str, Optional[torch.Tensor]]] = {}
         if "fp_pools" in dir() and "q_pools" in dir():
             fp_pools5 = fp_pools
@@ -540,44 +538,36 @@ def main() -> None:
 
                 mod = dict(model.named_modules())[name]
                 handle = mod.register_forward_hook(hook_fn)
-                jtj_sum = None
+                xs: List[np.ndarray] = []
+                ys: List[np.ndarray] = []
                 n_obs_used = 0
+                pos = 0 if name.startswith("backbone.") else -1
                 for batched_obs, batched_noise in chunked(jac_obs, jac_noises, args.batch_size):
                     norm = policy.apply_transforms(batched_obs)
-                    use_autocast = str(policy.device).startswith("cuda")
-                    if use_autocast:
-                        from gr00t.model.policy import COMPUTE_DTYPE
-
-                        with torch.autocast(device_type="cuda", dtype=COMPUTE_DTYPE):
-                            out = model.get_action(norm, action_noise=batched_noise, return_trajectory=False)
-                    else:
+                    # inference_mode: the calibration-era DuQuant caches are
+                    # inference tensors and the wrapped forward cannot save
+                    # them under grad mode; everything is detached for the
+                    # linear probe anyway
+                    with torch.inference_mode():
                         out = model.get_action(norm, action_noise=batched_noise, return_trajectory=False)
-                    a_final = out["action_pred"]  # (B, H, D) — grad-enabled
+                    a_final = out["action_pred"].detach()
                     h = store["h"]
                     if h is None:
                         continue
-                    # backbone sequences carry trailing PADDING tokens that the
-                    # action head slices away (no graph path to the action) —
-                    # use position 0 there; DiT sequences end on the final
-                    # action token, position -1
-                    pos = 0 if name.startswith("backbone.") else -1
-                    d_h = h.shape[-1]
-                    if jtj_sum is None:
-                        jtj_sum = torch.zeros((d_h, d_h), device=h.device, dtype=torch.float32)
+                    h = h.detach()
                     for i in range(h.shape[0]):
-                        h_i = h[i, pos]  # (D_h,) chosen sequence position
-                        a_i = a_final[i, -1]  # (D_a,) last action step
-                        d_a = a_i.numel()
-                        eye = torch.eye(d_a, device=h.device, dtype=h.dtype)
-                        (jt,) = torch.autograd.grad(a_i, h_i, grad_outputs=eye,
-                                                    is_grads_batched=True, retain_graph=False)
-                        jtj_sum += (jt.T @ jt).to(torch.float32)  # (D_h, D_h)
+                        xs.append(h[i, pos].float().cpu().numpy())
+                        ys.append(a_final[i, -1].float().cpu().numpy())
                         n_obs_used += 1
                     store["h"] = None
                     del out, a_final
                 handle.remove()
-                evals, evecs = torch.linalg.eigh(jtj_sum)
-                u = evecs[:, -args.jacobian_topk:]  # top-SV subspace (D_h, K)
+                x = np.stack(xs)  # (N, D_h)
+                y = np.stack(ys)  # (N, D_a)
+                lam = 1e-3 * float(np.trace(x @ x.T)) / max(x.shape[0], 1)
+                w = x.T @ np.linalg.solve(x @ x.T + lam * np.eye(x.shape[0]), y)  # (D_h, D_a)
+                u_np, _, _ = np.linalg.svd(w, full_matrices=False)
+                u = torch.tensor(u_np[:, : args.jacobian_topk].copy(), dtype=torch.float32)
                 # q pool on the SAME obs as the ref pool (W4 single-layer pass)
                 if "q_pools" in dir() and name in q_pools:
                     q_all = q_pools[name]["all"]
@@ -589,26 +579,22 @@ def main() -> None:
                     q_all = q5.pooled(name)["all"]
                     q5.remove()
                     set_single_layer_bits(model, name, REF_BITS)
-                    # de-inference ONLY the rebuilt module (cheap), not the
-                    # whole model — the next layer's Jacobian runs grad-enabled
-                    _deinference_duquant_tensors(dict(model.named_modules())[name])
                 fp_all = fp_pools5[name]["all"]
                 if fp_all is None or q_all is None:
                     results["audit"]["5_action_conditioned"][name] = {"status": "no pools"}
                     continue
-                proj_ref = _center(fp_all) @ u.cpu()
-                proj_q = _center(q_all) @ u.cpu()
+                proj_ref = _center(fp_all) @ u
+                proj_q = _center(q_all) @ u
                 bat = cka_control_battery(proj_ref, proj_q, seed=0)
                 results["audit"]["5_action_conditioned"][name] = {
+                    "method": "linear_probe_ridge",
                     "n_obs": n_obs_used, "topk": args.jacobian_topk,
                     "battery": {k: v for k, v in bat.items() if k != "n"},
                     "n_rows": int(proj_ref.shape[0]),
                     "d_solver_b4": d_solver.get(name),
                 }
-                del jtj_sum, evals, evecs, u, proj_ref, proj_q
+                del w, u, u_np, x, y, proj_ref, proj_q
                 gc.collect()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
                 print(f"[cka-audit] Audit-5 {name}: real_biased="
                       f"{results['audit']['5_action_conditioned'][name]['battery']['real']['cka_biased']:.4f}")
             except Exception as e:  # noqa: BLE001 — audit must degrade gracefully
