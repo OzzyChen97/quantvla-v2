@@ -565,3 +565,69 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   =720，失败 trial 不再空转 780 步 ≈ 每 trial 省 15-20 分钟）；
 - 本轮配置 = 修复后 action 顺序 + mean_std + 224 图像管线（D-035a）；
 - long held-out 不重启（保住 ~50 eps 进度），维持 2 分片原速推进。
+
+## 2026-08-16：criterion-4 EGL 崩溃根因 + 设备-3 修复（D-038）
+
+- **症状**：v2 三台 h2 客户端（fp16/w6/cscka）完成 trial 0 后在 env.reset()
+  /下一次构造时段错误（timeout: dumped core，rc=-11）；dmesg 全部指向
+  `libnvidia-eglcore.so.525.105.17`（NVIDIA EGL 驱动）；存活客户端的持续
+  stepping 不受影响——只有"新建/重置渲染上下文"崩溃，特征 = EGL 设备 0 上
+  的并发竞态（GPU0 被其他用户的 45GB 任务占用）。
+- **根因**：robocasa365 客户端用 MuJoCo EGL 渲染三路 obs 相机，默认走 EGL
+  设备 0（GPU0）；驱动 525.105.17 在设备 0 压力下新建上下文偶发 segfault。
+- **修复**：MuJoCo 3.3.1 支持 `MUJOCO_EGL_DEVICE_ID`（egl/__init__.py:38）；
+  切换到设备 3（GPU3，本组独占、空闲）。`scripts/tools/egl_device3_test.py`
+  验证：设备 3 下 PickPlaceDrawerToCounter 构造 21s + reset + 50 steps 全通。
+- **配套加固**：`scripts/tools/run_crit4_trial_driver.py` —— 每个 (task, trial)
+  独立子进程 + 全新 env 构造（绕过 reset 崩溃路径），segfault 只丢当前 trial
+  （attempts=5），按 (task,trial) 断点续跑；`crashed` 行不计入 SR 分母
+  （parse_crit4_v2.py 排除）。三个坑已修：unlink(missing_ok)/capture_output
+  （系统 python3.6 不支持）、resume 误把 crashed 当 done。
+- **行动**：kill 全部旧客户端/旧 driver（在设备 0 上赌运气），10 个配置半区
+  全部以设备 3 + 崩溃免疫 driver 重启（attempts=5，resume 跳过已完成 trial）。
+- **数据有效性**：trial 级数据不受影响——完成的 trial 结果有效，crashed 的
+  trial 无策略信号、剔除；D-036 的作废结论不变。
+
+## 2026-08-16：GPU5 空置 → long held-out 加两分片（D-039）
+
+- GPU5 空闲（3 MiB）被发现后加开 s2/s3，把 **seed-2 的全部工作提前并行**：
+  s2（GPU5:5562，任务 0-4）+ s3（GPU2:5563，任务 5-9，与 s1 服务器共卡
+  30/46GB），均 HOLD_SEEDS="2"（seed2-v14 + seed2-w6）。
+- s0/s1 原样跑 seed0/seed1；s0/s1 到达 seed-2 边界时停掉即可（其 seed-2 输出
+  与 s2/s3 重复，解析时 seed-2 以 s2/s3 完整数据为准，按 (config,task) 去重，
+  零风险）；不停也无碍——s2/s3 完成即数据齐。
+- 关键路径 4h→~2h；long 四片任务切分已验证（s2 首任务 = s0 首任务 ∈ 任务
+  0-4；s3 = s1 ∈ 任务 5-9）。
+- GitHub push 确认成功（main...origin/main，D-036/D-037 均已上远端）。
+
+## 2026-08-17：criterion-4 视频全黑根因（D-040）——round 1/2 数据全部作废
+
+- **根因链收口**：`gymnasium_groot.py` 第 222-226 行在 `enable_render=False` 时把
+  三路相机 obs **全部填零**；我们的 eval client 一直传 `enable_render=False` →
+  策略收到的视频 = 全黑帧（state+语言正常）→ VLA 失明 → 输出接近训练先验
+  （eef≈−0.93 / gripper≈−0.36）→ 所有配置 ~0%。这同时完整解释了 D-035/D-036
+  期间的"先验均值行为"与"绝对 SR 与官方 68.5% 的差距"之谜。
+- **验证**：enable_render=True 探针（EGL 设备 3）：三路视频 mean 60.5/67.0/62.0、
+  std 65.8/69.1/66.1、全域动态范围 → 真实图像。
+- **量化 plan 不受污染**：灵敏度探针使用合成 obs 协议（make_obs("robocasa365")），
+  csonly/cscka/ckaonly 三 plan 与 D_func 排序有效，无需重算。
+- **行动**：(a) kill 全部 10 个 driver/客户端，`runs/robocasa365_eval/v2` 移入
+  `v2_blind_invalid/` 留档（含 D-038 修复后的 21 trials——仍为盲视频，作废）；
+  (b) client 改为 enable_render=True；(c) `crit4_video_sanity.py` 端到端验证
+  策略对真视频的反应（输出不再先验化）；(d) sanity 通过后 10 driver 全量重启
+  （设备 3 + 真视频，v2 全新目录）。
+- **修正 D-036 记录**：round-1 作废原因 = action 错序 **且** 盲视频；D-038 修复
+  了 EGL 崩溃，但当时未发现视频全黑——修复链条直到 D-040 才完整。
+
+## 2026-08-17：EGL 并发构造死锁 + 构造串行化（D-041）
+
+- **症状**：D-040 后 10 driver 同发（设备 3 + 真视频）→ 全部子进程 9 分钟只
+  烧 44-52s CPU、无 ZMQ 连接、State=S 卡死——非崩溃、非慢，是死锁。单构造
+  （sanity 探针）21s 正常 → 病根 = **同一 EGL 设备上 10 路并发上下文创建**
+  触发 NVIDIA EGL 驱动互斥死锁（设备 0 时代表现为 segfault，设备 3 表现为
+  hang——同一类并发病的两种表型）。
+- **修复**：(a) client 构造 env 前加 repo 本地 flock（`runs/.robocasa365_
+  construct.lock`，fcntl.LOCK_EX/LOCK_UN 包住 GrootRoboCasa365Env(...)）——
+  跨进程串行化构造，永久生效；(b) 10 driver 错峰重启（每 60s 一个）。
+- 注：flock 用 repo 路径而非 /tmp（/tmp 是启动器私有 tmpfs，跨进程不可见）。
+

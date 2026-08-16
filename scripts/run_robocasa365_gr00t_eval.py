@@ -139,7 +139,20 @@ def main() -> None:
     results = []
     t0 = time.time()
     for ti, task in enumerate(tasks):
-        env = GrootRoboCasa365Env(env_name=task, enable_render=False, split=args.split)
+        # enable_render=True is REQUIRED: False zero-fills camera obs and the
+        # policy runs blind (D-040).
+        # D-041: concurrent EGL context creation on one device deadlocks the
+        # NVIDIA EGL driver (10 stuck constructions, 44s CPU / 9min wall, no
+        # sockets). Serialize env construction across processes with a repo-
+        # local flock (repo path, NOT /tmp — /tmp is per-launcher tmpfs).
+        import fcntl
+        lock_path = REPO_ROOT / "runs" / ".robocasa365_construct.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(lock_path, "w") as _lf:
+            fcntl.flock(_lf, fcntl.LOCK_EX)
+            env = GrootRoboCasa365Env(env_name=task, enable_render=True,
+                                      split=args.split)
+            fcntl.flock(_lf, fcntl.LOCK_UN)
         for trial in range(args.n_trials):
             seed = args.seed * 1000 + ti * 10 + trial
             obs, _ = env.reset(seed=seed)
