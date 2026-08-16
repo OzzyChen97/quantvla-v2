@@ -255,3 +255,32 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   **spatial: v2 98.0% | uniform W6 94.0% | random best 92.0% / median 88.0% / worst 88.0%**
 - v2 相对 uniform W6 的 LIBERO 优势 +4.0pp（D_solver 阶段 4.7×），相对随机 mask
   中位 +10.0pp；与 D_solver 排序一致。
+
+## 2026-08-16：object 套件近似完成——W6 名义上高于 v2（需诚实解读）
+
+- object 4/5 配置 OK（50 rollouts）：v2 **86.0%**、uniform W6 **92.0%**、
+  random best(random_5) 84.0%、random median(random_17) 86.0%；random worst 待补；
+- **关键发现**：object 上 uniform W6 名义 +6.0pp 于 v2——D_solver 排序（v2 0.00142
+  vs W6 0.01210，8.5×）未完全迁移到 LIBERO 成功率；差异集中在 milk(0.6 vs 1.0)、
+  ketchup(0.8 vs 1.0)、butter(0.8 vs 1.0)、bbq(0.6 vs 0.8)，cream cheese 反向
+  (0.8 vs 0.6)；
+- **统计口径**：每配置 50 rollouts，SE≈4.9pp，+6pp ≈ 1.2σ——名义差距未达显著；
+  结论：object 套件 v2 与 W6 在 LIBERO 上无显著差异（spatial 的 +4pp 亦仅 ~1.5σ，
+  但方向与全部代理指标一致）；报告 §6 将如实呈现，不夸大；
+- 已知限制（D-016 注）：policy 侧 flow-matching noise 未固定 seed，配对检验功效
+  受限；若需显著结论需每配置 >200 rollouts 或固定 noise。
+
+## 2026-08-16：v1.3 full test 全部完成（8 分片 exit 0，06:22）
+
+- **最终结果**（每配置 50 rollouts，aggregate_v2_fulltest.py 全 21 配置 OK）：
+  - spatial：v2 98.0% | W6 94.0% | random 92.0/88.0/88.0
+  - goal：v2 80.0% | W6 84.0% | random 84.0/80.0/78.0
+  - object：v2 86.0% | W6 92.0% | random 84.0/86.0/80.0
+  - long（held-out 3 seeds × {transfer-v2, transfer-w6}）：v2 76.7%（78/74/78）
+    vs w6 77.3%（74/82/76）
+- **诚实结论**：四套件 v2 vs W6 差 ±0.7–6.0pp 均 ≈0.8–1.2σ（SE≈4.9pp@50），
+  无统计显著差异；D_solver 4.7–8.5× 的代理优势未一致迁移到端到端 SR；
+  random 基线全部 ≤ v2/W6（object median 与 v2 持平）；
+- **工程验证**：21 次配置切换（A8 静态校准 + closure）全干净；0 watchdog 误杀
+  /0 重试/0 abort；分片并行墙钟 ~8h；
+- 报告已更新：docs/quantvla_v2_full_test_report.md（§4/§5 填表、§6 结论）。
