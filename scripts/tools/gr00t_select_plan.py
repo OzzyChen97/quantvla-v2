@@ -207,9 +207,14 @@ def _weight_stats(values: Dict[str, float]) -> Dict[str, float]:
 
 
 def build_weights_with_log(
-    sensitivity: Dict[str, Any], layer_names: List[str]
+    sensitivity: Dict[str, Any], layer_names: List[str], metric: str = "d_solver"
 ) -> Tuple[Dict[str, float], Dict[str, Any]]:
     """Layer importance weights + the v1.3 mandatory three-stage log.
+
+    metric ∈ {"d_solver", "d_func"} selects the per-layer functional
+    divergence source (v1.4 adds the tail-aware D_func from
+    gr00t_func_metrics; the probe now emits d_func_b{b} alongside
+    d_solver_b{b}).
 
     Definition (v1.2, boundary cases closed):
       w_i = n·d_i / Σ_j d_j, with
@@ -224,12 +229,13 @@ def build_weights_with_log(
     that action importance actually entered the search. The log enforces
     mean(final) ≈ 1 and 0.5 ≤ final ≤ 2.
     """
+    assert metric in ("d_solver", "d_func"), metric
     lay = sensitivity.get("layers", {})
     raw: Dict[str, float] = {}
     for n in layer_names:
         d = None
         for key, val in lay.get(n, {}).items():
-            if key.startswith("d_solver_b") and not key.endswith("_std"):
+            if key.startswith(f"{metric}_b") and not key.endswith("_std"):
                 d = float(val)
             elif key.startswith("d_action_b") and not key.endswith("_std"):
                 d = float(val)
@@ -238,10 +244,10 @@ def build_weights_with_log(
     if not raw:
         w = {n: 1.0 for n in layer_names}
         log = {
-            "raw_d_solver": _weight_stats(raw),
+            f"raw_{metric}": _weight_stats(raw),
             "normalized_before_clip": _weight_stats(w),
             "final": _weight_stats(w),
-            "note": "no d_solver measurements -> uniform weights",
+            "note": f"no {metric} measurements -> uniform weights",
         }
         return w, log
     mean_d = sum(raw.values()) / len(raw)
@@ -251,7 +257,7 @@ def build_weights_with_log(
         # boundary: all divergences zero (or negative) -> uniform weights
         w = {n: 1.0 for n in layer_names}
         log = {
-            "raw_d_solver": _weight_stats(raw),
+            f"raw_{metric}": _weight_stats(raw),
             "normalized_before_clip": _weight_stats(w),
             "final": _weight_stats(w),
             "note": "Σ d ≤ 0 -> uniform weights",
@@ -265,7 +271,7 @@ def build_weights_with_log(
     s_clip = sum(w_clip.values())
     w_final = {n: v / s_clip * len(layer_names) for n, v in w_clip.items()} if s_clip > 0 else w_clip
     log = {
-        "raw_d_solver": _weight_stats(raw),
+        f"raw_{metric}": _weight_stats(raw),
         "normalized_before_clip": _weight_stats(w_norm),
         "final": _weight_stats(w_final),
     }
@@ -277,28 +283,29 @@ def build_weights(sensitivity: Dict[str, Any], layer_names: List[str]) -> Dict[s
     return build_weights_with_log(sensitivity, layer_names)[0]
 
 
-def select_final(topk: List[Dict[str, Any]], tol: float = 0.05) -> Optional[Dict[str, Any]]:
+def select_final(topk: List[Dict[str, Any]], tol: float = 0.05, key: str = "d_solver") -> Optional[Dict[str, Any]]:
     """TopK final-selection rule (v1.2, lexicographic — now well-defined).
 
-    Among candidate configs, each entry must carry "d_solver" (config-level
-    global divergence, measured on GPU by paired rollout of the COMPLETE
-    config) and "proxy" (the search objective Σ w_i·S_i).
+    Among candidate configs, each entry must carry the adjudication metric
+    (config-level global divergence, measured on GPU by paired rollout of the
+    COMPLETE config; key ∈ {"d_solver", "d_func"}, v1.4 adds the tail-aware
+    D_func) and "proxy" (the search objective Σ w_i·S_i).
 
-        d_min  = min_c D_solver(c)
-        T      = { c : D_solver(c) ≤ d_min + tol·max(d_min, ε) }   (tie set)
+        d_min  = min_c metric(c)
+        T      = { c : metric(c) ≤ d_min + tol·max(d_min, ε) }   (tie set)
         c*     = argmin_{c ∈ T} L_proxy(c)
 
-    Rationale: D_solver is the task-level metric (Q-DiT: proxy metrics do not
-    correlate with final quality); the proxy only breaks near-ties. tol is a
-    relative tolerance (default 5%).
+    Rationale: the functional metric is the task-level judge (Q-DiT: proxy
+    metrics do not correlate with final quality); the proxy only breaks
+    near-ties. tol is a relative tolerance (default 5%).
     """
-    cands = [c for c in topk if c.get("d_solver") is not None]
+    cands = [c for c in topk if c.get(key) is not None]
     if not cands:
         return None
-    d_min = min(float(c["d_solver"]) for c in cands)
+    d_min = min(float(c[key]) for c in cands)
     ties = [
         c for c in cands
-        if float(c["d_solver"]) <= d_min + tol * max(d_min, 1e-12)
+        if float(c[key]) <= d_min + tol * max(d_min, 1e-12)
     ]
     return min(ties, key=lambda c: float(c.get("proxy", float("inf"))))
 
@@ -886,6 +893,9 @@ def parse_args() -> argparse.Namespace:
                    help="最低 bit 档（默认 4，v1.3 正式安全约束）：CKA/CS 对 W2/W3 的"
                         "输出幅度爆炸失明（几何保持但幅度放大数倍 → 下游 A8 饱和 → "
                         "成功率崩溃）。重开 W2/W3 需过设计文档 §1.3.2 的六项实验。")
+    p.add_argument("--weight-metric", default="d_solver", choices=["d_solver", "d_func"],
+                   help="v1.4: per-layer functional divergence source for w_i "
+                        "(d_func = tail-aware metric from gr00t_func_metrics).")
     p.add_argument("--solver", default="greedy", choices=["greedy", "evolution"])
     p.add_argument("--npop", type=int, default=20)
     p.add_argument("--niter", type=int, default=10)
@@ -1067,10 +1077,11 @@ def main() -> None:
 
     layer_names = list(shapes)
     scores = build_scores(sens, layer_names, args.lambda_cka, args.lambda_cs)
-    weights, w_log = build_weights_with_log(sens, layer_names)
-    print("[select] w_i three-stage log (v1.3, §5.2):")
-    print(f"  raw_d_solver:            min {w_log['raw_d_solver']['min']:.6g} / "
-          f"max {w_log['raw_d_solver']['max']:.6g} / mean {w_log['raw_d_solver']['mean']:.6g}")
+    weights, w_log = build_weights_with_log(sens, layer_names, args.weight_metric)
+    raw_key = f"raw_{args.weight_metric}"
+    print(f"[select] w_i three-stage log (metric={args.weight_metric}):")
+    print(f"  {raw_key}:              min {w_log[raw_key]['min']:.6g} / "
+          f"max {w_log[raw_key]['max']:.6g} / mean {w_log[raw_key]['mean']:.6g}")
     print(f"  normalized_before_clip:  min {w_log['normalized_before_clip']['min']:.4f} / "
           f"max {w_log['normalized_before_clip']['max']:.4f} / mean {w_log['normalized_before_clip']['mean']:.4f}")
     print(f"  final_w_i:               min {w_log['final']['min']:.4f} / "

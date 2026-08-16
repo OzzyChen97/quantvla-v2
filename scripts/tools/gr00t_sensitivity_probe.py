@@ -735,6 +735,7 @@ def main() -> None:
                 if not set_single_layer_bits(model_q, name, b):
                     continue
                 all_per_obs: List[float] = []
+                all_d_func: List[float] = []
                 # noise set A: paired against the main reference trajectory
                 ref_sub_a = ref_traj[:, : args.n_rollout_obs]
                 q_traj = run_rollouts(
@@ -743,6 +744,12 @@ def main() -> None:
                 )
                 _, per_obs_a = solver_divergence(ref_sub_a, q_traj, args.gamma)
                 all_per_obs.extend(per_obs_a)
+                # v1.4 (D-020 route 3): tail-aware functional metric from the
+                # SAME paired trajectories (no extra rollouts)
+                from gr00t_func_metrics import d_func
+
+                df_a = d_func(ref_sub_a, q_traj, args.gamma)["d_func"]
+                all_d_func.append(df_a)
                 del q_traj
                 # noise set B: paired against ITS OWN reference trajectory
                 # (P0-3: D(x^R(ε_b), x^Q(ε_b)) — the old code compared ε_b
@@ -755,6 +762,7 @@ def main() -> None:
                     )
                     _, per_obs_b = solver_divergence(ref_traj_b, q_traj_b, args.gamma)
                     all_per_obs.extend(per_obs_b)
+                    all_d_func.append(d_func(ref_traj_b, q_traj_b, args.gamma)["d_func"])
                     del q_traj_b
                 gc.collect()
                 # median over (obs, noise) — robust aggregation, std recorded
@@ -762,8 +770,12 @@ def main() -> None:
                 std_div = float(np.std(all_per_obs)) if len(all_per_obs) > 1 else 0.0
                 results["layers"][name][f"d_solver_b{b}"] = mean_div
                 results["layers"][name][f"d_solver_b{b}_std"] = std_div
+                mean_df = float(np.median(all_d_func))
+                std_df = float(np.std(all_d_func)) if len(all_d_func) > 1 else 0.0
+                results["layers"][name][f"d_func_b{b}"] = mean_df
+                results["layers"][name][f"d_func_b{b}_std"] = std_df
             save_incremental()
-            print(f"[probe] per-layer importance rollouts b={b} done")
+            print(f"[probe] per-layer importance rollouts b={b} done (d_solver + d_func)")
 
     # ---- v1.3 guard thresholds: τ = P99 of the measured W4 candidates × margin ----
     if not args.skip_per_layer:

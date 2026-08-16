@@ -155,15 +155,17 @@ def battery(ref: torch.Tensor, q: torch.Tensor, seeds: int = 5, n_sweep: bool = 
     n = ref.shape[0]
 
     def run(rows_ref: torch.Tensor, rows_q: torch.Tensor) -> Dict[str, float]:
-        acc = {"cka_biased": 0.0, "cka_debiased_raw": 0.0, "rv2": 0.0,
-               "shuffled_biased": 0.0, "shuffled_raw": 0.0, "random_biased": 0.0, "random_raw": 0.0}
+        acc = {"cka_biased": 0.0, "cka_debiased": 0.0, "rv2": 0.0,
+               "shuffled_cka_biased": 0.0, "shuffled_cka_debiased": 0.0, "shuffled_rv2": 0.0,
+               "random_cka_biased": 0.0, "random_cka_debiased": 0.0, "random_rv2": 0.0}
         for s in range(seeds):
             b = cka_control_battery(_center(rows_ref), _center(rows_q), seed=s)
-            for k in acc:
-                src = "real" if not k.startswith(("shuffled", "random")) else k.split("_")[0]
-                v = b[src][k.replace("shuffled_", "").replace("random_", "")]
-                if v is not None:
-                    acc[k] += v / seeds
+            for group in ("real", "shuffled", "random"):
+                for k in ("cka_biased", "cka_debiased", "rv2"):
+                    v = b[group].get(k)
+                    if v is not None:
+                        key = k if group == "real" else f"{group}_{k}"
+                        acc[key] += v / seeds
         return acc
 
     out = {"n": int(n), "d": int(ref.shape[1]), "real": run(ref, q)}
@@ -238,8 +240,9 @@ def main() -> None:
     ap.add_argument("--layers-subset", type=int, default=30)
     ap.add_argument("--audits", default="1,2,3,4,5")
     ap.add_argument("--smoke", type=int, default=0, help="limit to first N subset layers (smoke mode)")
-    ap.add_argument("--obs-source", default="synthetic", choices=["synthetic", "l2", "npz"])
-    ap.add_argument("--obs-npz", default=None, help="path for --obs-source npz (keys videos/states/language)")
+    ap.add_argument("--obs-source", default="synthetic", choices=["synthetic", "l2", "l3"],
+                    help="Audit 3 data source: synthetic (L1) / l2 / l3 (both require --obs-npz)")
+    ap.add_argument("--obs-npz", default=None, help="npz from collect_libero_states.py for --obs-source l2/l3")
     ap.add_argument("--n-obs", type=int, default=16)
     ap.add_argument("--batch-size", type=int, default=8)
     ap.add_argument("--max-tokens", type=int, default=2048)
@@ -312,33 +315,18 @@ def main() -> None:
     print(f"[cka-audit] A8 calibrated in {time.time() - t0:.1f}s (sha {warm_sha[:16]})")
 
     # ---- obs source (Audit 3) ----
+    # synthetic (L1): fixed random obs, data-free. l2/l3: real states bridged
+    # through an npz produced by scripts/tools/collect_libero_states.py
+    # (l2 = FP16-policy env rollout states; l3 = unlabeled train/demo obs) —
+    # the audit process itself never imports the LIBERO env.
     obs_list: List[Dict[str, Any]] = [make_obs(rng, "libero") for _ in range(args.n_obs)]
-    if args.obs_source == "l2":
-        # rollout states: capture the transformed obs actually fed to the model
-        captured: List[Dict[str, Any]] = []
-        orig_apply = policy.apply_transforms
-
-        def capture_apply(batched_obs):
-            norm = orig_apply(batched_obs)
-            for k, v in norm.items():
-                if isinstance(v, torch.Tensor):
-                    norm[k] = v.detach()
-            captured.append({k: (v.cpu().numpy() if isinstance(v, torch.Tensor) else v) for k, v in norm.items()})
-            return norm
-
-        policy.apply_transforms = capture_apply
-        noises0 = [torch.randn(horizon, action_dim) for _ in obs_list]
-        run_rollouts(model, policy, obs_list, noises0, args.batch_size, return_trajectory=False)
-        policy.apply_transforms = orig_apply
-        obs_list = [captured[i] for i in range(min(args.n_obs, len(captured)))]
-        print(f"[cka-audit] Audit-3 L2: captured {len(obs_list)} rollout-state obs")
-    elif args.obs_source == "npz":
+    if args.obs_source in ("l2", "l3"):
         if not args.obs_npz:
-            raise SystemExit("--obs-source npz requires --obs-npz")
-        z = np.load(args.obs_npz)
+            raise SystemExit("--obs-source l2/l3 requires --obs-npz (see collect_libero_states.py)")
+        z = np.load(args.obs_npz, allow_pickle=False)
         keys = list(z.keys())
-        obs_list = [{k: z[k][i] for k in keys} for i in range(args.n_obs)]
-        print(f"[cka-audit] Audit-3 L3: {len(obs_list)} obs from {args.obs_npz}")
+        obs_list = [{k: z[k][i] for k in keys} for i in range(min(args.n_obs, len(z[keys[0]])))]
+        print(f"[cka-audit] Audit-3 {args.obs_source.upper()}: {len(obs_list)} obs from {args.obs_npz}")
 
     noises = [torch.randn(horizon, action_dim) for _ in obs_list]
 

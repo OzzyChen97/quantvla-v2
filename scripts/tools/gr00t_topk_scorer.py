@@ -104,6 +104,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n-obs", type=int, default=16, help="Synthetic obs for D_solver (round 3: 16, with paired-bootstrap significance).")
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--gamma", type=float, default=1.2)
+    p.add_argument("--metric", default="d_solver", choices=["d_solver", "d_func"],
+                   help="v1.4: adjudication metric (d_func = tail-aware functional metric).")
     p.add_argument("--group", type=int, default=64)
     p.add_argument("--ls", type=float, default=0.15)
     p.add_argument("--act-pct", type=float, default=99.9)
@@ -234,14 +236,21 @@ def main() -> None:
         n_wrapped = count_wrapped(policy_q.model)
         q_traj = run_rollouts(policy_q.model, policy_q, obs_list, noises, args.batch_size)
         mean_div, per_obs = solver_divergence(fp_traj, q_traj, args.gamma)
+        # v1.4: tail-aware functional metric from the SAME paired trajectories
+        from gr00t_func_metrics import d_func
+
+        df = d_func(fp_traj, q_traj, args.gamma)
         scored.append({
             "source": entry.get("source"),
             "d_solver": mean_div,
             "d_solver_std": float(np.std(per_obs)) if len(per_obs) > 1 else 0.0,
+            "d_func": df["d_func"],
+            "d_func_components": {k: v for k, v in df.items() if k != "per_obs"},
             "proxy": float(entry.get("objective", float("inf"))),
             "n_wrapped": n_wrapped,
             "plan_file": plan_path,
             "_per_obs": per_obs,
+            "_per_obs_func": df["per_obs"],
         })
         del policy_q, q_traj
         gc.collect()
@@ -252,10 +261,12 @@ def main() -> None:
 
     # paired-bootstrap significance: best vs runner-up over shared obs indices
     # (review round 3, item 9 — a fixed 5% tie rule on 8-16 point estimates is
-    # not a statistical decision; report the bootstrap evidence alongside it)
+    # not a statistical decision; report the bootstrap evidence alongside it.
+    # v1.4: the bootstrap uses the per-obs divergence list regardless of the
+    # adjudication metric — D_func components are per-plan aggregates.)
     bootstrap = None
     if len(scored) >= 2 and all(len(s.get("_per_obs", [])) > 1 for s in scored):
-        srt = sorted(scored, key=lambda c: c["d_solver"])
+        srt = sorted(scored, key=lambda c: c[args.metric])
         best, runner = srt[0], srt[1]
         pa = np.asarray(best["_per_obs"])
         pr = np.asarray(runner["_per_obs"])
@@ -271,21 +282,24 @@ def main() -> None:
         }
     for s_ in scored:
         s_.pop("_per_obs", None)
+        s_.pop("_per_obs_func", None)
 
-    final = select_final(scored, tol=args.tol)
+    final = select_final(scored, tol=args.tol, key=args.metric)
     if final is None:
-        raise SystemExit("[topk_scorer] select_final returned None (no d_solver scores)")
+        raise SystemExit(f"[topk_scorer] select_final returned None (no {args.metric} scores)")
     final_plan = json.loads(Path(final["plan_file"]).read_text())
     base = Path(args.out or str(Path(args.plan).parent / (Path(args.plan).stem + "_adjudicated")))
     report = {
         "meta": {
             "parent_plan": args.plan, "suite": args.suite, "n_obs": args.n_obs,
             "tol": args.tol, "final_source": final["source"],
+            "metric": args.metric,
             "calibration_buffer_sha256": warm_sha,
             "paired_bootstrap": bootstrap,
             "note": "true deployment semantics via GR00T_DUQUANT_PLAN (skip = unwrapped FP16); "
-                    "select_final = min D_solver, 5% tie set broken by canonical proxy; "
-                    "one shared fixed A8 calibration buffer for all plans",
+                    f"select_final = min {args.metric}, 5% tie set broken by canonical proxy; "
+                    "one shared fixed A8 calibration buffer for all plans; "
+                    "bootstrap significance uses per-obs divergences for both metrics",
         },
         "scored": scored,
         "final": {k: v for k, v in final.items() if k != "plan_file"},
@@ -298,12 +312,15 @@ def main() -> None:
     final_plan["meta"] = dict(final_plan.get("meta") or {})
     final_plan["meta"]["adjudicated"] = True
     final_plan["meta"]["final_source"] = final["source"]
-    final_plan["meta"]["final_d_solver"] = final["d_solver"]
+    final_plan["meta"]["final_metric"] = args.metric
+    final_plan["meta"][f"final_{args.metric}"] = final[args.metric]
+    if args.metric == "d_func" and "d_solver" in final:
+        final_plan["meta"]["final_d_solver"] = final["d_solver"]
     with open(base.with_suffix(".report.json"), "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
     with open(base.with_suffix(".final_plan.json"), "w", encoding="utf-8") as f:
         json.dump(final_plan, f, indent=2)
-    print(f"[topk_scorer] final = {final['source']} (D_solver {final['d_solver']:.5f})")
+    print(f"[topk_scorer] final = {final['source']} ({args.metric} {final[args.metric]:.5f})")
     print(f"[topk_scorer] report -> {base.with_suffix('.report.json')}")
     print(f"[topk_scorer] deployable plan -> {base.with_suffix('.final_plan.json')}")
     print("[topk_scorer] NEXT: run_quantvla.sh with "
