@@ -400,6 +400,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--cs-in-situ-check", action="store_true",
                    help="v1.3: verify the CS cross term responds monotonically when a real "
                         "layer output is scaled by 2/4/8 (closing criterion, §5.1.2).")
+    p.add_argument("--cka-location", default="linear", choices=["linear", "dit"],
+                   help="v1.4 (D-024): where per-layer CKA is measured. 'linear' = raw Linear "
+                        "outputs (v1.3 default, no functional signal); 'dit' = the DiT final "
+                        "hidden states (action-conditioning representation; gate-0 rho 0.72-0.95 "
+                        "vs d_solver, 0.55-0.94 vs D_func). With 'dit', layers[n][b].cka_dit "
+                        "carries the dit-output CKA for the selector's --cka-field.")
     p.add_argument("--guard-margin", type=float, default=1.5,
                    help="v1.3: τ = P99(W4 guard candidates) × margin, written into meta.")
     p.add_argument("--include", default=DEFAULT_INCLUDE)
@@ -618,9 +624,19 @@ def main() -> None:
     attn_ref = _AttentionCollector(mode="ref", banks=banks, max_tokens=args.max_tokens)
     lin_ref.install(model_q)
     register_output_capture(model_q, attn_ref, scope="dit")
+    # v1.4 (D-024): dit-output CKA attribution — the gate-0 evidence shows CKA
+    # at the DiT output predicts d_solver/D_func (rho 0.72-0.95), raw Linear
+    # does not. Collect the DiT final hidden states under a dedicated bank.
+    dit_ref = None
+    if args.cka_location == "dit":
+        banks["action_head.model"] = LayerScoreBank("action_head.model", max_tokens=args.max_tokens)
+        dit_ref = _LayerCollector(["action_head.model"], mode="ref", banks=banks, max_tokens=args.max_tokens)
+        dit_ref.install(model_q)
     # 只用配对噪声跑一次：激活参照与 ref_traj 来自同一条轨迹
     ref_traj = run_rollouts(model_q, policy_q, obs_list[: args.n_obs], noises[: args.n_obs], args.batch_size)
     lin_ref.remove()
+    if dit_ref is not None:
+        dit_ref.remove()
     clear_atm_capture(model_q)
     for bank in banks.values():
         bank.finalize_ref()
@@ -672,13 +688,23 @@ def main() -> None:
             set_all_bits(model_q, REF_BITS)
             for name in attr_names:
                 set_single_layer_bits(model_q, name, b)
-                col = _LayerCollector([name], mode="q", banks=banks, max_tokens=args.max_tokens)
+                q_names = [name]
+                if args.cka_location == "dit":
+                    q_names.append("action_head.model")
+                col = _LayerCollector(q_names, mode="q", banks=banks, max_tokens=args.max_tokens)
                 col.install(model_q)
                 run_activations(model_q, policy_q, obs_list[: args.n_obs], noises[: args.n_obs], args.batch_size)
                 set_single_layer_bits(model_q, name, REF_BITS)
                 front, back = col.pooled_blocks(name)
-                col.remove()
                 scores = banks[name].evaluate_blocks(front, back) if front is not None else {"cka": None, "cs": None, "cs_cross": None}
+                if args.cka_location == "dit" and "action_head.model" in banks:
+                    dfront, dback = col.pooled_blocks("action_head.model")
+                    d_scores = banks["action_head.model"].evaluate_blocks(dfront, dback) \
+                        if dfront is not None else {"cka": None}
+                    # v1.4 (D-024): the selector's CKA term reads cka_dit when
+                    # --cka-location dit (criterion-4 CS+CKA comparison plans)
+                    scores["cka_dit"] = d_scores.get("cka")
+                col.remove()
                 # v1.3 feasibility guards vs the pure FP16 reference
                 # (positional-only pooling on both sides — row-aligned)
                 q_pos = torch.cat([front, back], dim=0) if (front is not None and back is not None) else front
