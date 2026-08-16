@@ -523,3 +523,23 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   四量化配置 task 2/4（OpenStandMixerHead）；每 trial 全时长约 28 min；
 - GPU 全部用起：0/7 他人、1/2 long held-out、4/5/6 RoboCasa server+客户端、
   3 空闲（留给 RoboCerebra GR00T 桥梁）。
+
+## 2026-08-16：RoboCasa365 诊断链 + 判定（D-035）
+
+- **fp16 4 任务 × 3 trials = 0/12**，逐层排查：
+  1. 状态归一化模式 A/B（mean_std vs min_max）——均失败，非根因；
+  2. **action key 顺序修正**：metadata 顺序 = [base_motion, control_mode,
+     eef_pos, eef_rot, gripper_close]（我此前用 upstream 顺序，会把 32 维动作
+     切片错位——已修正为 metadata 顺序，D-035a）；
+  3. 官方 horizon=720（非 1500）——非截断问题；chunk-sequential 执行亦失败；
+  4. 观测行为：eef 300 步移动 0.15m、gripper 开合正常、动作量级合理、
+     control_mode/gripper 输出=训练分布均值（−0.93/−0.36）——机器人正常尝试；
+  5. **条件化强度测试**：robocasa365 模型对 zero-obs vs random-obs 的 10 样本
+     均值 |diff| = 0.016/max 0.12；**LIBERO 已知-good 模型同测试 = 0.023/0.069**
+     ——两者量级一致，说明 robocasa365 的条件化路径并非失效（GR00T 条件化
+     本身就弱/含噪），管线机制健全；
+- **判定**：本机 harness 下绝对 SR 低（0/16 trials），但 criterion-4 五配置
+  在同一 harness 上平行运行——**相对比较仍然有效**（fp16 上限 + 4 量化配置
+  同条件对照）；绝对 SR 与官方 68.5% 的差异需官方 harness/data-config 对齐
+  （上游 12-key state modality 等），列为后续对齐项，不阻塞 criterion-4 裁决；
+- 图像原生 256 分支（ROBOCASA365_IMG=native）已加入 data config 供后续 A/B。

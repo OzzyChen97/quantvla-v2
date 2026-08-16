@@ -61,39 +61,62 @@ class RoboCasa365DataConfig(BaseDataConfig):
         "state.end_effector_rotation_relative",
         "state.gripper_qpos",
     ]
+    # ORDER = the checkpoint metadata's action statistics key order — the
+    # 32-dim action vector is split onto these keys in THIS order at
+    # unnormalization time (D-035: a different order scrambles the actions)
     action_keys = [
-        "action.gripper_close",
-        "action.end_effector_position",
-        "action.end_effector_rotation",
         "action.base_motion",
         "action.control_mode",
+        "action.end_effector_position",
+        "action.end_effector_rotation",
+        "action.gripper_close",
     ]
     language_keys = ["annotation.human.action.task_description"]
     observation_indices = [0]
     action_indices = list(range(16))
 
     def transform(self) -> ModalityTransform:
-        transforms = [
-            VideoToTensor(apply_to=self.video_keys),
-            VideoCrop(apply_to=self.video_keys, scale=0.95),
-            VideoResize(apply_to=self.video_keys, height=224, width=224, interpolation="linear"),
-            VideoColorJitter(
-                apply_to=self.video_keys,
-                brightness=0.3,
-                contrast=0.4,
-                saturation=0.5,
-                hue=0.08,
-            ),
-            VideoToNumpy(apply_to=self.video_keys),
+        import os
+
+        # v1.4 probe: A/B the normalization mode (mean_std vs min_max) — the
+        # checkpoint metadata carries all four fields, but the TRAINING config
+        # decides which pair was used
+        norm = os.environ.get("ROBOCASA365_NORM", "mean_std")
+        state_mode = {key: norm for key in self.state_keys}
+        action_mode = {key: norm for key in self.action_keys}
+        # image pipeline: ROBOCASA365_IMG=native passes the 256x256 images
+        # through unchanged (crop/jitter/resize OFF — A/B probe for the
+        # conditioning failure); default = the LIBERO-style 224 pipeline
+        img_mode = os.environ.get("ROBOCASA365_IMG", "libero")
+        if img_mode == "native":
+            video_transforms = [
+                VideoToTensor(apply_to=self.video_keys),
+                VideoToNumpy(apply_to=self.video_keys),
+            ]
+        else:
+            video_transforms = [
+                VideoToTensor(apply_to=self.video_keys),
+                VideoCrop(apply_to=self.video_keys, scale=0.95),
+                VideoResize(apply_to=self.video_keys, height=224, width=224, interpolation="linear"),
+                VideoColorJitter(
+                    apply_to=self.video_keys,
+                    brightness=0.3,
+                    contrast=0.4,
+                    saturation=0.5,
+                    hue=0.08,
+                ),
+                VideoToNumpy(apply_to=self.video_keys),
+            ]
+        transforms = video_transforms + [
             StateActionToTensor(apply_to=self.state_keys),
             StateActionTransform(
                 apply_to=self.state_keys,
-                normalization_modes={key: "mean_std" for key in self.state_keys},
+                normalization_modes=state_mode,
             ),
             StateActionToTensor(apply_to=self.action_keys),
             StateActionTransform(
                 apply_to=self.action_keys,
-                normalization_modes={key: "mean_std" for key in self.action_keys},
+                normalization_modes=action_mode,
             ),
             ConcatTransform(
                 video_concat_order=self.video_keys,
