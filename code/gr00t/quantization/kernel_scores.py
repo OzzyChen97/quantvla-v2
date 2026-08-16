@@ -218,6 +218,24 @@ def hsic_biased_linear(xc: torch.Tensor, yc: torch.Tensor) -> float:
     return float(torch.linalg.matrix_norm(xc.T @ yc, ord="fro")) ** 2 / (n - 1) ** 2
 
 
+def hsic_biased_from_gram(k: torch.Tensor, l: torch.Tensor, n: int) -> float:
+    """Biased linear HSIC from precomputed Gram matrices K = Xc Xc^T, L = Yc Yc^T.
+
+    Lets audit batteries precompute the reference Gram ONCE across shuffle
+    seeds instead of recomputing the (N, D) @ (D, N) product per seed.
+    """
+    return float((k * l).sum()) / (n - 1) ** 2
+
+
+def hsic_unbiased_from_gram(k: torch.Tensor, l: torch.Tensor, n: int) -> Optional[float]:
+    """Unbiased linear HSIC from precomputed Grams (diagonal-free, Song et al.)."""
+    if n <= 3:
+        return None
+    k0 = k - torch.diag(torch.diag(k))
+    l0 = l - torch.diag(torch.diag(l))
+    return float((k0 * l0).sum()) / (n * (n - 3))
+
+
 def hsic_unbiased_linear(xc: torch.Tensor, yc: torch.Tensor) -> Optional[float]:
     """Unbiased linear-kernel HSIC (Song et al. 2012).
 

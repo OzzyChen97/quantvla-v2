@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -145,8 +146,20 @@ class _RawCollector:
 # Battery helpers
 # --------------------------------------------------------------------------- #
 def battery(ref: torch.Tensor, q: torch.Tensor, seeds: int = 5, n_sweep: bool = False) -> Dict[str, Any]:
-    """Control battery for one aligned (ref, q) pair; seed-averaged raw values."""
-    # shared near-zero row mask from the REF side (padding), row alignment kept
+    """Control battery for one aligned (ref, q) pair; seed-averaged raw values.
+
+    Fast path: the reference Gram K = Xc Xc^T is computed ONCE per (level,
+    pair); all shuffle/random control Grams reuse it via the Gram-based HSIC
+    helpers (hsic_biased_from_gram / hsic_unbiased_from_gram). RV2 is computed
+    for the real pair and the first control permutation only (D x D
+    covariance products dominate at D=6144).
+    """
+    from gr00t.quantization.kernel_scores import (  # noqa: PLC0415
+        hsic_biased_from_gram,
+        hsic_unbiased_from_gram,
+        rv2_adjusted,
+    )
+
     mask = ref.norm(dim=1) > 1e-9
     if int(mask.sum()) < 16:
         return {"n": 0, "note": "too few nonzero rows"}
@@ -154,21 +167,45 @@ def battery(ref: torch.Tensor, q: torch.Tensor, seeds: int = 5, n_sweep: bool = 
     q = q[mask].contiguous()
     n = ref.shape[0]
 
-    def run(rows_ref: torch.Tensor, rows_q: torch.Tensor) -> Dict[str, float]:
-        acc = {"cka_biased": 0.0, "cka_debiased": 0.0, "rv2": 0.0,
-               "shuffled_cka_biased": 0.0, "shuffled_cka_debiased": 0.0, "shuffled_rv2": 0.0,
-               "random_cka_biased": 0.0, "random_cka_debiased": 0.0, "random_rv2": 0.0}
-        for s in range(seeds):
-            b = cka_control_battery(_center(rows_ref), _center(rows_q), seed=s)
-            for group in ("real", "shuffled", "random"):
-                for k in ("cka_biased", "cka_debiased", "rv2"):
-                    v = b[group].get(k)
-                    if v is not None:
-                        key = k if group == "real" else f"{group}_{k}"
-                        acc[key] += v / seeds
+    def level(rows_ref: torch.Tensor, rows_q: torch.Tensor) -> Dict[str, float]:
+        m = rows_ref.shape[0]
+        xc = _center(rows_ref)
+        yc = _center(rows_q)
+        k = xc @ xc.T
+        kk_b = hsic_biased_from_gram(k, k, m)
+        kk_u = hsic_unbiased_from_gram(k, k, m)
+        g = torch.Generator().manual_seed(0)
+        perms = [torch.randperm(m, generator=g) for _ in range(seeds)]
+        groups: Dict[str, List[torch.Tensor]] = {
+            "real": [yc],
+            "shuffled": [yc[p] for p in perms],
+            "random": [rr - rr.mean(dim=0, keepdim=True)
+                       for rr in (torch.randn_like(yc) for _ in range(seeds))],
+        }
+        acc: Dict[str, float] = {}
+        for group, mats in groups.items():
+            for j, ym in enumerate(mats):
+                ll = ym @ ym.T
+                xy_b = hsic_biased_from_gram(k, ll, m)
+                ll_b = hsic_biased_from_gram(ll, ll, m)
+                biased = xy_b / math.sqrt(max(kk_b * ll_b, 1e-30))
+                xy_u = hsic_unbiased_from_gram(k, ll, m)
+                ll_u = hsic_unbiased_from_gram(ll, ll, m)
+                deb = None
+                if xy_u is not None and ll_u is not None and kk_u is not None \
+                        and kk_u > 0 and ll_u > 0:
+                    deb = xy_u / math.sqrt(kk_u * ll_u)
+                rv = None
+                if j == 0:  # RV2 only for the real pair + first control perm
+                    rv = rv2_adjusted(xc, ym)
+                for name, v in (("cka_biased", biased), ("cka_debiased", deb), ("rv2", rv)):
+                    if v is None:
+                        continue
+                    key = name if group == "real" else f"{group}_{name}"
+                    acc[key] = acc.get(key, 0.0) + v / seeds
         return acc
 
-    out = {"n": int(n), "d": int(ref.shape[1]), "real": run(ref, q)}
+    out = {"n": int(n), "d": int(ref.shape[1]), "real": level(ref, q)}
     if n_sweep:
         out["sweep"] = {}
         for cap in (256, 512, 1024, 2048):
@@ -177,7 +214,7 @@ def battery(ref: torch.Tensor, q: torch.Tensor, seeds: int = 5, n_sweep: bool = 
             step = n // cap + 1
             sub_r = ref[::step][:cap]
             sub_q = q[::step][:cap]
-            out["sweep"][str(cap)] = run(sub_r, sub_q)
+            out["sweep"][str(cap)] = level(sub_r, sub_q)
     return out
 
 
