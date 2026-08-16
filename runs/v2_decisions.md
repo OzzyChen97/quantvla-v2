@@ -322,3 +322,38 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
 - 三套件 CKA 审计（Audit 1/2/4，30 层）GPU1/2/3 并行运行中；
   RoboCasa365 GR00T checkpoint（HF robocasa/robocasa365_checkpoints，
   target_posttraining×3）经 hf-mirror 后台下载中。
+
+## 2026-08-16：审计 battery 归一化 bug 修复 + 三套件重跑（D-022）
+
+- **Bug**：battery() 快速路径把每次累加都除以 seeds，而 real 对只累加 1 次 →
+  真实 CKA 被整体除以 5（0.9993/5=0.1999——三套件首轮 audit 的 "real≈0.2" 是
+  伪影；由其派生的 Spearman 结论作废）；shuffled/random 有 seeds 次累加不受影响；
+- **修复**：改为按 key 计数、结束归一化；合成数据验证 real 0.99993 ✓、
+  shuffled/random 对照不变；kernel_scores selftest 全程不受影响（独立实现）；
+- **行动**：spatial/goal/object 三套件 audit 1/2/4 全部重跑（GPU1/2/3）；
+  已删除的首轮三份 audit JSON 作废。
+
+## 2026-08-16：CKA 审计正式结果（修正后）+ RoboCasa365 冒烟通过（D-023）
+
+- **Audit 2（hook 位置）——用户假设获强证实**（修正 battery bug 后的三套件数据）：
+  Spearman(1−CKA, d_solver_b4)：
+  - raw Linear：-0.04 / 0.12 / 0.12（无信号，与 v1.3 结论一致）；
+  - block 输出：0.37 / 0.38 / 0.40（中等且三套件同向）；
+  - **dit_final_norm：0.72 / 0.91 / 0.79**；
+  - **dit_output：0.77 / 0.95 / 0.84**（最强且跨 checkpoint 一致，远高于 CS 的
+    0.30-0.41）——action-conditioning 表征的 CKA 能预测功能损伤，raw Linear 不能；
+- **Audit 1**：real≫shuffled/random 分离度 100% 通过（对照分离门槛 1.00）；
+  biased 与 debiased 在 N≥1024 下给出相同排序；RV2 在 D>N 下饱和（仅记录）；
+- **Audit 4**：front/back/tail 位置分层无额外区分度（详见 JSON）；
+- **门槛裁决（gr00t_cka_gate.py）**：criterion 1（方向一致）/3（top-k recall
+  0.87@dit_output）/5（对照分离）已过；criterion 2（vs D_func 尾部指标）待新
+  probe 输出 d_func_b4 后补；criterion 4 待 RoboCasa smoke。**当前不启用 CKA，
+  等 2/4 补齐再裁决**；
+- **RoboCasa365 兼容性冒烟 PASS**：HF robocasa/robocasa365_checkpoints 的
+  target_posttraining×3 已下载（22GB）；新增
+  examples/RoboCasa365/custom_data_config.py（5 state×3 cam×5 action，统计来自
+  checkpoint 自带 metadata）+ scripts/tools/robocasa365_smoke.py——GR00T N1.5
+  在本地 fork 加载成功，输出 32 维动作全 finite；
+- 关键坑：robocasa365 env 中 `sys.path` 加 "code" 会把 robocasa 包遮蔽成命名
+  空间包（任务注册 396→19）——必须先 import robocasa 再加路径（wrapper 已在
+  code/gr00t/eval/sim/robocasa365/ 落地）。
