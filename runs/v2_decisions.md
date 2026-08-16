@@ -451,3 +451,14 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   校准 buffer 格式）；robocasa365 probe（bits 4,6, dit CKA, d_func）在 GPU5 运行
   中，pack 目录随加载自动生成（weight 旋转与 bit 无关）；
 - goal/object 的 CS+CKA / CKA-only diagnostic 计划已生成（待裁决）。
+
+## 2026-08-16：RoboCasa365 criterion-4 计划三件套生成（D-030）
+
+- robocasa365 probe（bits 4,6 + cka_dit + d_func，合成 robocasa365 obs）完成；
+- 生成四组计划（同 w_i=d_func、同 guards、同预算 uniform-W6 862.9MB、同
+  {W6,W4,FP16} 空间）：uniform W6 / CS-only / CS+CKA(dit) / CKA-only(diagnostic)；
+  进入 D_func 裁决（GPU4 串行）；
+- scorer 增加 --suite robocasa365_atomic + --obs-format（A8 buffer 与合成 obs
+  的 robocasa365 格式分支）；
+- 裁决完成后启动 criterion-4 小规模 RoboCasa 对比：3-5 atomic + 3-5 composite
+  × 3 trials × {W6, CS-only, CS+CKA} + FP16 单次上限校验。

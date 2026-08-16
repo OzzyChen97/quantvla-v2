@@ -96,11 +96,13 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="GR00T v2 TopK D_solver adjudicator (v1.3)")
     p.add_argument("--plan", default=None, help="Selector plan JSON with the diverse TopK.")
     p.add_argument("--ckpt", default=None, help="Checkpoint dir.")
-    p.add_argument("--suite", default="spatial", choices=["spatial", "goal", "object", "90", "10"])
+    p.add_argument("--suite", default="spatial", choices=["spatial", "goal", "object", "90", "10", "robocasa365_atomic"])
     p.add_argument("--data-config", default=None,
                    help="Default: resolved per suite via SUITE_DATA_CONFIG (goal -> MeanStd).")
     p.add_argument("--device", default="cuda")
     p.add_argument("--denoising-steps", type=int, default=8)
+    p.add_argument("--obs-format", default=None,
+                   help="Synthetic obs format (default: libero; robocasa365 for the RoboCasa365 checkpoints).")
     p.add_argument("--n-obs", type=int, default=16, help="Synthetic obs for D_solver (round 3: 16, with paired-bootstrap significance).")
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--gamma", type=float, default=1.2)
@@ -158,6 +160,8 @@ def main() -> None:
     if not args.plan or not args.ckpt:
         raise SystemExit("--plan/--ckpt are required (or use --selftest)")
     args.data_config = resolve_data_config(args.suite, args.data_config)
+    if args.obs_format is None:
+        args.obs_format = "robocasa365" if args.suite == "robocasa365_atomic" else "libero"
     sel_plan = json.loads(Path(args.plan).read_text())
     topk = sel_plan.get("topk", [])
     if not topk:
@@ -180,7 +184,7 @@ def main() -> None:
     model_fp = policy_fp.model
     horizon = int(model_fp.action_head.config.action_horizon)
     action_dim = int(model_fp.action_head.config.action_dim)
-    obs_list = [make_obs(rng, "libero") for _ in range(args.n_obs)]
+    obs_list = [make_obs(rng, args.obs_format) for _ in range(args.n_obs)]
     noises = [torch.randn(horizon, action_dim) for _ in obs_list]
     fp_traj = run_rollouts(model_fp, policy_fp, obs_list, noises, args.batch_size)
     del model_fp, policy_fp
@@ -196,7 +200,7 @@ def main() -> None:
 
     n_warm_obs = args.calib_steps * args.batch_size
     warm_obs, warm_noises, warm_sha = fixed_calibration_buffer(
-        0, n_warm_obs, horizon, action_dim, fmt="libero"
+        0, n_warm_obs, horizon, action_dim, fmt=args.obs_format
     )
     print(f"[topk_scorer] fixed calibration buffer: {n_warm_obs} obs, sha256={warm_sha[:16]}...")
 
