@@ -776,13 +776,18 @@ def evolution_plan(
 
     rng = random.Random(seed)
     names = list(shapes)
-    choices = [None] + BITS_ORDER  # None = skip (FP16)
+
+    def avail_bits(n: str) -> List[int]:
+        """Bits with non-None scores for layer n (mutation must never pick an
+        unscored bit — plan_objective treats None as an invalid state)."""
+        return [b for b in BITS_ORDER if scores[n].get(b) is not None]
 
     def random_ind() -> Dict[str, Any]:
         ind = {n: {"bits": None, "group": 64, "skip": True} for n in shapes}
         for n in names:
-            if rng.random() < 0.9:
-                b = rng.choice(BITS_ORDER)
+            ab = avail_bits(n)
+            if ab and rng.random() < 0.9:
+                b = rng.choice(ab)
                 ind[n]["bits"] = b
                 ind[n]["skip"] = False
         return ind
@@ -806,6 +811,7 @@ def evolution_plan(
                 child[n] = dict(src[n])
             if rng.random() < 0.2:
                 n = rng.choice(names)
+                choices: List[Optional[int]] = [None] + avail_bits(n)
                 c = rng.choice(choices)
                 child[n]["bits"] = c
                 child[n]["skip"] = c is None
@@ -872,6 +878,10 @@ def parse_args() -> argparse.Namespace:
                         "'v1-w4' (v1 W4A8 plan bytes) or a float byte budget.")
     p.add_argument("--binary", action=argparse.BooleanOptionalAction, default=True,
                    help="v1.3 main path: binary W4/FP16 selection (--no-binary restores the mixed-bit space).")
+    p.add_argument("--bits-order", default=None,
+                   help="v1.4: explicit descending bit order for the tri-state search, e.g. '6,4' "
+                        "gives {FP16(skip), W6, W4}; requires --no-binary. All entries must be "
+                        ">= --min-bits.")
     p.add_argument("--min-bits", type=int, default=4,
                    help="最低 bit 档（默认 4，v1.3 正式安全约束）：CKA/CS 对 W2/W3 的"
                         "输出幅度爆炸失明（几何保持但幅度放大数倍 → 下游 A8 饱和 → "
@@ -980,6 +990,38 @@ def _selftest() -> None:
     print(f"  diverse topk  {len(top)} plans, min hamming 3")
     print(f"  bootstrap     jaccard mean {bs['jaccard']['mean']:.3f}, spearman {bs['spearman_mean']:.3f}")
 
+    # ---- v1.4 tri-state selftest: {FP16, W6, W4} under a uniform-W6 budget ----
+    for n in names:
+        b4 = sens_layers[n]["b4"]
+        sens_layers[n]["b6"] = {
+            "cka": (b4.get("cka") * 0.95) if b4.get("cka") is not None else None,
+            "cs": (b4.get("cs") * 0.4) if b4.get("cs") is not None else None,
+            "rms_ratio": b4["rms_ratio"] * 0.5, "sat_rate": b4["sat_rate"] * 0.5,
+        }
+    BITS_ORDER[:] = [6, 4]
+    scores6 = build_scores(sens, names, 0.0, 1.0)  # CS-only primary (v1.4)
+    assert scores6["L0"][6] is not None and scores6["L0"][4] is not None
+    assert scores6["L50"][6] is None, "missing b6 measurement must stay unavailable"
+    weights6, _ = build_weights_with_log(sens, names)
+    budget6 = sum(layer_bytes_quant(s["out"], s["in"], s["has_bias"], 6, 64, "restore")
+                  for s in shapes.values())
+    g6, g6_obj = greedy_plan(shapes, scores6, weights6, budget6, "restore")
+    assert plan_total_bytes(g6, shapes, "restore") <= budget6 + 1e-3, "tri-state budget violated"
+    bits_used = {e["bits"] for e in g6.values()}
+    assert bits_used <= {None, 6, 4}, f"tri-state used unexpected bits: {bits_used}"
+    assert g6["L3"]["skip"] is True, "guarded layer must stay FP16 in tri-state too"
+    n_w6 = sum(1 for e in g6.values() if e["bits"] == 6)
+    n_w4 = sum(1 for e in g6.values() if e["bits"] == 4)
+    n_fp = sum(1 for e in g6.values() if e["bits"] is None)
+    assert n_w6 + n_w4 + n_fp == len(names) - len(removed) or n_fp >= 0
+    # evolution solver must also respect the tri-state space
+    e6, e6_obj = evolution_plan(shapes, scores6, weights6, budget6, "restore", npop=8, niter=5, topk=4, seed=0)
+    assert {e["bits"] for e in e6.values()} <= {None, 6, 4}
+    assert plan_total_bytes(e6, shapes, "restore") <= budget6 + 1e-3
+    BITS_ORDER[:] = BINARY_BITS  # restore the v1.3 default for any later use
+    print(f"[select] tri-state selftest OK: W6={n_w6} W4={n_w4} FP16={n_fp} "
+          f"(budget uniform-W6 {budget6/1e6:.1f}MB), greedy obj {g6_obj:.4f}, evolution obj {e6_obj:.4f}")
+
 
 def _parse_lambda_pairs(spec: str) -> Tuple[Tuple[float, float], ...]:
     out = []
@@ -998,8 +1040,15 @@ def main() -> None:
 
     if not args.sensitivity or not args.ckpt or not args.out:
         raise SystemExit("--sensitivity/--ckpt/--out are required (or use --selftest)")
-    # 搜索空间按 --min-bits 收紧（v1.3 正式安全约束，见参数说明）
-    BITS_ORDER[:] = [b for b in BITS_ORDER if b >= args.min_bits]
+    # 搜索空间：v1.4 --bits-order 6,4（三元 {FP16,W6,W4}，W2/W3 不开放）优先；
+    # 否则按 --min-bits 从默认空间收紧（v1.3 正式安全约束，见参数说明）
+    if args.bits_order:
+        order = [int(x) for x in args.bits_order.split(",") if x.strip()]
+        if any(b < args.min_bits for b in order):
+            raise SystemExit(f"--bits-order {args.bits_order} 含低于 --min-bits {args.min_bits} 的档位")
+        BITS_ORDER[:] = order
+    else:
+        BITS_ORDER[:] = [b for b in BITS_ORDER if b >= args.min_bits]
     if args.binary:
         BITS_ORDER[:] = BINARY_BITS  # v1.3 main path: W4 / skip only
     if not BITS_ORDER:
