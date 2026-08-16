@@ -365,7 +365,7 @@ def guard_metrics(fp_out: Optional[torch.Tensor], q_out: Optional[torch.Tensor])
 # --------------------------------------------------------------------------- #
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="GR00T v2 sensitivity probe (P0-G, v1.2 reference protocol)")
-    p.add_argument("--suite", default="spatial", choices=["spatial", "goal", "object", "90", "10"])
+    p.add_argument("--suite", default="spatial", choices=["spatial", "goal", "object", "90", "10", "robocasa365_atomic"])
     p.add_argument(
         "--model-path",
         default=None,
@@ -373,7 +373,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--data-config", default=None,
                    help="Default: resolved per suite via SUITE_DATA_CONFIG (goal -> MeanStd).")
-    p.add_argument("--obs-format", default="libero", choices=["libero", "gr1"],
+    p.add_argument("--obs-format", default="libero", choices=["libero", "gr1", "robocasa365"],
                    help="合成 obs 格式：libero（默认）或 gr1（fourier_gr1_arms_waist）")
     p.add_argument("--embodiment-tag", default="new_embodiment",
                    help="模型 embodiment tag（GR1 tabletop 用 gr1）")
@@ -453,7 +453,7 @@ def main() -> None:
     args.data_config = resolve_data_config(args.suite, args.data_config)
     suite_dir = SUITE_DIRS[args.suite]
     if args.model_path is None:
-        args.model_path = str(REPO_ROOT / "checkpoints" / "gr00t" / suite_dir)
+        args.model_path = str((REPO_ROOT / "checkpoints" / "gr00t" / suite_dir).resolve())
     if args.packdir is None:
         args.packdir = str(
             REPO_ROOT
