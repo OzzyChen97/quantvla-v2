@@ -290,7 +290,7 @@ PY
 v14_accept() {
     local S=${1:-spatial}
     local BDIR="$REPO/checkpoints/packs/gr00t/baselines_${S}"
-    local FINAL="$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}_v14.final_plan.json"
+    local FINAL="$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}_v14_adjudicated.final_plan.json"
     local ATM_W6="$REPO/checkpoints/packs/gr00t/atm_alpha_beta_static_${S}_w6.json"
     local ATM_V14="$REPO/checkpoints/packs/gr00t/atm_alpha_beta_static_${S}_v14.json"
     [[ -f "$BDIR/uniform_w6.json" ]] || { echo "!!! uniform_w6 baseline missing"; exit 1; }
