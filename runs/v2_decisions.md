@@ -462,3 +462,23 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   的 robocasa365 格式分支）；
 - 裁决完成后启动 criterion-4 小规模 RoboCasa 对比：3-5 atomic + 3-5 composite
   × 3 trials × {W6, CS-only, CS+CKA} + FP16 单次上限校验。
+
+## 2026-08-16：Triton 融合推理 A/B + RoboCasa365 计划裁决（D-031）
+
+- **Triton 融合 W4 反量化 matmul（duquant_fused.py）A/B 结论（libero-spatial，
+  v1.3 二元 final plan，16 paired obs）**：
+  - kernel 单层对照 eager 数学**逐位一致**（0.0 diff，standalone 复算）；
+  - 模型级能量加权差异：per-layer RMS rel diff 中位 1.5e-2、final-action RMS
+    4.3e-3；逐元素 max-rel 差异大（100×+）是近零元素分母放大 + bf16 混沌放大，
+    不代表损伤；
+  - **D_solver：eager 0.00074 → fused 0.00070（−3.9e-5，略优）**——fp32 累积
+    比 bf16 tensor-core 更准；fused_ready=78/78 确认融合分支生效；
+  - **速度：当前 eval 批规模下 0.86×（更慢）**——单层微基准大 M 时 3.3× 快，
+    但小 batch 下 kernel 启动开销占优；真正的加速需要 int4 packed 存储 +
+    更大 tile 的工程化版本，正确性结论先行；
+  - 结论：**融合推理不影响结果（D_solver 不劣化），当前实现不做默认**；
+- **RoboCasa365 计划 D_func 裁决完成**：CS-only 0.164 / CS+CKA(dit) 0.150 /
+  **CKA-only 0.095（最低）**——CKA(dit) 在 robocasa365 上也给出最低代理损伤，
+  criterion-4 闭环 RoboCasa 对比待跑；
+- 舰队 ATM 配置转换（cfg 3→4）已跨过（D-029 修复生效，spatial/object 已到
+  cfg 4，goal cfg 3）。

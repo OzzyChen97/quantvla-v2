@@ -50,9 +50,13 @@ class DuQuantConfig:
     block_out_size: Optional[int] = None
     # QuantVLA v2: on-the-fly min-max activation scale (Q-DiT 5.2 style)
     act_dynamic: Optional[bool] = None
+    # v1.4 fast-path probe: Triton fused W4-dequant matmul (duquant_fused)
+    use_fused: Optional[bool] = None
 
     def __post_init__(self):
         """Read environment variables at instantiation time."""
+        if self.use_fused is None:
+            self.use_fused = os.environ.get("GR00T_DUQUANT_FUSED", "0") not in ("0", "false", "False", "")
         if self.weight_bits is None:
             self.weight_bits = int(os.environ.get("GR00T_DUQUANT_WBITS_DEFAULT", 4))
         if self.act_bits is None:
@@ -171,6 +175,9 @@ class DuQuantLinear(nn.Module):
             self.register_buffer("_W_t_quantized", torch.zeros_like(self._weight))
         else:
             self._W_t_quantized = None
+        self.register_buffer("_W_packed_int8", torch.zeros(
+            self.out_features, self.in_features, dtype=torch.int8))
+        self._fused_ready = False
         self._weight_quantized_cached = False
 
         self._bias_rot: Optional[torch.Tensor] = None
@@ -234,6 +241,16 @@ class DuQuantLinear(nn.Module):
             self._weight_quantized_cached = True
         else:
             self._weight_quantized_cached = False
+
+        # v1.4 fast-path probe: packed int8 weights for the Triton fused kernel
+        if self.cfg.use_fused and self.weight_bits == 4:
+            from .duquant_fused import pack_w4_int8
+
+            with torch.no_grad():
+                self._W_packed_int8.copy_(pack_w4_int8(W_t, scales))
+            self._fused_ready = True
+        else:
+            self._fused_ready = False
 
         self._cached_weight_key = key
         if self.bias is not None:
@@ -336,7 +353,13 @@ class DuQuantLinear(nn.Module):
         self._maybe_update_weight_cache()
 
         # Use pre-quantized weights
-        if self._weight_quantized_cached:
+        if self.cfg.use_fused and self.weight_bits == 4 and self._fused_ready:
+            # v1.4 fast-path probe: Triton fused W4-dequant matmul (same math
+            # as the eager fake-quant path; fp32 accumulation in-kernel)
+            from .duquant_fused import fused_linear_w4
+
+            y_lin = fused_linear_w4(x_t, self._W_packed_int8, self._w_scales)
+        elif self._weight_quantized_cached:
             y_lin = torch.nn.functional.linear(x_t, self._W_t_quantized, None)
         elif self.weight_bits > 0:
             y_lin = torch.nn.functional.linear(
