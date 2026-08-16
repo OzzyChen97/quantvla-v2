@@ -511,3 +511,15 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   CS-only 与 v14 持平（spatial −4），CS+CKA 略低（−4.5）——criterion-4 的
   RoboCasa 闭环数据将给出最终裁决；
 - parser 增加 --mode v14（ATM-aware 配置切分）+ 修复打印缩进 bug。
+
+## 2026-08-16：v1.4 long held-out 启动 + criterion-4 进行中（D-034）
+
+- v14 胜出计划（spatial v14，SR 100%）mask-only 转移到 Long pack
+  （gr00t_quant_plan_long_transfer_v14.json，109 W4/7 skip…实际含 W6 位，
+  bits 原样保留）——final-holdout 增加 V14_HOLD_V2/W6 环境变量覆盖；
+- long held-out 2 分片启动（GPU1/2，transfer-v14 vs transfer-w6 × 3 seeds，
+  每配置 50 rollouts）；预期 6-10h；
+- criterion-4 RoboCasa 五配置闭环实验进行中：fp16 已到 task 3/4，
+  四量化配置 task 2/4（OpenStandMixerHead）；每 trial 全时长约 28 min；
+- GPU 全部用起：0/7 他人、1/2 long held-out、4/5/6 RoboCasa server+客户端、
+  3 空闲（留给 RoboCerebra GR00T 桥梁）。

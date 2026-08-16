@@ -339,9 +339,10 @@ final_holdout() {
     [[ -f "$PLAN" ]] || { echo "!!! spatial adjudicated plan missing — run spatial pipeline first"; exit 1; }
         # per seed: transfer-v2 (spatial mask + Long pack) AND the same-budget
         # uniform-W6 baseline on the Long checkpoint (review round 5, item 5)
+        # v1.4: env-overridable held-out plan pair (defaults = v1.3 pair)
         local PLANS=(
-            "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_long_transfer_v2.json"
-            "$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_long_transfer_w6.json"
+            "${V14_HOLD_V2:-$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_long_transfer_v2.json}"
+            "${V14_HOLD_W6:-$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_long_transfer_w6.json}"
         )
         for SEED in ${HOLD_SEEDS:-0 1 2}; do
             for PLAN2 in "${PLANS[@]}"; do
