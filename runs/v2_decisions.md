@@ -406,3 +406,16 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   plan JSON）；CS-only 消融（--no-weights）与 spatial CS+CKA（--cka-field
   cka_dit, λ_cka=1）计划同步生成，进入 D_func 裁决（7 组 × TopK，GPU4/5 并行）；
 - selector 打印修正（按 bit 分列）；--no-weights 消融开关落地。
+
+## 2026-08-16：L2 数据源审计 + v1.4 裁决第一批（D-027）
+
+- **Audit 3（L2 真实 rollout 状态，128 obs）**：Spearman(1−CKA, d_solver)——
+  linear 0.057（仍无信号）、block 0.376、dit_final_norm 0.672、dit_output 0.651；
+  与合成数据结论一致（合成上 dit 位置 0.72-0.95，真实状态略降但仍强正相关）——
+  **结论对数据源稳健**：action-conditioning 表征的 CKA 有效，raw Linear 无效；
+- **v1.4 D_func 裁决（已完成 5/7 组）**：spatial final=lambda(1,1)
+  d_func=0.0837（runner-up 0.0852，bootstrap p_best_wins=0.116——前两名统计上
+  不可区分，5% tie 规则生效，如实记录）；goal/object 主计划与 csonly 消融的
+  final plan 已产出；spatial csonly/cscka 裁决仍在 GPU4 批处理中；
+- 注：v1.4 tri-state 的 d_solver ≈ 0.0018-0.0038 vs v1.3 binary 0.00079
+  （同协议）——三元空间在 D_solver 上不优于二元，价值需 LIBERO 回归检验。
