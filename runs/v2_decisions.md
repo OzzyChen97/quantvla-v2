@@ -357,3 +357,23 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
 - 关键坑：robocasa365 env 中 `sys.path` 加 "code" 会把 robocasa 包遮蔽成命名
   空间包（任务注册 396→19）——必须先 import robocasa 再加路径（wrapper 已在
   code/gr00t/eval/sim/robocasa365/ 落地）。
+
+## 2026-08-16：CKA 门槛 1/2/3/5 通过（dit_output/final_norm 位置）（D-024）
+
+- **gate 全表（修正后数据 + 新 probe 的 d_func_b4）**：
+  - dit_output：ρ(1−CKA, d_solver) = 0.77/0.95/0.84；**ρ(1−CKA, D_func) =
+    0.62/0.94/0.91**；top-5 recall 0.87；对照分离 1.00 → **PASS**（biased/
+    debiased 一致）；
+  - dit_final_norm：0.72/0.91/0.79；0.55/0.82/0.82；0.60；1.00 → PASS；
+  - linear：-0.04/0.12/0.12；0.08/0.12/-0.07 → fail（v1.3 的测量位置是根因）；
+  - block：0.37-0.40 / 0.26-0.45 → fail（中等但未过门槛）；
+- **结论**：用户假设证实——CKA 在 action-conditioning 表征（DiT 输出）上与
+  功能损伤（含 tail-aware D_func）强相关且三 checkpoint 一致；raw Linear
+  位置无信号。**criterion 4 待办**：selector 需支持 dit-output CKA 分数，
+  生成 CS-only vs CS+CKA 两 plan 在 RoboCasa smoke 上对比（下一轮）；
+- 三套件 v1.4 probe（bits 4,6 + d_func 发射）全部完成（GPU1/2/3）；
+- RoboCasa365 全闭环冒烟通过：GR00T server（FP16, :5570）+ 客户端
+  （robocasa365 env，自含 ZMQ/msgpack 客户端，仅需 pyzmq 装到 repo-local
+  userbase）跑通 AddIceCubes 1500 步（SR 0/1，单试次无信息量，机制验证
+  目的）；修了 obs 维度（video T 轴 / state batch 轴 / language 列表）与
+  action 解包（chunk 向量取 [0]）四个格式问题。
