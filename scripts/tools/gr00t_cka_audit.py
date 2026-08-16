@@ -183,6 +183,7 @@ def battery(ref: torch.Tensor, q: torch.Tensor, seeds: int = 5, n_sweep: bool = 
                        for rr in (torch.randn_like(yc) for _ in range(seeds))],
         }
         acc: Dict[str, float] = {}
+        cnt: Dict[str, int] = {}
         for group, mats in groups.items():
             for j, ym in enumerate(mats):
                 ll = ym @ ym.T
@@ -202,8 +203,13 @@ def battery(ref: torch.Tensor, q: torch.Tensor, seeds: int = 5, n_sweep: bool = 
                     if v is None:
                         continue
                     key = name if group == "real" else f"{group}_{name}"
-                    acc[key] = acc.get(key, 0.0) + v / seeds
-        return acc
+                    # accumulate raw sums; normalize by the ACTUAL count per
+                    # key (real has 1 accumulation, controls have `seeds`).
+                    # Dividing every accumulation by seeds here would scale
+                    # the real pair by 1/seeds (the 0.1999 = 0.9993/5 bug).
+                    acc[key] = acc.get(key, 0.0) + v
+                    cnt[key] = cnt.get(key, 0) + 1
+        return {k: acc[k] / cnt[k] for k in acc}
 
     out = {"n": int(n), "d": int(ref.shape[1]), "real": level(ref, q)}
     if n_sweep:
