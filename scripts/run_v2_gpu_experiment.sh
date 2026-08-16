@@ -86,8 +86,13 @@ start_server() {
             return 1
         fi
     fi
+    # v1.4: plan-specific static ATM/OHB (opt-in via V14_ATM_ARTIFACT)
+    local atm_env=()
+    if [[ -n "${V14_ATM_ARTIFACT:-}" ]]; then
+        atm_env=(GR00T_ATM_ENABLE=1 GR00T_OHB_ENABLE=1 GR00T_ATM_ALPHA_PATH="$V14_ATM_ARTIFACT")
+    fi
     GR00T_DUQUANT_PLAN="$plan" GR00T_GPU=${GR00T_GPU:-4} GR00T_PORT="$PORT" \
-        ./scripts/run_quantvla.sh "libero_$suite" >"$logf" 2>&1 &
+        "${atm_env[@]}" ./scripts/run_quantvla.sh "libero_$suite" >"$logf" 2>&1 &
     SERVER_PID=$!
     for _ in $(seq 1 150); do
         if grep -q "Address already in use" "$logf" 2>/dev/null; then
@@ -276,6 +281,37 @@ PY
 }
 
 # --------------------------------------------------------------------------- #
+# v1.4 LIBERO regression (D-020 route 3): four configs, 50 rollouts each —
+#   uniform W6 / uniform W6 + static ATM-OHB / v1.4 / v1.4 + static ATM-OHB.
+# The two selector-level ablations (CS-only vs CS×w_i; selector-primary vs
+# D_func-adjudicated) are separate PLAN FILES produced upstream — run them as
+# extra configs via V14_EXTRA_PLANS (space-separated paths).
+# --------------------------------------------------------------------------- #
+v14_accept() {
+    local S=${1:-spatial}
+    local BDIR="$REPO/checkpoints/packs/gr00t/baselines_${S}"
+    local FINAL="$REPO/checkpoints/packs/gr00t/gr00t_quant_plan_libero_${S}_v14.final_plan.json"
+    local ATM_W6="$REPO/checkpoints/packs/gr00t/atm_alpha_beta_static_${S}_w6.json"
+    local ATM_V14="$REPO/checkpoints/packs/gr00t/atm_alpha_beta_static_${S}_v14.json"
+    [[ -f "$BDIR/uniform_w6.json" ]] || { echo "!!! uniform_w6 baseline missing"; exit 1; }
+    [[ -f "$FINAL" ]] || { echo "!!! v1.4 final plan missing: $FINAL"; exit 1; }
+    local ROWS=("$BDIR/uniform_w6.json|" "$FINAL|")
+    if [[ -f "$ATM_W6" ]]; then ROWS+=("$BDIR/uniform_w6.json|$ATM_W6"); fi
+    if [[ -f "$ATM_V14" ]]; then ROWS+=("$FINAL|$ATM_V14"); fi
+    for EP in ${V14_EXTRA_PLANS:-}; do ROWS+=("$EP|"); done
+    echo "--- v1.4 LIBERO regression ($S): $((${#ROWS[@]})) configs, seed 0, 50 rollouts each ---"
+    local ROW PLAN ATM
+    for ROW in "${ROWS[@]}"; do
+        PLAN="${ROW%%|*}"
+        ATM="${ROW#*|}"
+        echo "=== config: $PLAN atm=${ATM:-none}"
+        V14_ATM_ARTIFACT="$ATM" WATCHDOG_PLAN="$PLAN" start_server "$S" "$PLAN" || exit 1
+        V14_ATM_ARTIFACT="$ATM" WATCHDOG_PLAN="$PLAN" run_eval_watchdog "$S" --seed 0
+    done
+    echo "--- v1.4 LIBERO regression ($S) done; aggregate with aggregate_v2_fulltest.py ---"
+}
+
+# --------------------------------------------------------------------------- #
 consensus_freeze() {
     echo "--- [consensus] mask Jaccard gate + frozen unified plan ---"
     $PY scripts/tools/gr00t_consensus_plan.py \
@@ -330,9 +366,14 @@ case "$MODE" in
         [[ -n "$S2" ]] || { echo "usage: $0 dev-accept <suite>"; exit 1; }
         dev_accept "$S2"
         ;;
+    v14-accept)
+        S2="${2:-}"
+        [[ -n "$S2" ]] || { echo "usage: $0 v14-accept <suite>"; exit 1; }
+        v14_accept "$S2"
+        ;;
     final-holdout)
         final_holdout
         ;;
     *)
-        echo "usage: $0 {all-dev|dev-accept|final-holdout}"; exit 1 ;;
+        echo "usage: $0 {all-dev|dev-accept|v14-accept|final-holdout}"; exit 1 ;;
 esac

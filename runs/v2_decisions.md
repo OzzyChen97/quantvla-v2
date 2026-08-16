@@ -298,3 +298,27 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
      ATM/OHB，LIBERO 降级为回归；
   4. 主 benchmark 转 RoboCasa365（GR00T N1.5 checkpoint，HF
      robocasa/robocasa365_checkpoints），RoboCerebra 作桥梁。
+
+## 2026-08-16：v1.4 启动 + CKA 审计估计器层落地（D-021）
+
+- **v1.4 四路线开工**（用户决定，计划见设计文档 §10）：A 冻结完成（D-020）；
+  B/C/D 进行中。
+- **估计器层证据（Audit 1 前置，kernel_scores selftest 实测）**：
+  - biased linear CKA 在独立随机对上随 D/N 膨胀：0.20(D/N=0.2) →
+    0.50(1.0) → 0.80(4.0) → 0.94(16) → 0.98(64)——v1.3 观察到"大部分层 CKA
+    接近 1"与这一维度偏置完全吻合；
+  - unbiased-HSIC CKA 仍有 O(1/N) 正比偏置（N=64/D=1024 时 +0.20，N=1024
+    时 +0.002）→ 审计门槛改为**固定 N 下 real≫shuffled/random 分离度**，
+    不设绝对阈值；
+  - RV2（仅对角校正）在 D>N 下仍饱和 ~1.0 → 只作记录不作门槛；
+  - 新增 hsic_unbiased/from_gram、rv2_adjusted、cka_control_battery +
+    对照 selftest（全绿）。
+- **工具**：gr00t_cka_audit.py（Audit 1-5）、collect_libero_states.py（L2/L3
+  npz 桥接）、gr00t_func_metrics.py（tail-aware D_func，selftest 绿）、
+  calibrate_atm_static_plan.py（静态 plan-specific ATM/OHB wrapper）；
+  selector 新增 --bits-order 6,4 / --weight-metric，scorer 新增 --metric；
+  run_v2_gpu_experiment.sh 新增 v14-accept 模式（4 配置 + V14_EXTRA_PLANS
+  消融）。
+- 三套件 CKA 审计（Audit 1/2/4，30 层）GPU1/2/3 并行运行中；
+  RoboCasa365 GR00T checkpoint（HF robocasa/robocasa365_checkpoints，
+  target_posttraining×3）经 hf-mirror 后台下载中。
