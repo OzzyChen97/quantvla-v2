@@ -37,6 +37,8 @@ SUITE_DIRS = {
     "object": "libero-object",
     "90": "libero-90",
     "10": "libero-long",
+    # v1.4 Stage D: RoboCasa365 GR00T checkpoints (HF robocasa/robocasa365_checkpoints)
+    "robocasa365_atomic": "../robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000",
 }
 
 
@@ -64,6 +66,29 @@ def make_l1_obs(rng: np.random.Generator) -> Dict[str, Any]:
 GR1_LANG = "place the cup into the drawer and close it"
 
 
+ROBOCASA365_LANG = "add ice cubes to the blender"
+
+
+def make_robocasa365_obs(rng: np.random.Generator) -> Dict[str, Any]:
+    """Random RoboCasa365 observation in GR00T format (per-obs, unbatched).
+
+    Mirrors the wrapper obs layout consumed by RoboCasa365DataConfig: three
+    256x256 cameras (T,H,W,C uint8) + the five state groups (T,D float32) from
+    the checkpoint's own statistics.
+    """
+    return {
+        "video.robot0_agentview_left": rng.integers(0, 256, (1, 256, 256, 3), dtype=np.uint8),
+        "video.robot0_agentview_right": rng.integers(0, 256, (1, 256, 256, 3), dtype=np.uint8),
+        "video.robot0_eye_in_hand": rng.integers(0, 256, (1, 256, 256, 3), dtype=np.uint8),
+        "state.base_position": rng.uniform(-1.0, 1.0, (1, 3)).astype(np.float32),
+        "state.base_rotation": rng.uniform(-1.0, 1.0, (1, 4)).astype(np.float32),
+        "state.end_effector_position_relative": rng.uniform(-1.0, 1.0, (1, 3)).astype(np.float32),
+        "state.end_effector_rotation_relative": rng.uniform(-1.0, 1.0, (1, 4)).astype(np.float32),
+        "state.gripper_qpos": rng.uniform(0.0, 1.0, (1, 2)).astype(np.float32),
+        "annotation.human.action.task_description": [ROBOCASA365_LANG],
+    }
+
+
 def make_gr1_obs(rng: np.random.Generator) -> Dict[str, Any]:
     """Random synthetic obs in GR1 (fourier_gr1_arms_waist) GR00T format.
 
@@ -82,9 +107,11 @@ def make_gr1_obs(rng: np.random.Generator) -> Dict[str, Any]:
 
 
 def make_obs(rng: np.random.Generator, fmt: str = "libero") -> Dict[str, Any]:
-    """Synthetic obs dispatcher: 'libero' (default) or 'gr1'."""
+    """Synthetic obs dispatcher: 'libero' (default), 'gr1' or 'robocasa365'."""
     if fmt == "gr1":
         return make_gr1_obs(rng)
+    if fmt == "robocasa365":
+        return make_robocasa365_obs(rng)
     return make_l1_obs(rng)
 
 
@@ -228,6 +255,7 @@ SUITE_DATA_CONFIG = {
     "object": "examples.Libero.custom_data_config:LiberoDataConfig",
     "10": "examples.Libero.custom_data_config:LiberoDataConfig",
     "90": "examples.Libero.custom_data_config:LiberoDataConfig",
+    "robocasa365_atomic": "examples.RoboCasa365.custom_data_config:RoboCasa365DataConfig",
 }
 
 

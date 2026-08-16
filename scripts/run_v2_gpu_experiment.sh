@@ -87,12 +87,14 @@ start_server() {
         fi
     fi
     # v1.4: plan-specific static ATM/OHB (opt-in via V14_ATM_ARTIFACT)
-    local atm_env=()
     if [[ -n "${V14_ATM_ARTIFACT:-}" ]]; then
-        atm_env=(GR00T_ATM_ENABLE=1 GR00T_OHB_ENABLE=1 GR00T_ATM_ALPHA_PATH="$V14_ATM_ARTIFACT")
+        GR00T_ATM_ENABLE=1 GR00T_OHB_ENABLE=1 GR00T_ATM_ALPHA_PATH="$V14_ATM_ARTIFACT" \
+            GR00T_DUQUANT_PLAN="$plan" GR00T_GPU=${GR00T_GPU:-4} GR00T_PORT="$PORT" \
+            ./scripts/run_quantvla.sh "libero_$suite" >"$logf" 2>&1 &
+    else
+        GR00T_DUQUANT_PLAN="$plan" GR00T_GPU=${GR00T_GPU:-4} GR00T_PORT="$PORT" \
+            ./scripts/run_quantvla.sh "libero_$suite" >"$logf" 2>&1 &
     fi
-    GR00T_DUQUANT_PLAN="$plan" GR00T_GPU=${GR00T_GPU:-4} GR00T_PORT="$PORT" \
-        "${atm_env[@]}" ./scripts/run_quantvla.sh "libero_$suite" >"$logf" 2>&1 &
     SERVER_PID=$!
     for _ in $(seq 1 150); do
         if grep -q "Address already in use" "$logf" 2>/dev/null; then

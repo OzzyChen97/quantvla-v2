@@ -436,3 +436,18 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
 - goal/object 的 dit sensitivity（--cka-location dit）在 GPU6 重跑中，用于三
   套件 criterion-4 计划；下一步：RoboCasa365 的 DuQuant pack 校准 + 小规模
   {uniform W6 / CS-only / CS+CKA} 对比（3-5 atomic + 3-5 composite × 3 trials）。
+
+## 2026-08-16：ATM 配置启动 bug 修复 + RoboCasa365 量化管线接通（D-029）
+
+- **Bug**：start_server 的 ATM 环境变量经 bash 数组 `"${atm_env[@]}"` 展开在
+  续行上失败（bash 4.4，报 `GR00T_ATM_ENABLE=1: command not found`）——v14-accept
+  舰队在首个 ATM 配置（cfg 3）处全体崩溃（goal 在 cfg 2 被杀重跑，object/spatial
+  损失 50-75 eps）；改为显式 if/else 双分支 env 前缀，bash -n 通过；
+- **行动**：kill 全部 6 分片 + 残留 server/client，重部署（bash-204…209）；
+  这是 v1.4 舰队第二次全量重启（首次为 final-plan 文件名），损失 ~1h；
+- **RoboCasa365 量化管线接通**：gr00t_v2_common 增加 make_robocasa365_obs /
+  SUITE_DIRS/SUITE_DATA_CONFIG（robocasa365_atomic）；probe --obs-format
+  robocasa365 + --suite 选项；inference_service 支持 GR00T_OBS_FORMAT（A8 静态
+  校准 buffer 格式）；robocasa365 probe（bits 4,6, dit CKA, d_func）在 GPU5 运行
+  中，pack 目录随加载自动生成（weight 旋转与 bit 无关）；
+- goal/object 的 CS+CKA / CKA-only diagnostic 计划已生成（待裁决）。

@@ -172,8 +172,10 @@ def _maybe_close_a8_calibration(policy, data_config: str = "") -> None:
     action_dim = int(policy.model.action_head.config.action_dim)
     # review round 3: self-contained seed-based buffer — identical data every
     # start, so the sha256 + sidecar prove the scales match the experiment.
+    # v1.4 Stage D: GR00T_OBS_FORMAT=robocasa365 for the RoboCasa365 checkpoints
+    fmt = os.environ.get("GR00T_OBS_FORMAT", "libero")
     warm_obs, warm_noises, sha = fixed_calibration_buffer(
-        0, calib_steps * batch_size, horizon, action_dim, fmt="libero"
+        0, calib_steps * batch_size, horizon, action_dim, fmt=fmt
     )
     import hashlib as _hl
 
