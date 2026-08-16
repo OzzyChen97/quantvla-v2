@@ -419,3 +419,20 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   final plan 已产出；spatial csonly/cscka 裁决仍在 GPU4 批处理中；
 - 注：v1.4 tri-state 的 d_solver ≈ 0.0018-0.0038 vs v1.3 binary 0.00079
   （同协议）——三元空间在 D_solver 上不优于二元，价值需 LIBERO 回归检验。
+
+## 2026-08-16：criterion 3 口径修正后仍通过（D-028）
+
+- 按 review 修正 gr00t_cka_gate.py 的 criterion 3：不再用 d_solver 自召回作代理，
+  直接计算 R_CKA@5 与 R_CS@5（vs D_func 与 d_solver 两个功能指标），门槛 =
+  R_CKA > R_CS + 0.05（两指标都需胜出）；
+- 结果（k=5，三套件均值）：
+  - dit_output：R_CKA=0.87(d_solver)/0.73(D_func) vs R_CS=0.20/0.20 → PASS；
+  - dit_final_norm：0.60/0.60 vs 0.20/0.20 → PASS；
+  - linear/block：fail（符合预期）；
+- 门槛状态修正为：criterion 1/2/3/5 通过（dit_output/final_norm），criterion 4
+  待 RoboCasa 端到端；Audit 5 以线性探针回退收尾（无新增信号，不阻塞主线）；
+- v14-accept LIBERO 回归 8 分片已启动（spatial×2 含 csonly/cscka 消融 + goal×2
+  + object×2；GPU7/3/1），每配置 50 rollouts；
+- goal/object 的 dit sensitivity（--cka-location dit）在 GPU6 重跑中，用于三
+  套件 criterion-4 计划；下一步：RoboCasa365 的 DuQuant pack 校准 + 小规模
+  {uniform W6 / CS-only / CS+CKA} 对比（3-5 atomic + 3-5 composite × 3 trials）。
