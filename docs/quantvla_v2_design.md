@@ -830,3 +830,36 @@ v1.3 据此将方法收敛为"**动作加权 W4/FP16 二元选层 + 幅度/饱�
 **P0 正确性审查（2026-08-15）后的修复已全部落地并通过 CPU 回归**：权重不可变性 + bit 顺序不变性、A8 满批校准生命周期、D_solver 加权和与第二组噪声真正配对、metric audit 的 bit 复位顺序、run_quantvla.sh 默认关 ATM/OHB、baseline 字节匹配与真实部署语义、selector 的 missing-score/guard 继承/canonical 重打分/预算断言、新增 TopK 裁决工具 `gr00t_topk_scorer.py`、calibrator 真实 plan 加载与 α/β 拆分判定。细节见 `docs/quantvla_v2_p0_review_response.md`；受污染的旧 sensitivity/plan/ATM JSON 已移入 `checkpoints/packs/gr00t/deprecated_v1.2/` 作废。
 
 剩余工作为**执行层**（GPU 实跑）：Phase 1 先跑 gate 0 指标审计与护栏点火验证，再按八步管线做 TopK D_solver 裁决与基线矩阵对照。**进入 Phase 1 的判据**：指标审计（分数区分 bit、W2 分离度）+ 护栏点火测试通过；**离开 Phase 1 的判据**：v2 ≥ uniform W6 且 ≥ random mask（task-level 配对检验）、跨 3 个校准种子 FP16 mask Jaccard ≥ 0.7。全部判据满足后，方法才具备论文级评测资格；文档定位：**Phase 1 执行前的最终设计稿**。
+
+---
+
+## 10. v1.4 路线（2026-08-16 冻结 v1.3 后）
+
+v1.3 的 LIBERO full test 结论（`docs/quantvla_v2_full_test_report.md`）：较低的
+合成轨迹误差（D_solver 优 4.7–8.5×）**不蕴含**较高的闭环成功率——binary v2 与
+同预算 uniform W6 在四套件上 ±0.8–1.2σ 不可区分；CS 是唯一有弱-中等信号的
+主代理；当前 CKA 实例无预测力。
+
+v1.4 四条路线（按序执行，各阶段失败即停下修复并重启该阶段）：
+
+1. **冻结 v1.3**：本报告即其正式定位（CS-based binary baseline）。
+2. **CKA forensic audit（一次性、有边界）**：当前用法与原论文（ICLR 2025
+   Hidden State Matching）的语义差异——trainable cross-width block-level
+   masked CKA 被改造成静态、同构、raw-Linear、合成输入的敏感度分数。Audit：
+   ① biased vs debiased/HSIC + 行置乱/随机对照（D≥N 维度偏置）；② hook 位置
+   （raw Linear / branch / post-residual / post-LN / action-conditioning
+   hidden）；③ 数据源（合成 L1 / FP16 rollout states L2 / 无标签 demo L3）；
+   ④ token 范围（all / action / state / DiT-condition）；⑤ action-conditioned
+   子空间（J=∂a_T/∂H 的 TopSV 上算 CKA）。**重新启用门槛**：三 checkpoint 方向
+   一致 + 与 functional tail metric 显著正相关 + top-k recall 高于 CS-only +
+   CS+CKA 计划在非 LIBERO benchmark 上更优 + 置乱/随机对照分离。不通过则
+   λ_cka 永久 0，负结果正式记录。
+3. **v1.4 主算法**：搜索空间 {W4,W6,FP16}（W2/W3 不开放）；CS 主代理；
+   tail-aware D_func（final action chunk、分维 trans/rot、gripper 符号率、
+   p90/p95/CVaR0.9、Jacobian 加权、抓取/接触代理加权）；plan-specific 静态
+   ATM/OHB；LIBERO 降级为回归集（四配置 + CS-only vs CS×w_i、selector-primary
+   vs D_func-adjudicated 两消融）。
+4. **主 benchmark 转 RoboCasa365**：GR00T N1.5 RoboCasa365 checkpoint
+   （HF robocasa/robocasa365_checkpoints）；RoboCerebra 作接入桥梁；
+   指标超越 final success（Avg Completed Subgoals、P(≥k)、horizon 分组、
+   transition delay、failure stage、quantization retention R(h)）。

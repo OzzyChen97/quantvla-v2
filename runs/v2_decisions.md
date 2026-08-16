@@ -284,3 +284,17 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
 - **工程验证**：21 次配置切换（A8 静态校准 + closure）全干净；0 watchdog 误杀
   /0 重试/0 abort；分片并行墙钟 ~8h；
 - 报告已更新：docs/quantvla_v2_full_test_report.md（§4/§5 填表、§6 结论）。
+
+## 2026-08-16：v1.3 正式冻结 + v1.4 四路线启动（D-020）
+
+- **冻结声明**：v1.3 = 已完成的 CS-based binary baseline。LIBERO full test
+  最终数据与四项结论为最终版，不再回改；报告加 ⛔ banner（§6 冻结结论块），
+  设计文档新增 §10 v1.4 路线。
+- **v1.4 四路线（用户决定，按序执行）**：
+  1. 冻结 v1.3（本条）；
+  2. 一次性 CKA forensic audit（估计器/hook 位置/数据源/token 范围/
+     action-conditioned 子空间），按 5 条门槛决定 CKA 去留，不通过则负结果；
+  3. 主算法 {W4,W6,FP16} 三元 + tail-aware D_func + plan-specific 静态
+     ATM/OHB，LIBERO 降级为回归；
+  4. 主 benchmark 转 RoboCasa365（GR00T N1.5 checkpoint，HF
+     robocasa/robocasa365_checkpoints），RoboCerebra 作桥梁。

@@ -1,5 +1,10 @@
 # QuantVLA v2（v1.3）GR00T N1.5 LIBERO Full Test 报告
 
+> **⛔ v1.3 已冻结（2026-08-16，D-020）**：本文数据与方法为最终版，不再回改。
+> v1.3 定位 = 已完成的 CS-based binary baseline；后续工作见 v1.4 计划
+> （设计文档 §10）——CKA 法证审计、{W4,W6,FP16} 三元选层、tail-aware D_func、
+> plan-specific 静态 ATM/OHB、主基准转 RoboCasa365。
+>
 > 状态：**完成**（2026-08-15 启动，2026-08-16 06:22 最后一个分片 exit 0；8 分片并行墙钟约 8h）
 > 方法：动作加权 CS 表征保持型 W4/FP16 二元选层（v1.3，P0 修复后代码）
 > 决策档案：`runs/v2_decisions.md`（D-001…D-019）
@@ -69,6 +74,16 @@ white mug ×2 组合任务 0.4–0.8、black bowl between plate+ramekin 0.8；
 single soup/bowl picks）普遍 1.0。
 
 ## 6. 发现与结论
+
+**冻结结论（D-020，v1.3 的正式定位——负结果/有限结论）**：
+1. CS 对单层动作数值损伤（d_solver）有弱到中等相关（Spearman 0.30–0.41），
+   是该指标上唯一有信号的主代理；
+2. 当前 CKA 实例（biased linear、raw Linear 输出、合成随机输入）对功能损伤
+   无预测力（1−CKA 与 d_solver 相关 ≈ 0）；其失效根因分析（trainable vs
+   静态用法、不变性错配、维度偏置、测量位置、数据分布）见设计文档 §10/v1.4
+   计划的 CKA 法证审计；
+3. 配置级 D_solver 排序（v2 优 4.7–8.5×）未一致迁移到 closed-loop 成功率；
+4. binary v2 与同预算 uniform W6 在 LIBERO 四套件上不可区分（±0.8–1.2σ）。
 
 1. **D_solver 排序未一致迁移到 LIBERO SR**：配置级代理上 v2 比 uniform W6 优
    4.7–8.5×，但端到端 LIBERO（50 rollouts/配置）spatial +4.0pp（v2 胜）、
