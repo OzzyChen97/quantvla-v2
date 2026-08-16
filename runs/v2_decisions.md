@@ -555,3 +555,13 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   （4 任务 × 3 trials × 5 配置，预期 ~5-6h）；
 - 注：修复后配置的单 trial 探针（OpenCabinet×1）仍 0/1——修复是必要条件但
   单 trial 不足以判断充分性；重跑数据将给出裁决。
+
+## 2026-08-16：criterion-4 提速 + RoboCerebra 后置（D-037）
+
+- RoboCerebra 暂缓（server 已 kill，桥梁代码保留）；优先完成 v1.4 long +
+  RoboCasa 四任务；
+- **criterion-4 提速**：(a) 每配置拆 2 客户端（各 2 任务）并行——10 客户端
+  总并行度翻倍；(b) max-steps 1500→720（官方 horizon，DEFAULT_MAX_EPISODE_STEPS
+  =720，失败 trial 不再空转 780 步 ≈ 每 trial 省 15-20 分钟）；
+- 本轮配置 = 修复后 action 顺序 + mean_std + 224 图像管线（D-035a）；
+- long held-out 不重启（保住 ~50 eps 进度），维持 2 分片原速推进。
