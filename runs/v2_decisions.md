@@ -482,3 +482,15 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   criterion-4 闭环 RoboCasa 对比待跑；
 - 舰队 ATM 配置转换（cfg 3→4）已跨过（D-029 修复生效，spatial/object 已到
   cfg 4，goal cfg 3）。
+
+## 2026-08-16：RoboCasa365 criterion-4 五配置闭环实验启动（D-032）
+
+- 量化管线完成：scripts/run_robocasa365_quant_serve.sh（直连 inference_service：
+  robocasa365 data config + GR00T_DUQUANT_PLAN + robocasa365 pack + 
+  GR00T_OBS_FORMAT=robocasa365 的 A8 静态校准）；
+- 5 台 server 全部就绪（A8 静态校准完成）：fp16:5570(GPU5)、uniform W6:5571、
+  CS-only:5572（GPU4）、CS+CKA:5573、CKA-only:5574（GPU6）；
+- 任务集（用户指定）：OpenCabinet / OpenStandMixerHead /
+  PickPlaceDrawerToCounter / CoffeeSetupMug，每配置 3 trials = 12 episodes；
+- 5 客户端并行启动；机器负载高（LIBERO 舰队 + 5 个 kitchen env 构建），
+  env 构建显著变慢，观察中。
