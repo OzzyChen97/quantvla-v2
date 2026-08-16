@@ -377,3 +377,16 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   userbase）跑通 AddIceCubes 1500 步（SR 0/1，单试次无信息量，机制验证
   目的）；修了 obs 维度（video T 轴 / state batch 轴 / language 列表）与
   action 解包（chunk 向量取 [0]）四个格式问题。
+
+## 2026-08-16：Audit 5（Jacobian 子空间）调试中状态（D-025）
+
+- 三处修复已落地：get_action 的 @torch.no_grad 经 __wrapped__ 解包；
+  校准期冻结的 A8 scale/rotation 缓存是 inference tensor（grad 前向报
+  "Inference tensors cannot be saved for backward"）→ 新增
+  _deinference_duquant_tensors 克隆恢复；backbone 序列尾部为 padding token
+  （与动作无图路径）→ backbone 层取 position 0；
+- 当前状态：第 0 层 q_proj 仍报 "not used in the graph"（backbone 特征进入
+  动作头前疑似做了 masked pooling，仅部分位置连通，需定位具体使用的位置），
+  后续层出现 CUDA driver error（首个失败层后的状态污染）——Audit 5 继续调试，
+  不影响已完成的 audit 1-4 与 gate 1/2/3/5 结论；
+- 其余全部进度已同步 GitHub（D-020…D-024）。

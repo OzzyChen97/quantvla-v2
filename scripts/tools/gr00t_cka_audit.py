@@ -145,6 +145,36 @@ class _RawCollector:
 # --------------------------------------------------------------------------- #
 # Battery helpers
 # --------------------------------------------------------------------------- #
+def _deinference_duquant_tensors(model: torch.nn.Module) -> int:
+    """Clone every tensor attribute of DuQuantLinear modules out of the
+    inference-marked state.
+
+    Frozen A8 scales / rotation caches / pre-quantized weights are computed
+    inside torch.no_grad() during calibration, which marks them as inference
+    tensors; using them in a GRAD-ENABLED forward (Audit 5's vjp) raises
+    "Inference tensors cannot be saved for backward" at the first division.
+    clone() outside inference mode produces normal tensors (the documented
+    workaround). Returns the number of cloned tensors.
+    """
+    from gr00t.quantization.duquant_layers import DuQuantLinear
+
+    n = 0
+    for m in model.modules():
+        if not isinstance(m, DuQuantLinear):
+            continue
+        for name in list(m.__dict__):
+            v = getattr(m, name)
+            if isinstance(v, torch.Tensor):
+                setattr(m, name, v.clone())
+                n += 1
+            elif isinstance(v, dict):
+                for k in list(v):
+                    if isinstance(v[k], torch.Tensor):
+                        v[k] = v[k].clone()
+                        n += 1
+    return n
+
+
 def battery(ref: torch.Tensor, q: torch.Tensor, seeds: int = 5, n_sweep: bool = False) -> Dict[str, Any]:
     """Control battery for one aligned (ref, q) pair; seed-averaged raw values.
 
@@ -467,18 +497,45 @@ def main() -> None:
     # ---- Audit 5: action-conditioned subspace (vjp Jacobian, top-SV projection) ----
     # Per obs: J_i = d a_T / d H_i at the last action step and last sequence
     # position, via batched vjp (is_grads_batched). U = TopSV of J^T J
-    # (hidden-side Gram, accumulated per obs to bound memory). Requires the
-    # Audit-1/2/4 battery pass to have populated fp_pools/q_pools.
+    # (hidden-side Gram, accumulated per obs to bound memory).
+    # STANDALONE-CAPABLE: if the Audit-1/2/4 battery pass did not run in this
+    # process, collect the REF pool and per-layer W4 pools here (same obs).
     if 5 in audits:
         jac_obs = obs_list[: args.jacobian_n_obs]
         jac_noises = noises[: args.jacobian_n_obs]
         results["audit"]["5_action_conditioned"] = {}
         set_all_bits(model, REF_BITS)
+        # the action head's get_action is @torch.no_grad()-wrapped; call the
+        # UNWRAPPED function so the denoising graph is available for the vjp
+        # (the returned trajectory entries are detached anyway — Audit 5 uses
+        # the non-detached action_pred instead)
+        ah = model.action_head
+        wrapped = getattr(ah.get_action, "__wrapped__", None)
+        if wrapped is None:
+            raise SystemExit("[cka-audit] Audit-5: cannot unwrap no_grad get_action")
+        import types
+
+        ah.get_action = types.MethodType(wrapped, ah)
+        # calibration-time caches (A8 scales/rotations) are inference tensors;
+        # the grad-enabled Jacobian pass cannot save them for backward
+        n_deinf = _deinference_duquant_tensors(model)
+        print(f"[cka-audit] Audit-5: de-inferenced {n_deinf} DuQuant tensor attrs")
+        fp_pools5: Dict[str, Dict[str, Optional[torch.Tensor]]] = {}
+        if "fp_pools" in dir() and "q_pools" in dir():
+            fp_pools5 = fp_pools
+        else:
+            ref_col5 = _RawCollector(attr_names, args.max_tokens)
+            ref_col5.install(model)
+            run_activations(model, policy, obs_list, noises, args.batch_size)
+            fp_pools5 = {n: ref_col5.pooled(n) for n in attr_names}
+            ref_col5.remove()
         for li, name in enumerate(attr_names):
             try:
                 store: Dict[str, Optional[torch.Tensor]] = {"h": None}
 
                 def hook_fn(module, args, output):
+                    if isinstance(output, tuple):
+                        output = output[0]
                     store["h"] = output  # (B, L, D)
 
                 mod = dict(model.named_modules())[name]
@@ -487,17 +544,29 @@ def main() -> None:
                 n_obs_used = 0
                 for batched_obs, batched_noise in chunked(jac_obs, jac_noises, args.batch_size):
                     norm = policy.apply_transforms(batched_obs)
-                    out = model.get_action(norm, action_noise=batched_noise, return_trajectory=True)
-                    traj = out["_trajectory"]  # (T+1, B, H, D)
+                    use_autocast = str(policy.device).startswith("cuda")
+                    if use_autocast:
+                        from gr00t.model.policy import COMPUTE_DTYPE
+
+                        with torch.autocast(device_type="cuda", dtype=COMPUTE_DTYPE):
+                            out = model.get_action(norm, action_noise=batched_noise, return_trajectory=False)
+                    else:
+                        out = model.get_action(norm, action_noise=batched_noise, return_trajectory=False)
+                    a_final = out["action_pred"]  # (B, H, D) — grad-enabled
                     h = store["h"]
                     if h is None:
                         continue
+                    # backbone sequences carry trailing PADDING tokens that the
+                    # action head slices away (no graph path to the action) —
+                    # use position 0 there; DiT sequences end on the final
+                    # action token, position -1
+                    pos = 0 if name.startswith("backbone.") else -1
                     d_h = h.shape[-1]
                     if jtj_sum is None:
                         jtj_sum = torch.zeros((d_h, d_h), device=h.device, dtype=torch.float32)
                     for i in range(h.shape[0]):
-                        h_i = h[i, -1]  # (D_h,) last sequence position
-                        a_i = traj[-1][i, -1]  # (D_a,) last action step
+                        h_i = h[i, pos]  # (D_h,) chosen sequence position
+                        a_i = a_final[i, -1]  # (D_a,) last action step
                         d_a = a_i.numel()
                         eye = torch.eye(d_a, device=h.device, dtype=h.dtype)
                         (jt,) = torch.autograd.grad(a_i, h_i, grad_outputs=eye,
@@ -505,11 +574,25 @@ def main() -> None:
                         jtj_sum += (jt.T @ jt).to(torch.float32)  # (D_h, D_h)
                         n_obs_used += 1
                     store["h"] = None
+                    del out, a_final
                 handle.remove()
                 evals, evecs = torch.linalg.eigh(jtj_sum)
                 u = evecs[:, -args.jacobian_topk:]  # top-SV subspace (D_h, K)
-                fp_all = fp_pools[name]["all"]
-                q_all = q_pools[name]["all"]
+                # q pool on the SAME obs as the ref pool (W4 single-layer pass)
+                if "q_pools" in dir() and name in q_pools:
+                    q_all = q_pools[name]["all"]
+                else:
+                    set_single_layer_bits(model, name, PROBE_BITS)
+                    q5 = _RawCollector([name], args.max_tokens)
+                    q5.install(model)
+                    run_activations(model, policy, obs_list, noises, args.batch_size)
+                    q_all = q5.pooled(name)["all"]
+                    q5.remove()
+                    set_single_layer_bits(model, name, REF_BITS)
+                    # de-inference ONLY the rebuilt module (cheap), not the
+                    # whole model — the next layer's Jacobian runs grad-enabled
+                    _deinference_duquant_tensors(dict(model.named_modules())[name])
+                fp_all = fp_pools5[name]["all"]
                 if fp_all is None or q_all is None:
                     results["audit"]["5_action_conditioned"][name] = {"status": "no pools"}
                     continue
@@ -524,6 +607,8 @@ def main() -> None:
                 }
                 del jtj_sum, evals, evecs, u, proj_ref, proj_q
                 gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
                 print(f"[cka-audit] Audit-5 {name}: real_biased="
                       f"{results['audit']['5_action_conditioned'][name]['battery']['real']['cka_biased']:.4f}")
             except Exception as e:  # noqa: BLE001 — audit must degrade gracefully
