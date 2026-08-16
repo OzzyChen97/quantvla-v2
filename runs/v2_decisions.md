@@ -494,3 +494,20 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   PickPlaceDrawerToCounter / CoffeeSetupMug，每配置 3 trials = 12 episodes；
 - 5 客户端并行启动；机器负载高（LIBERO 舰队 + 5 个 kitchen env 构建），
   env 构建显著变慢，观察中。
+
+## 2026-08-16：v1.4 LIBERO 回归完成（D-033）
+
+- 全部 6 分片 exit 0：spatial 6 配置、goal/object 各 4 配置 × 50 rollouts
+  （2 分片 × 25 eps）——含 ATM/OHB 与两消融；
+- **结果表（SR，50 rollouts/配置）**：
+  - spatial：W6 96.0 / **v14 100.0** / W6+ATM 92.0 / v14+ATM 98.0 /
+    CS-only 96.0 / CS+CKA 95.5；
+  - goal：W6 86.0 / v14 84.0 / W6+ATM 84.0 / v14+ATM 86.0；
+  - object：W6 94.0 / v14 94.0 / W6+ATM 92.0 / v14+ATM 88.0；
+- **对比 v1.3 冻结基线**：v14 相对 v1.3 v2 plan 三套件全部提升
+  （spatial 98→100、goal 80→84、object 86→94）；相对同预算 W6：spatial +4、
+  goal −2、object 0（±4-6pp SE，方向一致但未达显著）；
+- **静态 ATM/OHB 未带来增益**（四组对照平均 −2.0pp，方向略负）——如实记录；
+  CS-only 与 v14 持平（spatial −4），CS+CKA 略低（−4.5）——criterion-4 的
+  RoboCasa 闭环数据将给出最终裁决；
+- parser 增加 --mode v14（ATM-aware 配置切分）+ 修复打印缩进 bug。

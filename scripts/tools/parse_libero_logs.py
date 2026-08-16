@@ -21,17 +21,29 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 START_RE = re.compile(r"--- starting server: libero_(\w+) plan=(\S+)")
+# v1.4 v14-accept config delimiter (plan + optional ATM artifact)
+V14_RE = re.compile(r"=== config: (\S+) atm=(\S+)")
 SUCCESS_RE = re.compile(r"Current total success rate: ([\d.]+)")
 TASK_RE = re.compile(r"Current task success rate: ([\d.]+)")
 EPISODE_RE = re.compile(r"# episodes completed so far: (\d+)")
 
 
-def parse_log(path: Path, exp_eps: int = 50, exp_tasks: int = 10) -> Dict[str, Any]:
+def parse_log(path: Path, exp_eps: int = 50, exp_tasks: int = 10, mode: str = "v13") -> Dict[str, Any]:
     configs: List[Dict[str, Any]] = []
     current: Optional[Dict[str, Any]] = None
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         for line in f:
-            m = START_RE.search(line)
+            v14 = V14_RE.search(line) if mode == "v14" else None
+            if v14:
+                if current is not None:
+                    configs.append(current)
+                plan = v14.group(1)
+                atm = v14.group(2)
+                suffix = f"|atm={Path(atm).name}" if atm not in ("none", "") else ""
+                current = {"suite": None, "plan": plan + suffix,
+                           "success_rate": None, "episodes": None, "tasks_done": 0}
+                continue
+            m = START_RE.search(line) if mode == "v13" else None
             if m:
                 if current is not None:
                     configs.append(current)
@@ -74,17 +86,20 @@ def main() -> None:
                    help="episodes required for completeness (25 for task shards).")
     p.add_argument("--expected-tasks", type=int, default=10,
                    help="tasks required for completeness (5 for task shards).")
+    p.add_argument("--mode", default="v13", choices=["v13", "v14"],
+                   help="v13 = split on 'starting server' lines; v14 = split on "
+                        "'=== config:' lines (v14-accept ATM-aware, plan+atm keys).")
     args = p.parse_args()
 
     logs = [Path(x) for x in args.log] if args.log else sorted(
         Path("runs/v2_gpu_logs").glob("liberos_*.log")
     )
-    all_results = [parse_log(l, args.expected_episodes, args.expected_tasks) for l in logs]
+    all_results = [parse_log(l, args.expected_episodes, args.expected_tasks, args.mode) for l in logs]
     for r in all_results:
         print(f"=== {r['file']} ===")
         for c in r["configs"]:
             mark = "OK " if c.get("complete") else "INC"
-        print(f"  [{mark}] {c['plan']:60s} SR={c['success_rate']} episodes={c['episodes']} tasks={c['tasks_done']}")
+            print(f"  [{mark}] {c['plan']:80s} SR={c['success_rate']} episodes={c['episodes']} tasks={c['tasks_done']}")
     if args.json:
         Path(args.json).parent.mkdir(parents=True, exist_ok=True)
         with open(args.json, "w") as f:
