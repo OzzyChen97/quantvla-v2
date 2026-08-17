@@ -923,12 +923,15 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   step/render 占 169–186 秒，模型推理占 42–89 秒，故主要瓶颈是官方长 horizon
   仿真，而非进程卡死或 GPU OOM。
 - seen 的不可变 manifest 已冻结为 4 shards/config，继续原样运行，避免重排使已完成
-  rows 失效。尚未创建正式 manifest 的 composite_unseen 调整为 **6 个
+  rows 失效。尚未创建正式 manifest 的 composite_unseen 调整为 **8 个
   horizon-balanced shards/config**：仅增加环境并发，不改变 task、50 scenarios、
   checkpoint、paired noise、official horizon、chunk=16、denoising=4、render、
   plan 或 scale；显式 `(config, task, seed)` 键与确定性 noise 保证调度不改变样本。
-- 依据 4-client 实测 env/inference 分解，6-client 预计将 unseen 墙钟缩短约
-  25%–35%，代价是单请求排队延迟可能上升；manifest 会记录实际 shards，最终
+- 每配置的 8 个 EGL client shard 按冻结的 round-robin 映射均匀分散到用户新授权的
+  **GPU1–7**，模型 server 仍固定在 GPU1/3/4/5；这直接并行化占单局 60%–70% 的
+  render/env-step，同时避免在 GPU6/7 上复制模型或终止已有无关进程。8-shard 的
+  最大 horizon 负载约为 4-shard 的一半；考虑共享 server 排队，预计 unseen
+  墙钟缩短约 30%–45%。manifest 会冻结每个 shard 的 EGL device，最终
   efficiency 按 task set 分栏，不把不同并发度的 latency 冒充单实例 kernel 速度。
-- GPU2 当前有独立 SADA 审计，GPU6 有系统 Ollama 服务；遵守“不终止无关进程”，
-  本轮不把这两张非空闲卡强行纳入正式服务副本。
+- GPU2/6/7 的已有进程均不终止；新增负载只有 offscreen EGL client，并在正式启动
+  前依据实时显存再次检查，不使用 GPU0。

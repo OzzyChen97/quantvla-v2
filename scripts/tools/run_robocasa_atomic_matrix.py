@@ -180,6 +180,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--tasks", default=None, help="Optional comma-separated task override.")
     p.add_argument("--dev-tasks", default=None, help="Tasks used for parameter selection.")
     p.add_argument("--n-shards", type=int, default=2)
+    p.add_argument(
+        "--egl-device-pool", default=None,
+        help=("Optional comma-separated physical GPU indices assigned round-robin "
+              "to client shards. Model-server placement is unchanged."),
+    )
     p.add_argument("--trial-timeout", type=int, default=3600)
     p.add_argument("--trial-batch-size", type=int, default=5)
     p.add_argument(
@@ -221,6 +226,44 @@ def gpu_processes() -> dict[int, list[dict[str, str]]]:
             {"pid": fields[1], "used_memory_mib": fields[2], "process": fields[3]}
         )
     return result
+
+
+def gpu_free_memory_mib() -> dict[int, float]:
+    rows = subprocess.check_output(
+        ["nvidia-smi", "--query-gpu=index,memory.free",
+         "--format=csv,noheader,nounits"],
+        text=True,
+    ).splitlines()
+    result = {}
+    for row in rows:
+        index, free = [value.strip() for value in row.split(",", 1)]
+        result[int(index)] = float(free)
+    return result
+
+
+def egl_pool_memory_requirements(manifest: dict) -> dict[int, float]:
+    """Conservative free-memory gate for shared EGL-client scheduling.
+
+    The observed RoboCasa EGL contexts use roughly 1.5--2.0 GiB each.  Budget
+    2.3 GiB/client, 12/16 GiB for FP16/quantized servers, and a 2 GiB guard.
+    This does not evict existing jobs: the detached chain simply retries while
+    a pool device lacks headroom.
+    """
+    pool = manifest["protocol"].get("egl_device_pool")
+    if not pool:
+        return {}
+    client_counts = {int(gpu): 0 for gpu in pool}
+    for devices in manifest["protocol"]["shard_egl_devices"].values():
+        for gpu in devices:
+            client_counts[int(gpu)] = client_counts.get(int(gpu), 0) + 1
+    requirements = {
+        gpu: 2048.0 + count * 2300.0 for gpu, count in client_counts.items()
+    }
+    for config in manifest["configs"]:
+        gpu = int(config["gpu"])
+        server_budget = 16384.0 if int(config["expected_wrapped"]) else 12288.0
+        requirements[gpu] = requirements.get(gpu, 2048.0) + server_budget
+    return requirements
 
 
 def monitor_gpus(
@@ -286,6 +329,7 @@ def build_manifest(
     checkpoint: Path, task_set: str, task_override: str | None,
     dev_override: str | None, n_shards: int, trial_timeout: int,
     trial_batch_size: int, action_noise: str, gpu_sample_interval: float,
+    egl_device_pool: list[int] | None = None,
 ) -> dict:
     spec = json.loads(spec_path.read_text())
     configs = spec.get("configs") or []
@@ -295,8 +339,8 @@ def build_manifest(
     if len(ids) != len(set(ids)):
         raise SystemExit(f"duplicate config ids: {ids}")
     gpus = [int(c["gpu"]) for c in configs]
-    if any(g not in range(1, 7) for g in gpus):
-        raise SystemExit(f"only GPUs 1-6 are authorized, got {gpus}")
+    if any(g not in range(1, 8) for g in gpus):
+        raise SystemExit(f"only GPUs 1-7 are authorized, got {gpus}")
     if len(gpus) != len(set(gpus)):
         raise SystemExit("each formal configuration must have its own GPU")
     ports = [int(c["port"]) for c in configs]
@@ -367,19 +411,60 @@ def build_manifest(
             raise SystemExit(f"{config['id']}: quantized config requires act_scale")
         if config["expected_wrapped"] and not config["packdir"]:
             raise SystemExit(f"{config['id']}: quantized config requires packdir")
-        if config["egl_device"] not in range(1, 7):
-            raise SystemExit(f"{config['id']}: EGL device must be in GPU1-6")
+        if config["egl_device"] not in range(1, 8):
+            raise SystemExit(f"{config['id']}: EGL device must be in GPU1-7")
         if config["atm"] is None and config["ohb"]:
             raise SystemExit(f"{config['id']}: OHB requires an ATM/OHB table")
         config["config_sha256"] = canonical_sha(config)
         enriched.append(config)
 
     shards = balanced_shards(tasks, n_shards)
+    if egl_device_pool:
+        if len(egl_device_pool) != len(set(egl_device_pool)):
+            raise SystemExit("--egl-device-pool must contain unique GPU indices")
+        if any(gpu not in range(1, 8) for gpu in egl_device_pool):
+            raise SystemExit("--egl-device-pool is restricted to GPUs 1-7")
+        for config_index, config in enumerate(enriched):
+            offset = config_index * len(shards)
+            config["shard_egl_devices"] = [
+                egl_device_pool[(offset + shard_index) % len(egl_device_pool)]
+                for shard_index in range(len(shards))
+            ]
+            # The shard-to-render-device schedule is experiment-defining and
+            # therefore participates in each row's frozen config hash.
+            config.pop("config_sha256", None)
+            config["config_sha256"] = canonical_sha(config)
     for config in enriched:
         config["result_files"] = [
             str((run_dir / f"{config['id']}_s{i}.jsonl").resolve())
             for i in range(len(shards))
         ]
+    protocol = {
+        "split": "target",
+        "official_task_horizons": True,
+        "n_action_steps": 16,
+        "denoising_steps": 4,
+        "paired_action_noise": action_noise == "paired",
+        "action_noise_scheme": (
+            "sha256(task,env_seed,replan_index)/torch-cpu-normal-v1"
+            if action_noise == "paired" else None
+        ),
+        "action_noise_mode": action_noise,
+        "render": True,
+        "egl_devices": {c["id"]: c["egl_device"] for c in enriched},
+        "scenarios_per_task": len(run_seeds),
+        "trial_timeout_seconds": trial_timeout,
+        "trial_batch_size": trial_batch_size,
+        "gpu_sample_interval_seconds": gpu_sample_interval,
+    }
+    if egl_device_pool:
+        protocol["egl_device_pool"] = egl_device_pool
+        protocol["shard_egl_devices"] = {
+            config["id"]: config["shard_egl_devices"] for config in enriched
+        }
+        protocol["gpu_efficiency_scope"] = (
+            "model-GPU device totals; EGL clients are distributed across shared GPUs 1-7"
+        )
     return {
         "schema_version": 1,
         "run_id": run_dir.name,
@@ -399,24 +484,7 @@ def build_manifest(
         "task_horizons": {t: TASK_HORIZONS[t] for t in tasks},
         "comparisons": spec.get("comparisons") or [],
         "decision": spec.get("decision") or {},
-        "protocol": {
-            "split": "target",
-            "official_task_horizons": True,
-            "n_action_steps": 16,
-            "denoising_steps": 4,
-            "paired_action_noise": action_noise == "paired",
-            "action_noise_scheme": (
-                "sha256(task,env_seed,replan_index)/torch-cpu-normal-v1"
-                if action_noise == "paired" else None
-            ),
-            "action_noise_mode": action_noise,
-            "render": True,
-            "egl_devices": {c["id"]: c["egl_device"] for c in enriched},
-            "scenarios_per_task": len(run_seeds),
-            "trial_timeout_seconds": trial_timeout,
-            "trial_batch_size": trial_batch_size,
-            "gpu_sample_interval_seconds": gpu_sample_interval,
-        },
+        "protocol": protocol,
         "configs": enriched,
     }
 
@@ -516,6 +584,11 @@ def start_clients(
     for config in manifest["configs"]:
         for shard_index, tasks in enumerate(manifest["shards"]):
             out = config["result_files"][shard_index]
+            shard_egl_devices = config.get("shard_egl_devices")
+            egl_device = (
+                int(shard_egl_devices[shard_index])
+                if shard_egl_devices else int(config["egl_device"])
+            )
             cmd = [
                 str(GROOT_PY), str(DRIVER), "--port", str(config["port"]),
                 "--config", config["id"], "--tasks", ",".join(tasks),
@@ -525,7 +598,7 @@ def start_clients(
                 "--config-sha256", config["config_sha256"], "--out", out,
                 "--trial-timeout", str(manifest["protocol"]["trial_timeout_seconds"]),
                 "--trial-batch-size", str(manifest["protocol"]["trial_batch_size"]),
-                "--egl-device", str(config["egl_device"]),
+                "--egl-device", str(egl_device),
             ]
             if manifest["protocol"]["paired_action_noise"]:
                 cmd.append("--paired-action-noise")
@@ -559,12 +632,24 @@ def main() -> None:
     seeds = [int(v.strip()) for v in args.seeds.split(",") if v.strip()]
     if len(seeds) != len(set(seeds)) or not seeds:
         raise SystemExit("--seeds must contain unique integers")
+    egl_device_pool = None
+    if args.egl_device_pool:
+        try:
+            egl_device_pool = [
+                int(value.strip())
+                for value in args.egl_device_pool.split(",") if value.strip()
+            ]
+        except ValueError as exc:
+            raise SystemExit("--egl-device-pool must be comma-separated integers") from exc
+        if not egl_device_pool:
+            raise SystemExit("--egl-device-pool must not be empty")
 
     manifest = build_manifest(
         spec_path, run_dir, args.phase, seeds, args.smoke_task,
         Path(args.checkpoint), args.task_set, args.tasks, args.dev_tasks,
         args.n_shards, args.trial_timeout, args.trial_batch_size,
         args.action_noise, args.gpu_sample_interval,
+        egl_device_pool,
     )
     manifest, manifest_sha = write_or_validate_manifest(
         run_dir / "manifest.json", manifest
@@ -575,6 +660,24 @@ def main() -> None:
         conflicts = {g: busy.get(g, []) for g in requested_gpus if busy.get(g)}
         if conflicts:
             raise SystemExit(f"authorized GPUs are not idle; refusing to kill jobs: {conflicts}")
+    memory_requirements = egl_pool_memory_requirements(manifest)
+    if memory_requirements:
+        free_memory = gpu_free_memory_mib()
+        insufficient = {
+            gpu: {"free_mib": free_memory.get(gpu), "required_mib": required}
+            for gpu, required in memory_requirements.items()
+            if free_memory.get(gpu, 0.0) < required
+        }
+        preflight = {
+            "sampled_at": datetime.now(timezone.utc).isoformat(),
+            "free_memory_mib": free_memory,
+            "required_free_memory_mib": memory_requirements,
+            "insufficient": insufficient,
+            "policy": "no eviction; retry until every GPU has conservative headroom",
+        }
+        (run_dir / "gpu_preflight.json").write_text(json.dumps(preflight, indent=2) + "\n")
+        if insufficient:
+            raise SystemExit(f"EGL pool lacks free memory; refusing eviction: {insufficient}")
 
     servers: list[tuple[subprocess.Popen, Any, dict]] = []
     clients: list[tuple[subprocess.Popen, Any, str]] = []

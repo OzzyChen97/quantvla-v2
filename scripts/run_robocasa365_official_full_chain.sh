@@ -21,6 +21,11 @@ ensure_matrix() {
     local run_dir=$3
     local checkpoint=$4
     local n_shards=$5
+    local egl_pool=${6:-}
+    local extra_args=()
+    if [[ -n "$egl_pool" ]]; then
+        extra_args+=(--egl-device-pool "$egl_pool")
+    fi
 
     if [[ -f "$run_dir/manifest.json" ]] && \
        "$groot_python" "$matrix_parser" --run-dir "$run_dir" --bootstrap 10000 \
@@ -38,7 +43,8 @@ ensure_matrix() {
         --trial-batch-size 10 \
         --trial-timeout 3600 \
         --action-noise paired \
-        --gpu-sample-interval 10; do
+        --gpu-sample-interval 10 \
+        "${extra_args[@]}"; do
         sleep 30
     done
     "$groot_python" "$matrix_parser" --run-dir "$run_dir" --bootstrap 10000 \
@@ -66,7 +72,8 @@ ensure_matrix \
     runs/robocasa365_official_full_composite_unseen_spec.json \
     runs/robocasa365_official_full_composite_unseen_paired50 \
     "$checkpoint_root/composite_unseen/checkpoint-60000" \
-    6
+    8 \
+    1,2,3,4,5,6,7
 
 "$groot_python" scripts/tools/aggregate_robocasa365_official.py \
     --run-dir runs/robocasa365_official_full_atomic_paired50 \
