@@ -752,10 +752,15 @@ def load_act_scales(
             scale = torch.from_numpy(data[name].astype(np.float32)).to(
                 dtype=m._weight.dtype, device=m._weight.device
             )
-            if m._act_scale is None:
-                m._act_scale = scale
-            else:
-                m._act_scale.copy_(scale)
+            # A model (and therefore its registered buffers) may have been
+            # constructed under ``torch.inference_mode()``. Such buffers are
+            # inference tensors and reject in-place updates made outside
+            # inference mode, even for non-gradient state restoration.
+            with torch.inference_mode():
+                if m._act_scale is None:
+                    m._act_scale = scale
+                else:
+                    m._act_scale.copy_(scale)
             m._act_scale_initialized = True
             # mark the calibrator full: the frozen scale supersedes any future
             # observation (and _get_act_scale short-circuits on initialized)
@@ -846,6 +851,17 @@ def selftest() -> None:
         assert all_calibrated(layer3), "loaded scales must satisfy all_calibrated"
         out_b = layer3(x).clone()
         assert torch.allclose(out_a, out_b, atol=1e-6), "round-trip outputs differ"
+        # The inference service constructs model buffers in inference mode;
+        # loading a frozen scale later from ordinary Python must still work.
+        base4 = nn.Linear(64, 64, bias=False)
+        base4.weight.data.copy_(base2.weight.data)
+        layer4 = DuQuantLinear(base4, "selftest_a8_inference_buffer", cfg2)
+        with torch.inference_mode():
+            layer4._act_scale = torch.zeros_like(s_frozen)
+        load_act_scales(layer4, str(scale_path))
+        assert torch.equal(layer4._act_scale, s_frozen), (
+            "scale restore into inference-tensor buffer failed"
+        )
         # sidecar mismatch must raise
         try:
             load_act_scales(layer3, str(scale_path), require={"buffer_sha256": "other"})
