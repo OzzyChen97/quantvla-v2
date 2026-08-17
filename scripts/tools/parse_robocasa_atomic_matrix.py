@@ -23,7 +23,7 @@ CONTRASTS = [
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
-    p.add_argument("--run-dir", required=True)
+    p.add_argument("--run-dir")
     p.add_argument("--bootstrap", type=int, default=10_000)
     p.add_argument("--allow-incomplete", action="store_true")
     p.add_argument("--selftest", action="store_true")
@@ -479,6 +479,8 @@ def main() -> None:
     if args.selftest:
         selftest()
         return
+    if not args.run_dir:
+        raise SystemExit("--run-dir is required unless --selftest is used")
     run_dir = Path(args.run_dir).resolve()
     summary = summarize(run_dir, args.bootstrap, args.allow_incomplete)
     manifest = json.loads((run_dir / "manifest.json").read_text())
