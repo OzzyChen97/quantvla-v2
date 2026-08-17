@@ -898,6 +898,16 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   `37.5s / 0.268s / 18.0GiB / 15.7GiB`；final `30.9s / 0.254s / 17.7GiB /
   15.2GiB`；final+ATM `31.6s / 0.259s / 17.7GiB / 15.2GiB`。环境 step
   四配置均约 0.048s，差异主要来自推理和任务成功/失败 horizon。
+- 按 QuantVLA 论文 Tables 1/2 的 `Memory (LLM+DiT)` 口径（180 个 LLM+DiT
+  Linear，W4 理想紧密打包，计入 FP16 scales 与 FP32 block rotations，ATM/OHB
+  折叠进已有 scale，不计 vision/activation/CUDA workspace/fake-quant cache），
+  FP16 为 **1.993 GiB**，原版 116-layer W4A8 为 **0.898 GiB（节省 55.0%，
+  2.22×）**，100-layer final 与 final+ATM 均为 **1.001 GiB（节省 49.8%，
+  1.99×）**。该理论部署存储与当前 eager fake-quant 的 nvidia-smi 实测必须分栏：
+  当前包装器保留多份浮点缓存且使用浮点 GEMM，因此不能把论文式存储节省表述为
+  已实现的端到端显存或速度提升。统计已固化到
+  `scripts/tools/robocasa_paper_memory.py`，单 split parser 与 50-task aggregator
+  会从 checkpoint/plan 自动重算并校验。
 - 结果与完整 per-task/统计/效率表：
   `runs/robocasa365_official_full_atomic_paired50/{summary.json,summary.md}`。
 - composite formal 启动时发现 formal 阶段错误校验默认 atomic

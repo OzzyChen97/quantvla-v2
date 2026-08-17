@@ -48,6 +48,99 @@
   },
   "bootstrap_draws": 10000,
   "validation_errors": [],
+  "paper_style_memory": {
+    "scope": "LLM+DiT Linear weights/biases (QuantVLA Tables 1/2)",
+    "unit_note": "GiB (2^30 bytes), displayed as GB in the paper",
+    "estimate_kind": "theoretical tightly-packed deployment component storage",
+    "excluded": [
+      "vision modules",
+      "activation peaks",
+      "CUDA/runtime workspaces",
+      "fake-quant caches",
+      "simulator"
+    ],
+    "atm_ohb": "folded into existing scales; zero additional operators/buffers",
+    "checkpoint": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000",
+    "scope_linear_layers": 180,
+    "fp16_weight_bytes": 2139095040,
+    "fp16_bias_bytes": 442368,
+    "fp16_component_bytes": 2139537408,
+    "fp16_component_gib": 1.9925994873046875,
+    "configs": {
+      "fp16": {
+        "plan_sha256": null,
+        "quantized_layers": 0,
+        "fp16_layers": 180,
+        "planned_fp16_skips": 0,
+        "quantized_parameters": 0,
+        "component_bytes": 2139537408,
+        "component_mib": 2040.421875,
+        "component_gib": 1.9925994873046875,
+        "relative_savings": 0.0,
+        "compression_ratio": 1.0,
+        "breakdown_mib": {
+          "packed_weights": 0.0,
+          "weight_scales": 0.0,
+          "rotations": 0.0,
+          "permutation_indices": 0.0
+        }
+      },
+      "w4a8_atmohb": {
+        "plan_sha256": "cc8fd13ec6d6800abf4651b15ad1f19274b9bcdc146a4c83ecb7200c2af646c3",
+        "quantized_layers": 116,
+        "fp16_layers": 64,
+        "planned_fp16_skips": 0,
+        "quantized_parameters": 905969664,
+        "component_bytes": 963772416,
+        "component_mib": 919.125,
+        "component_gib": 0.8975830078125,
+        "relative_savings": 0.5495416848537756,
+        "compression_ratio": 2.2199612403100777,
+        "breakdown_mib": {
+          "packed_weights": 432.0,
+          "weight_scales": 0.703125,
+          "rotations": 174.0,
+          "permutation_indices": 0.0
+        }
+      },
+      "cscka_final": {
+        "plan_sha256": "70b6b0d3190c3f4ebad9a5a874f9c0ac1044143a4912020aa9fb129f66a6eeb4",
+        "quantized_layers": 100,
+        "fp16_layers": 80,
+        "planned_fp16_skips": 16,
+        "quantized_parameters": 818937856,
+        "component_bytes": 1074710528,
+        "component_mib": 1024.923828125,
+        "component_gib": 1.0009021759033203,
+        "relative_savings": 0.497690237159901,
+        "compression_ratio": 1.990803432419711,
+        "breakdown_mib": {
+          "packed_weights": 390.5,
+          "weight_scales": 0.626953125,
+          "rotations": 155.375,
+          "permutation_indices": 0.0
+        }
+      },
+      "cscka_final_atmohb": {
+        "plan_sha256": "70b6b0d3190c3f4ebad9a5a874f9c0ac1044143a4912020aa9fb129f66a6eeb4",
+        "quantized_layers": 100,
+        "fp16_layers": 80,
+        "planned_fp16_skips": 16,
+        "quantized_parameters": 818937856,
+        "component_bytes": 1074710528,
+        "component_mib": 1024.923828125,
+        "component_gib": 1.0009021759033203,
+        "relative_savings": 0.497690237159901,
+        "compression_ratio": 1.990803432419711,
+        "breakdown_mib": {
+          "packed_weights": 390.5,
+          "weight_scales": 0.626953125,
+          "rotations": 155.375,
+          "permutation_indices": 0.0
+        }
+      }
+    }
+  },
   "configs": {
     "fp16": {
       "per_task": {
@@ -230,6 +323,24 @@
           "p95_gpu_utilization_pct": 35.34999999999991,
           "mean_power_w": 99.21456356736243,
           "p95_power_w": 121.99299999999997
+        }
+      },
+      "paper_style_memory": {
+        "plan_sha256": null,
+        "quantized_layers": 0,
+        "fp16_layers": 180,
+        "planned_fp16_skips": 0,
+        "quantized_parameters": 0,
+        "component_bytes": 2139537408,
+        "component_mib": 2040.421875,
+        "component_gib": 1.9925994873046875,
+        "relative_savings": 0.0,
+        "compression_ratio": 1.0,
+        "breakdown_mib": {
+          "packed_weights": 0.0,
+          "weight_scales": 0.0,
+          "rotations": 0.0,
+          "permutation_indices": 0.0
         }
       }
     },
@@ -415,6 +526,24 @@
           "mean_power_w": 102.89044592030379,
           "p95_power_w": 122.19349999999999
         }
+      },
+      "paper_style_memory": {
+        "plan_sha256": "cc8fd13ec6d6800abf4651b15ad1f19274b9bcdc146a4c83ecb7200c2af646c3",
+        "quantized_layers": 116,
+        "fp16_layers": 64,
+        "planned_fp16_skips": 0,
+        "quantized_parameters": 905969664,
+        "component_bytes": 963772416,
+        "component_mib": 919.125,
+        "component_gib": 0.8975830078125,
+        "relative_savings": 0.5495416848537756,
+        "compression_ratio": 2.2199612403100777,
+        "breakdown_mib": {
+          "packed_weights": 432.0,
+          "weight_scales": 0.703125,
+          "rotations": 174.0,
+          "permutation_indices": 0.0
+        }
       }
     },
     "cscka_final": {
@@ -599,6 +728,24 @@
           "mean_power_w": 94.38913662239096,
           "p95_power_w": 112.854
         }
+      },
+      "paper_style_memory": {
+        "plan_sha256": "70b6b0d3190c3f4ebad9a5a874f9c0ac1044143a4912020aa9fb129f66a6eeb4",
+        "quantized_layers": 100,
+        "fp16_layers": 80,
+        "planned_fp16_skips": 16,
+        "quantized_parameters": 818937856,
+        "component_bytes": 1074710528,
+        "component_mib": 1024.923828125,
+        "component_gib": 1.0009021759033203,
+        "relative_savings": 0.497690237159901,
+        "compression_ratio": 1.990803432419711,
+        "breakdown_mib": {
+          "packed_weights": 390.5,
+          "weight_scales": 0.626953125,
+          "rotations": 155.375,
+          "permutation_indices": 0.0
+        }
       }
     },
     "cscka_final_atmohb": {
@@ -782,6 +929,24 @@
           "p95_gpu_utilization_pct": 42.0,
           "mean_power_w": 101.24212523719159,
           "p95_power_w": 122.33749999999999
+        }
+      },
+      "paper_style_memory": {
+        "plan_sha256": "70b6b0d3190c3f4ebad9a5a874f9c0ac1044143a4912020aa9fb129f66a6eeb4",
+        "quantized_layers": 100,
+        "fp16_layers": 80,
+        "planned_fp16_skips": 16,
+        "quantized_parameters": 818937856,
+        "component_bytes": 1074710528,
+        "component_mib": 1024.923828125,
+        "component_gib": 1.0009021759033203,
+        "relative_savings": 0.497690237159901,
+        "compression_ratio": 1.990803432419711,
+        "breakdown_mib": {
+          "packed_weights": 390.5,
+          "weight_scales": 0.626953125,
+          "rotations": 155.375,
+          "permutation_indices": 0.0
         }
       }
     }

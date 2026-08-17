@@ -46,6 +46,17 @@ Primary held-out scope: 18 tasks.
 v1.4 macro Avg 89.2%; uniform W6 88.2%; v1.3 85.2%. These values are contextual and are not pooled with RoboCasa365.
 
 
+## Paper-style LLM+DiT component memory
+
+Theoretical tightly-packed deployment storage (QuantVLA Tables 1/2 scope); this is not live CUDA memory.
+
+| Config | Quantized Linear layers | Component memory (GiB) | Savings vs FP16 | Compression |
+|---|---:|---:|---:|---:|
+| fp16 | 0/180 | 1.993 | 0.0% | 1.00× |
+| w4a8_atmohb | 116/180 | 0.898 | 55.0% | 2.22× |
+| cscka_final | 100/180 | 1.001 | 49.8% | 1.99× |
+| cscka_final_atmohb | 100/180 | 1.001 | 49.8% | 1.99× |
+
 ## Efficiency
 
 | Config | Mean episode wall (s) | Env construct (s) | Inference/replan (s) | Env step (s) | Peak GPU memory (MiB) | Mean GPU util |

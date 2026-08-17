@@ -22,6 +22,7 @@ from parse_robocasa_atomic_matrix import (
     paired_delta_ci,
     percentile,
 )
+from robocasa_paper_memory import calculate_manifest as calculate_paper_memory
 
 
 OFFICIAL_TASK_COUNTS = {
@@ -157,6 +158,21 @@ def aggregate(
             if manifest.get("decision", {}).get(key) != value:
                 raise ValueError(f"final decision mismatch on {key}")
 
+    paper_by_task_set: dict[str, dict[str, Any]] = {}
+    manifests_with_checkpoint = [bool(manifest.get("checkpoint")) for _, manifest, _ in manifests]
+    if any(manifests_with_checkpoint):
+        if not all(manifests_with_checkpoint):
+            raise ValueError("checkpoint metadata is missing from one or more matrices")
+        for run_dir, manifest, _ in manifests:
+            task_set = str(manifest["task_set"])
+            metric = calculate_paper_memory(run_dir / "manifest.json")
+            if set(metric["configs"]) != set(config_ids):
+                raise ValueError(f"{task_set}: paper-memory config set mismatch")
+            paper_by_task_set[task_set] = metric
+        scope_counts = {metric["scope_linear_layers"] for metric in paper_by_task_set.values()}
+        if len(scope_counts) != 1:
+            raise ValueError(f"paper-memory scope differs across checkpoints: {scope_counts}")
+
     rows_by_config: dict[str, dict[tuple[str, int], dict]] = {
         config: {} for config in config_ids
     }
@@ -205,6 +221,31 @@ def aggregate(
         steps = sum(int(row["steps"]) for row in rows.values())
         inference = sum(float(row.get("inference_seconds", 0)) for row in rows.values())
         env_steps = sum(float(row.get("env_step_seconds", 0)) for row in rows.values())
+        paper_config = None
+        if paper_by_task_set:
+            by_task_set = {
+                task_set: paper_by_task_set[task_set]["configs"][config]
+                for task_set in split_tasks
+            }
+            weighted_component_bytes = sum(
+                by_task_set[task_set]["component_bytes"] * len(tasks)
+                for task_set, tasks in split_tasks.items()
+            ) / len(all_tasks)
+            weighted_fp16_bytes = sum(
+                paper_by_task_set[task_set]["fp16_component_bytes"] * len(tasks)
+                for task_set, tasks in split_tasks.items()
+            ) / len(all_tasks)
+            paper_config = {
+                "by_task_set": by_task_set,
+                "task_weighted_mean_component_bytes": weighted_component_bytes,
+                "task_weighted_mean_component_gib": weighted_component_bytes / 2**30,
+                "task_weighted_relative_savings": (
+                    1.0 - weighted_component_bytes / weighted_fp16_bytes
+                ),
+                "task_weighted_compression_ratio": (
+                    weighted_fp16_bytes / weighted_component_bytes
+                ),
+            }
         configs[config] = {
             "per_task": per_task,
             "per_task_details": per_task_details,
@@ -217,6 +258,7 @@ def aggregate(
                 task_set: mean([per_task[task] for task in tasks])
                 for task_set, tasks in split_tasks.items()
             },
+            "paper_style_memory": paper_config,
             "efficiency": {
                 "mean_driver_wall_seconds": mean(driver_seconds),
                 "p50_driver_wall_seconds": percentile(driver_seconds, 0.50),
@@ -265,6 +307,12 @@ def aggregate(
         "episodes_per_config": len(all_tasks) * len(seeds),
         "bootstrap_draws": n_boot,
         "protocol": {key: protocol.get(key) for key in PROTOCOL_KEYS},
+        "paper_style_memory": ({
+            "scope": next(iter(paper_by_task_set.values()))["scope"],
+            "unit_note": next(iter(paper_by_task_set.values()))["unit_note"],
+            "estimate_kind": next(iter(paper_by_task_set.values()))["estimate_kind"],
+            "by_task_set": paper_by_task_set,
+        } if paper_by_task_set else None),
         "final_decision": final_decision,
         "sources": [
             {
@@ -354,6 +402,25 @@ def write_markdown(path: Path, summary: dict[str, Any]) -> None:
             f"{gpu.get('mean_gpu_utilization_pct', float('nan')):.1f}% | "
             f"{gpu.get('mean_power_w', float('nan')):.1f} |"
         )
+    paper_memory = summary.get("paper_style_memory")
+    if paper_memory:
+        task_sets = list(summary["task_sets"])
+        lines += [
+            "", "## Paper-style LLM+DiT component memory", "",
+            "Theoretical tightly-packed deployment storage (QuantVLA Tables 1/2 scope); "
+            "this is distinct from live CUDA memory.", "",
+            "| Config | " + " | ".join(f"{task_set} (GiB)" for task_set in task_sets)
+            + " | 50-task weighted mean (GiB) | Savings vs FP16 |",
+            "|---|" + "---:|" * (len(task_sets) + 2),
+        ]
+        for config, row in summary["configs"].items():
+            metric = row["paper_style_memory"]
+            values = [metric["by_task_set"][task_set]["component_gib"] for task_set in task_sets]
+            lines.append(
+                "| " + config + " | " + " | ".join(f"{value:.3f}" for value in values)
+                + f" | {metric['task_weighted_mean_component_gib']:.3f} | "
+                + f"{100 * metric['task_weighted_relative_savings']:.1f}% |"
+            )
     lines += [
         "",
         "LIBERO context: v1.4 macro Avg 89.2%, uniform W6 88.2%, v1.3 85.2%. "

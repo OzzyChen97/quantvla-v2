@@ -12,6 +12,8 @@ import random
 from pathlib import Path
 from typing import Any
 
+from robocasa_paper_memory import calculate_manifest as calculate_paper_memory
+
 
 CONTRASTS = [
     ("cscka_adjusted", "ckaonly"),
@@ -229,6 +231,7 @@ def load_rows(run_dir: Path, manifest: dict, manifest_sha: str, allow_incomplete
 def summarize(run_dir: Path, n_boot: int, allow_incomplete: bool) -> dict:
     manifest_path = run_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
+    paper_memory = calculate_paper_memory(manifest_path) if manifest.get("checkpoint") else None
     manifest_sha = file_sha(manifest_path)
     loaded = load_rows(run_dir, manifest, manifest_sha, allow_incomplete)
     rows_by_config = loaded["rows"]
@@ -309,6 +312,9 @@ def summarize(run_dir: Path, n_boot: int, allow_incomplete: bool) -> dict:
             "mean_success_steps": sum(success_steps) / len(success_steps) if success_steps else None,
             "mean_failure_steps": sum(failure_steps) / len(failure_steps) if failure_steps else None,
             "efficiency": efficiency,
+            "paper_style_memory": (
+                paper_memory["configs"].get(cid) if paper_memory is not None else None
+            ),
         }
 
     comparisons = {}
@@ -351,6 +357,7 @@ def summarize(run_dir: Path, n_boot: int, allow_incomplete: bool) -> dict:
         "secondary_scope": {"tasks": tasks, "n_tasks": len(tasks)},
         "bootstrap_draws": n_boot,
         "validation_errors": loaded["validation_errors"],
+        "paper_style_memory": paper_memory,
         "configs": configs,
         "comparisons": comparisons,
         "decision": {"spec": decision, "passed": decision_passed},
@@ -406,6 +413,22 @@ def write_markdown(path: Path, summary: dict) -> None:
     lines += ["", "## LIBERO context", "",
               "v1.4 macro Avg 89.2%; uniform W6 88.2%; v1.3 85.2%. "
               "These values are contextual and are not pooled with RoboCasa365.", ""]
+    paper_memory = summary.get("paper_style_memory")
+    if paper_memory:
+        lines += [
+            "", "## Paper-style LLM+DiT component memory", "",
+            "Theoretical tightly-packed deployment storage (QuantVLA Tables 1/2 scope); "
+            "this is not live CUDA memory.", "",
+            "| Config | Quantized Linear layers | Component memory (GiB) | Savings vs FP16 | Compression |",
+            "|---|---:|---:|---:|---:|",
+        ]
+        for cid in summary["configs"]:
+            metric = paper_memory["configs"][cid]
+            lines.append(
+                f"| {cid} | {metric['quantized_layers']}/{paper_memory['scope_linear_layers']} | "
+                f"{metric['component_gib']:.3f} | {100 * metric['relative_savings']:.1f}% | "
+                f"{metric['compression_ratio']:.2f}× |"
+            )
     lines += ["", "## Efficiency", "",
               "| Config | Mean episode wall (s) | Env construct (s) | Inference/replan (s) | Env step (s) | Peak GPU memory (MiB) | Mean GPU util |",
               "|---|---:|---:|---:|---:|---:|---:|"]
