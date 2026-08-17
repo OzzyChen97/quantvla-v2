@@ -914,3 +914,21 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   `--smoke-task OpenCabinet`；修复为仅在 `phase=smoke` 时校验。错误发生在
   manifest/server 创建前，没有产生 episode；修复后 composite_seen 的 4×4
   driver 与 checkpoint-specific runtime 校验均成功。
+
+## 2026-08-18：composite 吞吐复核与 unseen 安全提速（D-053）
+
+- composite_seen 启动 1.57 小时后的 312 个有效/可恢复样本显示：官方 task
+  horizon 平均为 2316（atomic_seen 为 658，约 3.5×）；当前样本成功率仅
+  5%–13%，平均实际执行 2914–3115 steps。单 episode 的 232–293 秒中，env
+  step/render 占 169–186 秒，模型推理占 42–89 秒，故主要瓶颈是官方长 horizon
+  仿真，而非进程卡死或 GPU OOM。
+- seen 的不可变 manifest 已冻结为 4 shards/config，继续原样运行，避免重排使已完成
+  rows 失效。尚未创建正式 manifest 的 composite_unseen 调整为 **6 个
+  horizon-balanced shards/config**：仅增加环境并发，不改变 task、50 scenarios、
+  checkpoint、paired noise、official horizon、chunk=16、denoising=4、render、
+  plan 或 scale；显式 `(config, task, seed)` 键与确定性 noise 保证调度不改变样本。
+- 依据 4-client 实测 env/inference 分解，6-client 预计将 unseen 墙钟缩短约
+  25%–35%，代价是单请求排队延迟可能上升；manifest 会记录实际 shards，最终
+  efficiency 按 task set 分栏，不把不同并发度的 latency 冒充单实例 kernel 速度。
+- GPU2 当前有独立 SADA 审计，GPU6 有系统 Ollama 服务；遵守“不终止无关进程”，
+  本轮不把这两张非空闲卡强行纳入正式服务副本。

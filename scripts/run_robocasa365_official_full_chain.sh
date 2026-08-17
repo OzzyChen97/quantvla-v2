@@ -66,7 +66,7 @@ ensure_matrix \
     runs/robocasa365_official_full_composite_unseen_spec.json \
     runs/robocasa365_official_full_composite_unseen_paired50 \
     "$checkpoint_root/composite_unseen/checkpoint-60000" \
-    4
+    6
 
 "$groot_python" scripts/tools/aggregate_robocasa365_official.py \
     --run-dir runs/robocasa365_official_full_atomic_paired50 \
