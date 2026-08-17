@@ -273,6 +273,11 @@ def summarize(run_dir: Path, n_boot: int, allow_incomplete: bool) -> dict:
         env_construct = [float(r["env_construct_seconds"]) for r in rows.values()
                          if r.get("env_construct_seconds") is not None]
         efficiency = {
+            "rollout_shards": len(manifest["shards"]),
+            "egl_device_pool": manifest["protocol"].get("egl_device_pool"),
+            "gpu_measurement_scope": manifest["protocol"].get(
+                "gpu_efficiency_scope", "dedicated model-GPU device total"
+            ),
             "driver_wall_samples": len(driver_seconds),
             "mean_driver_wall_seconds": (
                 sum(driver_seconds) / len(driver_seconds) if driver_seconds else None
@@ -445,6 +450,14 @@ def write_markdown(path: Path, summary: dict) -> None:
             f"{fmt(gpu.get('peak_memory_mib'), 0)} | "
             f"{fmt(gpu.get('mean_gpu_utilization_pct'), 1)}% |"
         )
+    if summary["configs"]:
+        sample_efficiency = next(iter(summary["configs"].values()))["efficiency"]
+        lines += [
+            "",
+            f"Scheduling: {sample_efficiency['rollout_shards']} shards/config; "
+            f"EGL pool={sample_efficiency['egl_device_pool']}; "
+            f"GPU sampling scope={sample_efficiency['gpu_measurement_scope']}.",
+        ]
     path.write_text("\n".join(lines))
 
 

@@ -304,6 +304,9 @@
       "mean_success_steps": 247.6235294117647,
       "mean_failure_steps": 679.7727272727273,
       "efficiency": {
+        "rollout_shards": 2,
+        "egl_device_pool": null,
+        "gpu_measurement_scope": "dedicated model-GPU device total",
         "driver_wall_samples": 900,
         "mean_driver_wall_seconds": 34.44770800537543,
         "p50_driver_wall_seconds": 34.46352864503861,
@@ -506,6 +509,9 @@
       "mean_success_steps": 288.4484304932735,
       "mean_failure_steps": 659.8017621145375,
       "efficiency": {
+        "rollout_shards": 2,
+        "egl_device_pool": null,
+        "gpu_measurement_scope": "dedicated model-GPU device total",
         "driver_wall_samples": 900,
         "mean_driver_wall_seconds": 44.89583154042557,
         "p50_driver_wall_seconds": 44.44068979024887,
@@ -708,6 +714,9 @@
       "mean_success_steps": 246.19001610305958,
       "mean_failure_steps": 663.4408602150538,
       "efficiency": {
+        "rollout_shards": 2,
+        "egl_device_pool": null,
+        "gpu_measurement_scope": "dedicated model-GPU device total",
         "driver_wall_samples": 900,
         "mean_driver_wall_seconds": 38.58033855305801,
         "p50_driver_wall_seconds": 37.368906784057614,
@@ -910,6 +919,9 @@
       "mean_success_steps": 248.75333333333333,
       "mean_failure_steps": 660.0,
       "efficiency": {
+        "rollout_shards": 2,
+        "egl_device_pool": null,
+        "gpu_measurement_scope": "dedicated model-GPU device total",
         "driver_wall_samples": 900,
         "mean_driver_wall_seconds": 39.257415314515335,
         "p50_driver_wall_seconds": 38.3210159778595,

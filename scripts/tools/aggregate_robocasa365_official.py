@@ -93,6 +93,48 @@ def summarize_gpu(rows: list[dict]) -> dict[str, Any] | None:
     }
 
 
+def summarize_efficiency(
+    rows: dict[tuple[str, int], dict],
+    gpu_rows: list[dict],
+    *,
+    protocol: dict[str, Any] | None = None,
+    rollout_shards: int | None = None,
+) -> dict[str, Any]:
+    driver_seconds = [float(row["driver_wall_seconds"]) for row in rows.values()
+                      if row.get("driver_wall_seconds") is not None]
+    episode_seconds = [float(row["episode_wall_seconds"]) for row in rows.values()
+                       if row.get("episode_wall_seconds") is not None]
+    construct_seconds = [float(row["env_construct_seconds"]) for row in rows.values()
+                         if row.get("env_construct_seconds") is not None]
+    replans = sum(int(row.get("replans", 0)) for row in rows.values())
+    steps = sum(int(row["steps"]) for row in rows.values())
+    inference = sum(float(row.get("inference_seconds", 0)) for row in rows.values())
+    env_steps = sum(float(row.get("env_step_seconds", 0)) for row in rows.values())
+    driver_total = sum(driver_seconds)
+    protocol = protocol or {}
+    return {
+        "rollout_shards": rollout_shards,
+        "egl_device_pool": protocol.get("egl_device_pool"),
+        "gpu_measurement_scope": protocol.get(
+            "gpu_efficiency_scope",
+            ("mixed across task-set schedules" if rollout_shards is None
+             else "dedicated model-GPU device total"),
+        ),
+        "mean_driver_wall_seconds": mean(driver_seconds),
+        "p50_driver_wall_seconds": percentile(driver_seconds, 0.50),
+        "p90_driver_wall_seconds": percentile(driver_seconds, 0.90),
+        "mean_episode_wall_seconds": mean(episode_seconds),
+        "mean_env_construct_seconds": mean(construct_seconds),
+        "mean_inference_seconds_per_replan": inference / replans if replans else None,
+        "mean_env_step_seconds": env_steps / steps if steps else None,
+        "steps_per_driver_second": steps / driver_total if driver_total else None,
+        "episodes_per_aggregate_driver_hour": (
+            3600 * len(driver_seconds) / driver_total if driver_total else None
+        ),
+        "gpu": summarize_gpu(gpu_rows),
+    }
+
+
 def aggregate(
     run_dirs: list[Path], n_boot: int, require_official: bool = True
 ) -> dict[str, Any]:
@@ -192,6 +234,18 @@ def aggregate(
             )
 
     gpu_rows = load_gpu_rows(run_dirs, set(config_ids))
+    matrix_by_task_set = {
+        str(manifest["task_set"]): matrix
+        for matrix, (_, manifest, _) in zip(matrices, manifests)
+    }
+    manifest_by_task_set = {
+        str(manifest["task_set"]): (run_dir, manifest)
+        for run_dir, manifest, _ in manifests
+    }
+    gpu_rows_by_task_set = {
+        task_set: load_gpu_rows([run_dir], set(config_ids))
+        for task_set, (run_dir, _) in manifest_by_task_set.items()
+    }
     rng = random.Random(20260817)
     configs: dict[str, dict[str, Any]] = {}
     for config in config_ids:
@@ -211,16 +265,14 @@ def aggregate(
                 "mean_success_steps": mean([float(row["steps"]) for row in successes]),
                 "mean_failure_steps": mean([float(row["steps"]) for row in failures]),
             }
-        driver_seconds = [float(row["driver_wall_seconds"]) for row in rows.values()
-                          if row.get("driver_wall_seconds") is not None]
-        episode_seconds = [float(row["episode_wall_seconds"]) for row in rows.values()
-                           if row.get("episode_wall_seconds") is not None]
-        construct_seconds = [float(row["env_construct_seconds"]) for row in rows.values()
-                             if row.get("env_construct_seconds") is not None]
-        replans = sum(int(row.get("replans", 0)) for row in rows.values())
-        steps = sum(int(row["steps"]) for row in rows.values())
-        inference = sum(float(row.get("inference_seconds", 0)) for row in rows.values())
-        env_steps = sum(float(row.get("env_step_seconds", 0)) for row in rows.values())
+        per_task_set_efficiency = {}
+        for task_set, matrix in matrix_by_task_set.items():
+            _, split_manifest = manifest_by_task_set[task_set]
+            per_task_set_efficiency[task_set] = summarize_efficiency(
+                matrix[config], gpu_rows_by_task_set[task_set][config],
+                protocol=split_manifest["protocol"],
+                rollout_shards=len(split_manifest["shards"]),
+            )
         paper_config = None
         if paper_by_task_set:
             by_task_set = {
@@ -259,20 +311,8 @@ def aggregate(
                 for task_set, tasks in split_tasks.items()
             },
             "paper_style_memory": paper_config,
-            "efficiency": {
-                "mean_driver_wall_seconds": mean(driver_seconds),
-                "p50_driver_wall_seconds": percentile(driver_seconds, 0.50),
-                "p90_driver_wall_seconds": percentile(driver_seconds, 0.90),
-                "mean_episode_wall_seconds": mean(episode_seconds),
-                "mean_env_construct_seconds": mean(construct_seconds),
-                "mean_inference_seconds_per_replan": inference / replans if replans else None,
-                "mean_env_step_seconds": env_steps / steps if steps else None,
-                "steps_per_driver_second": steps / sum(driver_seconds),
-                "episodes_per_aggregate_driver_hour": (
-                    3600 * len(driver_seconds) / sum(driver_seconds)
-                ),
-                "gpu": summarize_gpu(gpu_rows[config]),
-            },
+            "efficiency": summarize_efficiency(rows, gpu_rows[config]),
+            "per_task_set_efficiency": per_task_set_efficiency,
         }
 
     comparisons = {}
@@ -401,6 +441,33 @@ def write_markdown(path: Path, summary: dict[str, Any]) -> None:
             f"{gpu.get('peak_memory_mib', float('nan')):.0f} | "
             f"{gpu.get('mean_gpu_utilization_pct', float('nan')):.1f}% | "
             f"{gpu.get('mean_power_w', float('nan')):.1f} |"
+        )
+    lines += [
+        "",
+        "Aggregate efficiency above mixes task horizons and execution concurrency; "
+        "use the task-set table below for scheduling-aware comparisons.",
+        "", "## Efficiency by task set", "",
+        "| Task set | Config | Shards | Episode wall (s) | Inference/replan (s) | Env step (s) | Peak model-GPU device memory (MiB) |",
+        "|---|---|---:|---:|---:|---:|---:|",
+    ]
+    for task_set in summary["task_sets"]:
+        for config, row in summary["configs"].items():
+            efficiency = row["per_task_set_efficiency"][task_set]
+            gpu = efficiency.get("gpu") or {}
+            lines.append(
+                f"| {task_set} | {config} | {efficiency['rollout_shards']} | "
+                f"{efficiency['mean_episode_wall_seconds']:.1f} | "
+                f"{efficiency['mean_inference_seconds_per_replan']:.3f} | "
+                f"{efficiency['mean_env_step_seconds']:.3f} | "
+                f"{gpu.get('peak_memory_mib', float('nan')):.0f} |"
+            )
+    lines += ["", "Scheduling/GPU sampling notes:", ""]
+    for task_set in summary["task_sets"]:
+        sample = next(iter(summary["configs"].values()))["per_task_set_efficiency"][task_set]
+        lines.append(
+            f"- {task_set}: {sample['rollout_shards']} shards/config; "
+            f"EGL pool={sample.get('egl_device_pool')}; "
+            f"GPU scope={sample['gpu_measurement_scope']}."
         )
     paper_memory = summary.get("paper_style_memory")
     if paper_memory:

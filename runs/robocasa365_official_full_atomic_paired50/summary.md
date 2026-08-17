@@ -65,3 +65,5 @@ Theoretical tightly-packed deployment storage (QuantVLA Tables 1/2 scope); this 
 | w4a8_atmohb | 37.5 | 7.3 | 0.268 | 0.048 | 17973 | 14.9% |
 | cscka_final | 30.9 | 7.6 | 0.254 | 0.048 | 17671 | 13.3% |
 | cscka_final_atmohb | 31.6 | 7.5 | 0.259 | 0.048 | 17719 | 13.2% |
+
+Scheduling: 2 shards/config; EGL pool=None; GPU sampling scope=dedicated model-GPU device total.
