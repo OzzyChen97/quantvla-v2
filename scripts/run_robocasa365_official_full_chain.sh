@@ -20,6 +20,7 @@ ensure_matrix() {
     local spec=$2
     local run_dir=$3
     local checkpoint=$4
+    local n_shards=$5
 
     if [[ -f "$run_dir/manifest.json" ]] && \
        "$groot_python" "$matrix_parser" --run-dir "$run_dir" --bootstrap 10000 \
@@ -33,7 +34,7 @@ ensure_matrix() {
         --task-set "$task_set" \
         --seeds "$seeds" \
         --checkpoint "$checkpoint" \
-        --n-shards 2 \
+        --n-shards "$n_shards" \
         --trial-batch-size 10 \
         --trial-timeout 3600 \
         --action-noise paired \
@@ -50,19 +51,22 @@ ensure_matrix \
     atomic_seen \
     runs/robocasa365_official_full_atomic_spec.json \
     runs/robocasa365_official_full_atomic_paired50 \
-    "$checkpoint_root/atomic_seen/checkpoint-60000"
+    "$checkpoint_root/atomic_seen/checkpoint-60000" \
+    2
 
 ensure_matrix \
     composite_seen \
     runs/robocasa365_official_full_composite_seen_spec.json \
     runs/robocasa365_official_full_composite_seen_paired50 \
-    "$checkpoint_root/composite_seen/checkpoint-60000"
+    "$checkpoint_root/composite_seen/checkpoint-60000" \
+    4
 
 ensure_matrix \
     composite_unseen \
     runs/robocasa365_official_full_composite_unseen_spec.json \
     runs/robocasa365_official_full_composite_unseen_paired50 \
-    "$checkpoint_root/composite_unseen/checkpoint-60000"
+    "$checkpoint_root/composite_unseen/checkpoint-60000" \
+    4
 
 "$groot_python" scripts/tools/aggregate_robocasa365_official.py \
     --run-dir runs/robocasa365_official_full_atomic_paired50 \

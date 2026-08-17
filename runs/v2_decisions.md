@@ -859,3 +859,18 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   composite_unseen}_spec.json`，每套固定比较 FP16、原版 W4A8+static ATM/OHB、
   CS+CKA(16:1)、CS+CKA(16:1)+static ATM/OHB；正式矩阵启动前先逐 checkpoint
   做 1 task × 1 seed smoke。
+
+## 2026-08-17：官方 50-task 正式执行与 composite 并发（D-051）
+
+- 三个 checkpoint 的 4 配置 smoke 共 12/12 rows 完整，runtime 校验确认
+  FP16=0、原版 W4A8=116、两个 final 配置=100 wrapped layers；ATM/OHB 配置
+  均捕获 16/16 hooks，所有 client exit=0。
+- atomic_seen 保持预注册的每配置 2 个 9-task 平衡分片（总 horizon 6000/5850）。
+  composite 的平均 horizon 显著更长，若仍为 2 分片，失败占比较高的 W4A8 预计
+  每个 split 接近一天。因显式 seed 与 deterministic action noise 已保证任务顺序/
+  分片不改变样本，且单服务器 4-client 路径已在 CKA-only 200-episode 边界测试中
+  通过，composite_seen/unseen 改为每配置 4 个 horizon-balanced 分片。
+- 该调整只改变执行调度，不改变 task、seed、checkpoint、horizon、chunk、
+  denoising、render 或 paired-noise 协议；不可变 manifest 会记录实际 shards。
+  16 client 的 CPU 需求远低于 128 核容量，EGL 构造仍按物理设备加锁串行，
+  rollout 保持并发，预计将 composite 墙钟时间降低约 2 倍。
