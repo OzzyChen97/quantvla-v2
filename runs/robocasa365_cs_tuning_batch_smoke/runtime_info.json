@@ -1,0 +1,54 @@
+{
+  "cscka_8to1": {
+    "wrapped_layers": 100,
+    "model_path": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000",
+    "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_8to1_adjudicated.final_plan.json",
+    "packdir": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_protocolfix_d4_w4a8_b64c32ls015",
+    "act_scale_path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_8to1_official_d4.npz",
+    "atm_enabled": false,
+    "ohb_enabled": false,
+    "atm_path": null,
+    "atm_layers": 0,
+    "ohb_layers": 0,
+    "denoising_steps": 4
+  },
+  "cscka_16to1": {
+    "wrapped_layers": 100,
+    "model_path": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000",
+    "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.final_plan.json",
+    "packdir": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_protocolfix_d4_w4a8_b64c32ls015",
+    "act_scale_path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_protocolfix_d4.npz",
+    "atm_enabled": false,
+    "ohb_enabled": false,
+    "atm_path": null,
+    "atm_layers": 0,
+    "ohb_layers": 0,
+    "denoising_steps": 4
+  },
+  "cscka_32to1": {
+    "wrapped_layers": 98,
+    "model_path": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000",
+    "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_32to1_adjudicated.final_plan.json",
+    "packdir": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_protocolfix_d4_w4a8_b64c32ls015",
+    "act_scale_path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_32to1_official_d4.npz",
+    "atm_enabled": false,
+    "ohb_enabled": false,
+    "atm_path": null,
+    "atm_layers": 0,
+    "ohb_layers": 0,
+    "denoising_steps": 4
+  },
+  "cscka_64to1": {
+    "wrapped_layers": 94,
+    "model_path": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000",
+    "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.final_plan.json",
+    "packdir": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_protocolfix_d4_w4a8_b64c32ls015",
+    "act_scale_path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_64to1_protocolfix_d4.npz",
+    "atm_enabled": false,
+    "ohb_enabled": false,
+    "atm_path": null,
+    "atm_layers": 0,
+    "ohb_layers": 0,
+    "denoising_steps": 4
+  }
+}

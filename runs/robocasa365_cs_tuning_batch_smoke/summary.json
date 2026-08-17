@@ -1,0 +1,277 @@
+{
+  "manifest_sha256": "64a9a8c493e5559475e89c5b29f08155c137fcb530dd7d36f19cee9753a2d65a",
+  "primary_scope": {
+    "tasks": [
+      "OpenStandMixerHead"
+    ],
+    "n_tasks": 1
+  },
+  "secondary_scope": {
+    "tasks": [
+      "OpenStandMixerHead"
+    ],
+    "n_tasks": 1
+  },
+  "bootstrap_draws": 1000,
+  "validation_errors": [],
+  "configs": {
+    "cscka_8to1": {
+      "per_task": {
+        "OpenStandMixerHead": 0.5
+      },
+      "per_task_details": {
+        "OpenStandMixerHead": {
+          "sr": 0.5,
+          "successes": 1,
+          "episodes": 2,
+          "mean_success_steps": 96.0,
+          "mean_failure_steps": 450.0
+        }
+      },
+      "primary_task_macro_sr": 0.5,
+      "primary_task_cluster_ci95": [
+        0.5,
+        0.5
+      ],
+      "all18_task_macro_sr": 0.5,
+      "task_macro_sr": 0.5,
+      "episode_sr": 0.5,
+      "successes": 1,
+      "episodes": 2,
+      "mean_success_steps": 96.0,
+      "mean_failure_steps": 450.0,
+      "efficiency": {
+        "driver_wall_samples": 2,
+        "mean_driver_wall_seconds": 32.890939593315125,
+        "p50_driver_wall_seconds": 32.890939593315125,
+        "p90_driver_wall_seconds": 32.890939593315125,
+        "mean_episode_wall_seconds": 25.331323173828423,
+        "total_replans": 35,
+        "mean_inference_seconds_per_replan": 0.3041595299329076,
+        "mean_env_step_seconds": 0.05075425910507585,
+        "mean_env_construct_seconds": 6.936403430067003,
+        "steps_per_driver_second": 8.300158140069842,
+        "episodes_per_aggregate_driver_hour": 109.45263481410781,
+        "gpu": {
+          "samples": 50,
+          "peak_memory_mib": 14776.0,
+          "mean_memory_mib": 8853.86,
+          "mean_gpu_utilization_pct": 1.84,
+          "p95_gpu_utilization_pct": 12.099999999999994,
+          "mean_power_w": 66.40320000000001,
+          "p95_power_w": 95.077
+        }
+      }
+    },
+    "cscka_16to1": {
+      "per_task": {
+        "OpenStandMixerHead": 0.5
+      },
+      "per_task_details": {
+        "OpenStandMixerHead": {
+          "sr": 0.5,
+          "successes": 1,
+          "episodes": 2,
+          "mean_success_steps": 96.0,
+          "mean_failure_steps": 450.0
+        }
+      },
+      "primary_task_macro_sr": 0.5,
+      "primary_task_cluster_ci95": [
+        0.5,
+        0.5
+      ],
+      "all18_task_macro_sr": 0.5,
+      "task_macro_sr": 0.5,
+      "episode_sr": 0.5,
+      "successes": 1,
+      "episodes": 2,
+      "mean_success_steps": 96.0,
+      "mean_failure_steps": 450.0,
+      "efficiency": {
+        "driver_wall_samples": 2,
+        "mean_driver_wall_seconds": 31.07674241065979,
+        "p50_driver_wall_seconds": 31.07674241065979,
+        "p90_driver_wall_seconds": 31.07674241065979,
+        "mean_episode_wall_seconds": 24.78081537503749,
+        "total_replans": 35,
+        "mean_inference_seconds_per_replan": 0.28472907090825694,
+        "mean_env_step_seconds": 0.04952306713697402,
+        "mean_env_construct_seconds": 5.6805070554837584,
+        "steps_per_driver_second": 8.784704535387753,
+        "episodes_per_aggregate_driver_hour": 115.84225760950883,
+        "gpu": {
+          "samples": 50,
+          "peak_memory_mib": 14776.0,
+          "mean_memory_mib": 9148.66,
+          "mean_gpu_utilization_pct": 7.66,
+          "p95_gpu_utilization_pct": 37.749999999999986,
+          "mean_power_w": 64.96340000000001,
+          "p95_power_w": 96.63849999999996
+        }
+      }
+    },
+    "cscka_32to1": {
+      "per_task": {
+        "OpenStandMixerHead": 0.5
+      },
+      "per_task_details": {
+        "OpenStandMixerHead": {
+          "sr": 0.5,
+          "successes": 1,
+          "episodes": 2,
+          "mean_success_steps": 99.0,
+          "mean_failure_steps": 450.0
+        }
+      },
+      "primary_task_macro_sr": 0.5,
+      "primary_task_cluster_ci95": [
+        0.5,
+        0.5
+      ],
+      "all18_task_macro_sr": 0.5,
+      "task_macro_sr": 0.5,
+      "episode_sr": 0.5,
+      "successes": 1,
+      "episodes": 2,
+      "mean_success_steps": 99.0,
+      "mean_failure_steps": 450.0,
+      "efficiency": {
+        "driver_wall_samples": 2,
+        "mean_driver_wall_seconds": 32.3569860458374,
+        "p50_driver_wall_seconds": 32.3569860458374,
+        "p90_driver_wall_seconds": 32.3569860458374,
+        "mean_episode_wall_seconds": 25.942659705877304,
+        "total_replans": 36,
+        "mean_inference_seconds_per_replan": 0.29512261920091176,
+        "mean_env_step_seconds": 0.052228449441777555,
+        "mean_env_construct_seconds": 5.783001563511789,
+        "steps_per_driver_second": 8.483484821829174,
+        "episodes_per_aggregate_driver_hour": 111.25881733546458,
+        "gpu": {
+          "samples": 50,
+          "peak_memory_mib": 14546.0,
+          "mean_memory_mib": 9352.5,
+          "mean_gpu_utilization_pct": 4.36,
+          "p95_gpu_utilization_pct": 32.099999999999994,
+          "mean_power_w": 66.11039999999998,
+          "p95_power_w": 92.8125
+        }
+      }
+    },
+    "cscka_64to1": {
+      "per_task": {
+        "OpenStandMixerHead": 0.5
+      },
+      "per_task_details": {
+        "OpenStandMixerHead": {
+          "sr": 0.5,
+          "successes": 1,
+          "episodes": 2,
+          "mean_success_steps": 92.0,
+          "mean_failure_steps": 450.0
+        }
+      },
+      "primary_task_macro_sr": 0.5,
+      "primary_task_cluster_ci95": [
+        0.5,
+        0.5
+      ],
+      "all18_task_macro_sr": 0.5,
+      "task_macro_sr": 0.5,
+      "episode_sr": 0.5,
+      "successes": 1,
+      "episodes": 2,
+      "mean_success_steps": 92.0,
+      "mean_failure_steps": 450.0,
+      "efficiency": {
+        "driver_wall_samples": 2,
+        "mean_driver_wall_seconds": 32.672996044158936,
+        "p50_driver_wall_seconds": 32.672996044158936,
+        "p90_driver_wall_seconds": 32.672996044158936,
+        "mean_episode_wall_seconds": 25.626630688551813,
+        "total_replans": 35,
+        "mean_inference_seconds_per_replan": 0.289722620403128,
+        "mean_env_step_seconds": 0.05195985224984614,
+        "mean_env_construct_seconds": 6.431547362823039,
+        "steps_per_driver_second": 8.294311291004108,
+        "episodes_per_aggregate_driver_hour": 110.18273301702874,
+        "gpu": {
+          "samples": 50,
+          "peak_memory_mib": 14273.0,
+          "mean_memory_mib": 8992.14,
+          "mean_gpu_utilization_pct": 6.98,
+          "p95_gpu_utilization_pct": 32.55,
+          "mean_power_w": 61.955199999999984,
+          "p95_power_w": 91.45599999999999
+        }
+      }
+    }
+  },
+  "comparisons": {
+    "cscka_64to1_vs_cscka_32to1": {
+      "a": "cscka_64to1",
+      "b": "cscka_32to1",
+      "primary_task_macro_delta": 0.0,
+      "task_cluster_ci95": [
+        0.0,
+        0.0
+      ],
+      "paired_permutation_p": 1.0,
+      "episode_mcnemar": {
+        "a_wins": 0,
+        "b_wins": 0,
+        "two_sided_p": 1.0
+      },
+      "holm_adjusted_p": 1.0
+    },
+    "cscka_64to1_vs_cscka_16to1": {
+      "a": "cscka_64to1",
+      "b": "cscka_16to1",
+      "primary_task_macro_delta": 0.0,
+      "task_cluster_ci95": [
+        0.0,
+        0.0
+      ],
+      "paired_permutation_p": 1.0,
+      "episode_mcnemar": {
+        "a_wins": 0,
+        "b_wins": 0,
+        "two_sided_p": 1.0
+      },
+      "holm_adjusted_p": 1.0
+    },
+    "cscka_64to1_vs_cscka_8to1": {
+      "a": "cscka_64to1",
+      "b": "cscka_8to1",
+      "primary_task_macro_delta": 0.0,
+      "task_cluster_ci95": [
+        0.0,
+        0.0
+      ],
+      "paired_permutation_p": 1.0,
+      "episode_mcnemar": {
+        "a_wins": 0,
+        "b_wins": 0,
+        "two_sided_p": 1.0
+      },
+      "holm_adjusted_p": 1.0
+    }
+  },
+  "decision": {
+    "spec": {},
+    "passed": false
+  },
+  "acceptance": {
+    "enable_cs": false,
+    "default": "ckaonly",
+    "rule": "held-out delta > 0 and task-cluster bootstrap CI95 lower bound > 0"
+  },
+  "libero_context": {
+    "v1.4_macro_avg": 0.892,
+    "uniform_w6_macro_avg": 0.882,
+    "v1.3_macro_avg": 0.852,
+    "note": "cross-benchmark context only; not pooled with RoboCasa365"
+  },
+  "task_set": "atomic_seen"
+}

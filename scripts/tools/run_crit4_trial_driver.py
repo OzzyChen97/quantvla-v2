@@ -14,6 +14,7 @@ Usage:
       --out runs/robocasa365_eval/v2/crit4_w6_h2.jsonl
 """
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -84,52 +85,86 @@ def build_jobs(tasks, n_trials, trial_seeds, base_seed):
     ]
 
 
-def run_one(port, task, trial, seed, max_steps, attempts, paired_action_noise):
-    tmp = Path(f"/tmp/crit4_drv_{port}_{task}_{seed}.jsonl")
+def run_batch(
+    port, task, jobs, max_steps, attempts, paired_action_noise,
+    trial_timeout, egl_device,
+):
+    """Run several seeds in one imported client, retaining partial progress.
+
+    Each seed still gets a freshly constructed environment.  If native code
+    crashes the child, rows flushed before the crash are returned and only the
+    remaining seeds are retried.
+    """
+    seed_to_trial = {seed: trial for _, trial, seed in jobs}
+    pending = list(seed_to_trial)
+    completed = {}
     child_env = os.environ.copy()
     # Keep the driver self-contained when launched from nohup/setsid instead
     # of an interactive experiment shell. RoboCasa365's pyzmq wheel lives in
-    # the repo-local user base, and all EGL clients must render on device 3.
+    # the repo-local user base; EGL placement is explicit per worker.
     child_env.setdefault("PYTHONUSERBASE", os.path.join(REPO, ".pyuserbase"))
-    child_env.setdefault("MUJOCO_EGL_DEVICE_ID", "3")
+    child_env["MUJOCO_EGL_DEVICE_ID"] = str(egl_device)
     child_env.setdefault("NUMBA_CACHE_DIR", os.path.join(REPO, "runs", "numba_cache"))
-    cmd = [PY, os.path.join(REPO, CLIENT_PY),
-           "--port", str(port), "--task-set", "custom", "--tasks", task,
-           "--n-trials", "1", "--exact-seed", str(seed),
-           "--max-steps", str(max_steps), "--out", str(tmp)]
-    if paired_action_noise:
-        cmd.append("--paired-action-noise")
     for att in range(attempts):
+        if not pending:
+            break
+        seed_arg = ",".join(str(seed) for seed in pending)
+        suffix = hashlib.sha256(seed_arg.encode()).hexdigest()[:12]
+        tmp = Path(f"/tmp/crit4_drv_{port}_{task}_{suffix}.jsonl")
         if tmp.exists():
             tmp.unlink()
+        cmd = [PY, os.path.join(REPO, CLIENT_PY),
+               "--port", str(port), "--task-set", "custom", "--tasks", task,
+               "--n-trials", str(len(pending)), "--exact-seeds", seed_arg,
+               "--fresh-env-per-trial", "--max-steps", str(max_steps),
+               "--out", str(tmp)]
+        if paired_action_noise:
+            cmd.append("--paired-action-noise")
         t0 = time.time()
         try:
-            proc = subprocess.run(cmd, cwd=REPO, env=child_env, timeout=1800,
-                                  stdout=subprocess.PIPE,
-                                  stderr=subprocess.PIPE,
-                                  universal_newlines=True)
+            proc = subprocess.run(
+                cmd, cwd=REPO, env=child_env,
+                timeout=trial_timeout * len(pending),
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                universal_newlines=True,
+            )
         except subprocess.TimeoutExpired:
-            print(f"[drv] {task} t{trial} attempt {att+1}: TIMEOUT")
-            continue
-        if proc.returncode == 0 and tmp.exists():
-            line = tmp.read_text().strip().splitlines()
-            if line:
-                # The child intentionally executes one trial, so its local
-                # trial index is always zero. Restore the driver's logical
-                # index before appending; resume is keyed by (task, seed).
-                result = json.loads(line[-1])
-                result["trial"] = trial
+            proc = None
+            print(f"[drv] {task} seeds={pending} attempt {att+1}: TIMEOUT")
+        elapsed = time.time() - t0
+        new_results = []
+        if tmp.exists():
+            for line in tmp.read_text().splitlines():
+                try:
+                    result = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                seed = result.get("seed")
+                if seed not in pending or result.get("success") is None:
+                    continue
+                result["trial"] = seed_to_trial[seed]
                 result["seed"] = seed
-                result_line = json.dumps(result)
-                print(f"[drv] {task} t{trial} attempt {att+1}: OK "
-                      f"({time.time()-t0:.0f}s) {result_line}")
-                return result_line
-        print(f"[drv] {task} t{trial} attempt {att+1}: FAILED rc={proc.returncode}")
-        tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
-        for t in tail:
-            print(f"[drv]   | {t}")
-    print(f"[drv] {task} t{trial}: all {attempts} attempts failed -> marking crashed")
-    return None
+                new_results.append(result)
+        amortized = elapsed / len(new_results) if new_results else None
+        for result in new_results:
+            result["driver_wall_seconds"] = amortized
+            completed[result["seed"]] = result
+            print(
+                f"[drv] {task} t{result['trial']} seed={result['seed']} "
+                f"attempt {att+1}: OK ({amortized:.0f}s amortized)"
+            )
+        pending = [seed for seed in pending if seed not in completed]
+        if proc is not None and proc.returncode != 0:
+            print(
+                f"[drv] {task} attempt {att+1}: child rc={proc.returncode}; "
+                f"remaining={pending}"
+            )
+            tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
+            for value in tail:
+                print(f"[drv]   | {value}")
+    if pending:
+        print(f"[drv] {task}: all {attempts} attempts failed for seeds={pending}")
+    return [completed[seed] for seed in seed_to_trial if seed in completed], pending
 
 
 def main():
@@ -155,6 +190,13 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--attempts", type=int, default=3)
     ap.add_argument("--paired-action-noise", action="store_true")
+    ap.add_argument("--trial-timeout", type=int, default=3600)
+    ap.add_argument("--egl-device", type=int, default=3)
+    ap.add_argument(
+        "--trial-batch-size", type=int, default=1,
+        help=("Trials per RoboCasa child process. Every trial still constructs "
+              "a fresh environment; values >1 amortize Python import cost."),
+    )
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
 
@@ -163,6 +205,7 @@ def main():
         b = build_jobs(["B", "A"], 3, "0,1,2", 9)
         assert {(t, s) for t, _, s in a} == {(t, s) for t, _, s in b}
         assert [s for t, _, s in a if t == "A"] == [0, 1, 2]
+        assert args.trial_batch_size >= 1
         print("[drv] selftest OK (explicit seeds independent of task order/sharding)")
         return
     if not args.out:
@@ -182,24 +225,38 @@ def main():
     print(f"[drv] port={args.port} tasks={tasks} "
           f"remaining={len(todo)}/{len(jobs)} paired_noise={args.paired_action_noise}")
 
+    if args.trial_batch_size < 1:
+        raise SystemExit("--trial-batch-size must be >= 1")
+    grouped = []
+    for task in tasks:
+        task_jobs = [job for job in todo if job[0] == task]
+        grouped.extend(
+            (task, task_jobs[start:start + args.trial_batch_size])
+            for start in range(0, len(task_jobs), args.trial_batch_size)
+        )
+
     with open(out, "a", encoding="utf-8") as f:
-        for task, trial, seed in todo:
-            line = run_one(args.port, task, trial, seed, args.max_steps,
-                           args.attempts, args.paired_action_noise)
-            if line is None:
-                f.write(json.dumps({
-                    "config": args.config,
-                    "manifest_sha256": args.manifest_sha256,
-                    "config_sha256": args.config_sha256,
-                    "task": task, "trial": trial, "seed": seed,
-                    "success": None, "steps": None, "crashed": True,
-                }) + "\n")
-            else:
-                result = json.loads(line)
+        for task, batch in grouped:
+            results, missing = run_batch(
+                args.port, task, batch, args.max_steps,
+                args.attempts, args.paired_action_noise,
+                args.trial_timeout, args.egl_device,
+            )
+            for result in results:
                 result["config"] = args.config
                 result["manifest_sha256"] = args.manifest_sha256
                 result["config_sha256"] = args.config_sha256
                 f.write(json.dumps(result) + "\n")
+                f.flush()
+            trial_by_seed = {seed: trial for _, trial, seed in batch}
+            for seed in missing:
+                f.write(json.dumps({
+                    "config": args.config,
+                    "manifest_sha256": args.manifest_sha256,
+                    "config_sha256": args.config_sha256,
+                    "task": task, "trial": trial_by_seed[seed], "seed": seed,
+                    "success": None, "steps": None, "crashed": True,
+                }) + "\n")
             f.flush()
     print(f"[drv] done -> {out}")
 

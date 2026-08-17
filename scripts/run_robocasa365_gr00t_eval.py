@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -184,6 +185,19 @@ def parse_args() -> argparse.Namespace:
               "and one trial."),
     )
     p.add_argument(
+        "--exact-seeds",
+        default=None,
+        help=("Comma-separated exact environment seeds for one task. This is "
+              "used by the crash-tolerant batched driver."),
+    )
+    p.add_argument(
+        "--fresh-env-per-trial",
+        action="store_true",
+        help=("Reconstruct the RoboCasa environment for every trial. This avoids "
+              "the known second-reset crash while amortizing Python imports over "
+              "multiple trials."),
+    )
+    p.add_argument(
         "--max-steps",
         type=int,
         default=0,
@@ -212,6 +226,19 @@ def main() -> None:
         tasks = [t.strip() for t in args.tasks.split(",") if t.strip()]
     else:
         tasks = list(TARGET_TASKS[args.task_set])
+    if args.exact_seed is not None and args.exact_seeds is not None:
+        raise SystemExit("--exact-seed and --exact-seeds are mutually exclusive")
+    exact_seeds = None
+    if args.exact_seeds is not None:
+        try:
+            exact_seeds = [int(v.strip()) for v in args.exact_seeds.split(",") if v.strip()]
+        except ValueError as exc:
+            raise SystemExit("--exact-seeds must contain integers") from exc
+        if (not exact_seeds or len(exact_seeds) != len(set(exact_seeds)) or
+                len(tasks) != 1 or args.n_trials != len(exact_seeds)):
+            raise SystemExit(
+                "--exact-seeds requires one task, unique seeds, and matching --n-trials"
+            )
     if args.exact_seed is not None and (len(tasks) != 1 or args.n_trials != 1):
         raise SystemExit("--exact-seed requires exactly one task and --n-trials 1")
     client = _Gr00tZMQClient(host="localhost", port=args.port)
@@ -220,7 +247,7 @@ def main() -> None:
 
     results = []
     t0 = time.time()
-    for ti, task in enumerate(tasks):
+    def construct_env(task: str):
         # enable_render=True is REQUIRED: False zero-fills camera obs and the
         # policy runs blind (D-040).
         # D-041: concurrent EGL context creation on one device deadlocks the
@@ -228,77 +255,113 @@ def main() -> None:
         # sockets). Serialize env construction across processes with a repo-
         # local flock (repo path, NOT /tmp — /tmp is per-launcher tmpfs).
         import fcntl
-        lock_path = REPO_ROOT / "runs" / ".robocasa365_construct.lock"
+        # Serialize only within one EGL device.  The previous single global
+        # lock forced all GPU1-6 clients through GPU3 one at a time and made
+        # environment construction the dominant wall-time cost.  Independent
+        # A40 devices can safely construct contexts concurrently.
+        egl_device = str(os.environ.get("MUJOCO_EGL_DEVICE_ID", "3"))
+        lock_path = REPO_ROOT / "runs" / f".robocasa365_construct_gpu{egl_device}.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
+        construct_t0 = time.perf_counter()
         with open(lock_path, "w") as _lf:
             fcntl.flock(_lf, fcntl.LOCK_EX)
             # Use RoboCasa's own GR00T wrapper. It is the environment used by
             # the official Isaac-GR00T run_eval.py protocol and already emits
             # the exact PandaOmron keys expected by the checkpoint.
-            env = RoboCasaGymEnv(
+            built_env = RoboCasaGymEnv(
                 env_name=task,
                 enable_render=True,
                 split=args.split,
             )
             fcntl.flock(_lf, fcntl.LOCK_UN)
+        return built_env, time.perf_counter() - construct_t0
+
+    for ti, task in enumerate(tasks):
         task_max_steps = args.max_steps or get_task_horizon(task)
+        env = None
+        shared_construct_seconds = None
+        if not args.fresh_env_per_trial:
+            env, shared_construct_seconds = construct_env(task)
         for trial in range(args.n_trials):
-            seed = (args.exact_seed if args.exact_seed is not None
-                    else args.seed * 1000 + ti * 10 + trial)
-            obs, _ = env.reset(seed=seed)
-            done = False
-            steps = 0
-            replan_index = 0
-            success = False
-            while not done and steps < task_max_steps:
-                send_obs = {}
-                for k in SEND_VIDEO_KEYS + SEND_STATE_KEYS + SEND_LANG_KEYS:
-                    if k not in obs:
-                        continue
-                    v = obs[k]
-                    if k.startswith("video."):
-                        # VideoToTensor expects (T, H, W, C) sequences
-                        v = np.asarray(v)
-                        if v.ndim == 3:
-                            v = v[np.newaxis, ...]
-                    elif k.startswith("state."):
-                        # state values carry (T, D) batch dims like the LIBERO
-                        # obs format
-                        v = np.asarray(v, dtype=np.float32)
-                        if v.ndim == 1:
-                            v = v[np.newaxis, :]
-                    elif isinstance(v, str):
-                        v = [v]  # language values travel as lists
-                    send_obs[k] = v
-                noise_seed = (
-                    action_noise_seed(task, seed, replan_index)
-                    if args.paired_action_noise else None
-                )
-                action_chunk = client.get_action(send_obs, action_seed=noise_seed)
-                replan_index += 1
-                chunks = _normalize_action_chunks(action_chunk)
-                chunk_len = min(
-                    args.n_action_steps,
-                    task_max_steps - steps,
-                    *(len(value) for value in chunks.values()),
-                )
-                for action_step in range(chunk_len):
-                    action = {
-                        f"action.{key}": np.atleast_1d(value[action_step])
-                        for key, value in chunks.items()
-                    }
-                    obs, reward, done, truncated, info = env.step(action)
-                    steps += 1
-                    success = bool(info.get("success", False))
-                    if success or done or truncated:
-                        done = True
-                        break
+            if args.fresh_env_per_trial:
+                env, env_construct_seconds = construct_env(task)
+            else:
+                env_construct_seconds = shared_construct_seconds if trial == 0 else 0.0
+            episode_t0 = time.perf_counter()
+            seed = (
+                args.exact_seed if args.exact_seed is not None
+                else exact_seeds[trial] if exact_seeds is not None
+                else args.seed * 1000 + ti * 10 + trial
+            )
+            try:
+                obs, _ = env.reset(seed=seed)
+                done = False
+                steps = 0
+                replan_index = 0
+                success = False
+                inference_seconds = 0.0
+                env_step_seconds = 0.0
+                while not done and steps < task_max_steps:
+                    send_obs = {}
+                    for k in SEND_VIDEO_KEYS + SEND_STATE_KEYS + SEND_LANG_KEYS:
+                        if k not in obs:
+                            continue
+                        v = obs[k]
+                        if k.startswith("video."):
+                            # VideoToTensor expects (T, H, W, C) sequences
+                            v = np.asarray(v)
+                            if v.ndim == 3:
+                                v = v[np.newaxis, ...]
+                        elif k.startswith("state."):
+                            # state values carry (T, D) batch dims like the LIBERO
+                            # obs format
+                            v = np.asarray(v, dtype=np.float32)
+                            if v.ndim == 1:
+                                v = v[np.newaxis, :]
+                        elif isinstance(v, str):
+                            v = [v]  # language values travel as lists
+                        send_obs[k] = v
+                    noise_seed = (
+                        action_noise_seed(task, seed, replan_index)
+                        if args.paired_action_noise else None
+                    )
+                    infer_t0 = time.perf_counter()
+                    action_chunk = client.get_action(send_obs, action_seed=noise_seed)
+                    inference_seconds += time.perf_counter() - infer_t0
+                    replan_index += 1
+                    chunks = _normalize_action_chunks(action_chunk)
+                    chunk_len = min(
+                        args.n_action_steps,
+                        task_max_steps - steps,
+                        *(len(value) for value in chunks.values()),
+                    )
+                    for action_step in range(chunk_len):
+                        action = {
+                            f"action.{key}": np.atleast_1d(value[action_step])
+                            for key, value in chunks.items()
+                        }
+                        step_t0 = time.perf_counter()
+                        obs, reward, done, truncated, info = env.step(action)
+                        env_step_seconds += time.perf_counter() - step_t0
+                        steps += 1
+                        success = bool(info.get("success", False))
+                        if success or done or truncated:
+                            done = True
+                            break
+            finally:
+                if args.fresh_env_per_trial and env is not None:
+                    env.close()
+                    env = None
             results.append({
                 "task": task, "trial": trial, "seed": seed,
                 "success": success, "steps": steps,
                 "max_steps": task_max_steps,
                 "n_action_steps": args.n_action_steps,
                 "replans": replan_index,
+                "env_construct_seconds": env_construct_seconds,
+                "episode_wall_seconds": time.perf_counter() - episode_t0,
+                "inference_seconds": inference_seconds,
+                "env_step_seconds": env_step_seconds,
                 "paired_action_noise": args.paired_action_noise,
                 "action_noise_scheme": (
                     ACTION_NOISE_SCHEME if args.paired_action_noise else None
@@ -309,7 +372,8 @@ def main() -> None:
             with open(out_path, "w", encoding="utf-8") as f:
                 for r in results:
                     f.write(json.dumps(r) + "\n")
-        env.close()
+        if env is not None:
+            env.close()
     n_ok = sum(1 for r in results if r["success"])
     print(f"[robocasa365-eval] done: {n_ok}/{len(results)} episodes "
           f"({n_ok / len(results):.1%}) -> {out_path}")

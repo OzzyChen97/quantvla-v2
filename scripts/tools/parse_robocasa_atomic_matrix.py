@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strict parser and task-clustered statistics for the atomic_seen matrix."""
+"""Strict accuracy/efficiency parser for a RoboCasa365 configuration matrix."""
 
 from __future__ import annotations
 
@@ -74,7 +74,21 @@ def paired_delta_ci(
 
 
 def exact_sign_flip_p(diffs: list[float]) -> float:
+    """Two-sided paired sign-flip test.
+
+    Enumerate small task sets exactly.  For an eventual 50-task aggregate,
+    use a deterministic 100,000-draw Monte Carlo estimate instead of trying
+    to enumerate 2**50 assignments.
+    """
     observed = abs(sum(diffs) / len(diffs))
+    if len(diffs) > 20:
+        rng = random.Random(20260817)
+        draws = 100_000
+        extreme = 0
+        for _ in range(draws):
+            value = abs(sum(d if rng.getrandbits(1) else -d for d in diffs) / len(diffs))
+            extreme += value >= observed - 1e-15
+        return (extreme + 1) / (draws + 1)
     extreme = 0
     total = 1 << len(diffs)
     for mask in range(total):
@@ -111,6 +125,52 @@ def holm_adjust(raw: dict[str, float]) -> dict[str, float]:
         running = max(running, min(1.0, (m - index) * p))
         adjusted[name] = running
     return adjusted
+
+
+def manifest_contrasts(manifest: dict) -> list[tuple[str, str]]:
+    raw = manifest.get("comparisons") or []
+    pairs = []
+    for entry in raw:
+        if isinstance(entry, dict):
+            pairs.append((str(entry["a"]), str(entry["b"])))
+        elif isinstance(entry, (list, tuple)) and len(entry) == 2:
+            pairs.append((str(entry[0]), str(entry[1])))
+        else:
+            raise ValueError(f"invalid comparison entry: {entry!r}")
+    if pairs:
+        return pairs
+    ids = {c["id"] for c in manifest["configs"]}
+    return [(a, b) for a, b in CONTRASTS if a in ids and b in ids]
+
+
+def gpu_efficiency(run_dir: Path) -> dict[str, dict[str, Any]]:
+    path = run_dir / "gpu_efficiency.jsonl"
+    grouped: dict[str, list[dict]] = {}
+    if not path.exists():
+        return {}
+    for line_no, line in enumerate(path.read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{path}:{line_no}: malformed GPU sample: {exc}") from exc
+        grouped.setdefault(str(row["config"]), []).append(row)
+    result = {}
+    for config, rows in grouped.items():
+        memory = [float(r["memory_used_mib"]) for r in rows]
+        util = [float(r["utilization_gpu_pct"]) for r in rows]
+        power = [float(r["power_draw_w"]) for r in rows]
+        result[config] = {
+            "samples": len(rows),
+            "peak_memory_mib": max(memory),
+            "mean_memory_mib": sum(memory) / len(memory),
+            "mean_gpu_utilization_pct": sum(util) / len(util),
+            "p95_gpu_utilization_pct": percentile(util, 0.95),
+            "mean_power_w": sum(power) / len(power),
+            "p95_power_w": percentile(power, 0.95),
+        }
+    return result
 
 
 def load_rows(run_dir: Path, manifest: dict, manifest_sha: str, allow_incomplete: bool) -> dict:
@@ -150,8 +210,9 @@ def load_rows(run_dir: Path, manifest: dict, manifest_sha: str, allow_incomplete
                 if row.get("crashed") or row.get("success") is None:
                     errors.append(f"{cid}: crashed/incomplete task/seed {key}")
                     continue
-                if row.get("paired_action_noise") is not True:
-                    errors.append(f"{cid}: unpaired action noise at {key}")
+                expected_paired = bool(manifest["protocol"].get("paired_action_noise", True))
+                if bool(row.get("paired_action_noise")) != expected_paired:
+                    errors.append(f"{cid}: action-noise mode mismatch at {key}")
                 if row.get("action_noise_scheme") != manifest["protocol"]["action_noise_scheme"]:
                     errors.append(f"{cid}: action-noise scheme mismatch at {key}")
                 rows[key] = row
@@ -175,6 +236,7 @@ def summarize(run_dir: Path, n_boot: int, allow_incomplete: bool) -> dict:
     seeds = manifest["seeds"]
     primary_tasks = manifest["heldout_tasks"] or tasks
     rng = random.Random(20260817)
+    gpu_metrics = gpu_efficiency(run_dir)
     configs = {}
     for config in manifest["configs"]:
         cid = config["id"]
@@ -197,22 +259,61 @@ def summarize(run_dir: Path, n_boot: int, allow_incomplete: bool) -> dict:
             }
         success_steps = [r["steps"] for r in rows.values() if r["success"]]
         failure_steps = [r["steps"] for r in rows.values() if not r["success"]]
+        driver_seconds = [float(r["driver_wall_seconds"]) for r in rows.values()
+                          if r.get("driver_wall_seconds") is not None]
+        episode_seconds = [float(r["episode_wall_seconds"]) for r in rows.values()
+                           if r.get("episode_wall_seconds") is not None]
+        total_replans = sum(int(r.get("replans", 0)) for r in rows.values())
+        total_steps = sum(int(r["steps"]) for r in rows.values())
+        total_inference = sum(float(r.get("inference_seconds", 0.0)) for r in rows.values())
+        total_env_step = sum(float(r.get("env_step_seconds", 0.0)) for r in rows.values())
+        env_construct = [float(r["env_construct_seconds"]) for r in rows.values()
+                         if r.get("env_construct_seconds") is not None]
+        efficiency = {
+            "driver_wall_samples": len(driver_seconds),
+            "mean_driver_wall_seconds": (
+                sum(driver_seconds) / len(driver_seconds) if driver_seconds else None
+            ),
+            "p50_driver_wall_seconds": percentile(driver_seconds, 0.50) if driver_seconds else None,
+            "p90_driver_wall_seconds": percentile(driver_seconds, 0.90) if driver_seconds else None,
+            "mean_episode_wall_seconds": (
+                sum(episode_seconds) / len(episode_seconds) if episode_seconds else None
+            ),
+            "total_replans": total_replans,
+            "mean_inference_seconds_per_replan": (
+                total_inference / total_replans if total_replans else None
+            ),
+            "mean_env_step_seconds": total_env_step / total_steps if total_steps else None,
+            "mean_env_construct_seconds": (
+                sum(env_construct) / len(env_construct) if env_construct else None
+            ),
+            "steps_per_driver_second": (
+                total_steps / sum(driver_seconds) if driver_seconds and sum(driver_seconds) else None
+            ),
+            "episodes_per_aggregate_driver_hour": (
+                3600.0 * len(driver_seconds) / sum(driver_seconds)
+                if driver_seconds and sum(driver_seconds) else None
+            ),
+            "gpu": gpu_metrics.get(cid),
+        }
         configs[cid] = {
             "per_task": rates_all,
             "per_task_details": per_task_details,
             "primary_task_macro_sr": sum(rates_primary.values()) / len(rates_primary),
             "primary_task_cluster_ci95": cluster_ci(rates_primary, n_boot, rng),
             "all18_task_macro_sr": sum(rates_all.values()) / len(rates_all),
+            "task_macro_sr": sum(rates_all.values()) / len(rates_all),
             "episode_sr": sum(bool(r["success"]) for r in rows.values()) / len(rows),
             "successes": sum(bool(r["success"]) for r in rows.values()),
             "episodes": len(rows),
             "mean_success_steps": sum(success_steps) / len(success_steps) if success_steps else None,
             "mean_failure_steps": sum(failure_steps) / len(failure_steps) if failure_steps else None,
+            "efficiency": efficiency,
         }
 
     comparisons = {}
     raw_p = {}
-    for a, b in CONTRASTS:
+    for a, b in manifest_contrasts(manifest):
         if a not in configs or b not in configs:
             continue
         rates_a = {t: configs[a]["per_task"][t] for t in primary_tasks}
@@ -230,11 +331,19 @@ def summarize(run_dir: Path, n_boot: int, allow_incomplete: bool) -> dict:
     for name, value in adjusted.items():
         comparisons[name]["holm_adjusted_p"] = value
 
-    cs_key = "cscka_adjusted_vs_ckaonly"
-    cs_cmp = comparisons.get(cs_key)
-    cs_enabled = bool(
-        cs_cmp and cs_cmp["primary_task_macro_delta"] > 0
-        and cs_cmp["task_cluster_ci95"][0] > 0
+    decision = manifest.get("decision") or {}
+    decision_name = decision.get("comparison")
+    decision_cmp = comparisons.get(decision_name) if decision_name else None
+    decision_passed = bool(
+        decision_cmp
+        and decision_cmp["primary_task_macro_delta"] > float(decision.get("min_delta", 0.0))
+        and decision_cmp["task_cluster_ci95"][0] > float(decision.get("min_ci_lower", 0.0))
+        and decision_cmp.get("holm_adjusted_p", 1.0) <= float(decision.get("max_holm_p", 0.05))
+    )
+    legacy_cmp = comparisons.get("cscka_adjusted_vs_ckaonly")
+    legacy_enable_cs = bool(
+        legacy_cmp and legacy_cmp["primary_task_macro_delta"] > 0
+        and legacy_cmp["task_cluster_ci95"][0] > 0
     )
     return {
         "manifest_sha256": manifest_sha,
@@ -244,9 +353,10 @@ def summarize(run_dir: Path, n_boot: int, allow_incomplete: bool) -> dict:
         "validation_errors": loaded["validation_errors"],
         "configs": configs,
         "comparisons": comparisons,
+        "decision": {"spec": decision, "passed": decision_passed},
         "acceptance": {
-            "enable_cs": cs_enabled,
-            "default": "cscka_adjusted" if cs_enabled else "ckaonly",
+            "enable_cs": legacy_enable_cs,
+            "default": "cscka_adjusted" if legacy_enable_cs else "ckaonly",
             "rule": "held-out delta > 0 and task-cluster bootstrap CI95 lower bound > 0",
         },
         "libero_context": {
@@ -259,18 +369,18 @@ def summarize(run_dir: Path, n_boot: int, allow_incomplete: bool) -> dict:
 
 
 def write_markdown(path: Path, summary: dict) -> None:
-    lines = ["# RoboCasa365 atomic_seen expanded ablation", ""]
+    task_set = summary.get("task_set", "RoboCasa365")
+    lines = [f"# RoboCasa365 {task_set} matrix", ""]
     lines += [
-        f"Primary held-out scope: {summary['primary_scope']['n_tasks']} tasks.  ",
-        f"Acceptance default: **{summary['acceptance']['default']}**.", "",
-        "| Config | Held-out macro SR | 95% task-cluster CI | All-18 macro SR | Episodes |",
+        f"Primary held-out scope: {summary['primary_scope']['n_tasks']} tasks.",
+        "| Config | Primary macro SR | 95% task-cluster CI | Task macro SR | Episodes |",
         "|---|---:|---:|---:|---:|",
     ]
     for cid, row in summary["configs"].items():
         ci = row["primary_task_cluster_ci95"]
         lines.append(
             f"| {cid} | {row['primary_task_macro_sr']:.3f} | "
-            f"[{ci[0]:.3f}, {ci[1]:.3f}] | {row['all18_task_macro_sr']:.3f} | "
+            f"[{ci[0]:.3f}, {ci[1]:.3f}] | {row['task_macro_sr']:.3f} | "
             f"{row['successes']}/{row['episodes']} |"
         )
     if summary["configs"]:
@@ -296,6 +406,22 @@ def write_markdown(path: Path, summary: dict) -> None:
     lines += ["", "## LIBERO context", "",
               "v1.4 macro Avg 89.2%; uniform W6 88.2%; v1.3 85.2%. "
               "These values are contextual and are not pooled with RoboCasa365.", ""]
+    lines += ["", "## Efficiency", "",
+              "| Config | Mean episode wall (s) | Env construct (s) | Inference/replan (s) | Env step (s) | Peak GPU memory (MiB) | Mean GPU util |",
+              "|---|---:|---:|---:|---:|---:|---:|"]
+    for cid, row in summary["configs"].items():
+        eff = row.get("efficiency") or {}
+        gpu = eff.get("gpu") or {}
+        def fmt(value, digits=3):
+            return "n/a" if value is None else f"{value:.{digits}f}"
+        lines.append(
+            f"| {cid} | {fmt(eff.get('mean_episode_wall_seconds'), 1)} | "
+            f"{fmt(eff.get('mean_env_construct_seconds'), 1)} | "
+            f"{fmt(eff.get('mean_inference_seconds_per_replan'))} | "
+            f"{fmt(eff.get('mean_env_step_seconds'))} | "
+            f"{fmt(gpu.get('peak_memory_mib'), 0)} | "
+            f"{fmt(gpu.get('mean_gpu_utilization_pct'), 1)}% |"
+        )
     path.write_text("\n".join(lines))
 
 
@@ -355,6 +481,8 @@ def main() -> None:
         return
     run_dir = Path(args.run_dir).resolve()
     summary = summarize(run_dir, args.bootstrap, args.allow_incomplete)
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    summary["task_set"] = manifest.get("task_set")
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     write_markdown(run_dir / "summary.md", summary)
     print(json.dumps(summary, indent=2))

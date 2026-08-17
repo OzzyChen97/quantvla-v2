@@ -789,3 +789,28 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   旧 RoboCasa 日志已移至可恢复归档
   `/home1/gyy/vla/QuantVLA_old_logs_20260817_pre_expanded/`；废弃四任务 parser 与
   旧 smoke 入口已移除，避免旧协议结果混入新汇总。
+
+## 2026-08-17：官方规模复测、paired diffusion noise 与安全提速（D-049）
+
+- 本轮调参冻结口径升级为四个预声明任务各 50 个 target scenarios；候选仍为
+  CKA:CS = {8,16,32,64}:1，主判据为四任务 macro SR，并列依次按更低
+  `D_func`、更高 CKA:CS 裁决。8:1 与 32:1 缺失的 plan-specific static-A8
+  产物已经补齐，分别校验为 100/98 个 wrapped layers；两者与 16:1、64:1
+  都固定使用同一 calibration buffer、P99.9、32 batches 和 denoising=4。
+- **paired deterministic diffusion noise 是合法的 common-random-numbers
+  方差缩减设计**：每个配置在相同 `(task, env_seed, replan_index)` 下使用相同
+  标准正态初始噪声，单个配置的边际噪声分布不变，因此适合参数选择和配对差异
+  估计。但它不是上游脚本默认的 GPU RNG 实现，正式结果必须明确标注为
+  “paired evaluation”；若要声称与上游官方单点数字完全同口径，需另做 native
+  GPU-noise 验证，不能把两种协议的结果混写。
+- runner 现已同时支持 `paired` 与 `native` manifest，旧 `get_action` 行为保持
+  不变；manifest 冻结 noise mode、checkpoint、plan/A8/ATM/pack hashes、EGL
+  device、trial seeds、batch size、timeout 与效率采样周期。
+- **安全提速**：旧 driver 每个 scenario 启动一次 Python，短任务也需要约
+  70–83 秒。新 driver 在一个子进程内批量跑 seed，但仍为每个 seed 重建环境，
+  避开已知的同一 env 第二次 reset crash；子进程 crash 时保留已完成 rows，仅
+  重试缺失 seeds。四配置 `OpenStandMixerHead × seeds 0,1` 真实 smoke 共 8/8
+  完整、0 crash，摊销后约 31–33 秒/episode，较旧日志提升约 **2.3–2.6×**。
+- efficiency 新增每 episode 的环境构造、推理、env-step 与 wall time，以及每卡
+  显存峰值/均值、GPU utilization、power；smoke 中环境构造约 5.7–6.9 秒，
+  inference 约 0.285–0.304 秒/replan，峰值显存随 mask 为 14.3–14.8 GiB。

@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "run_id": "robocasa365_cs_tuning_batch_smoke",
+  "created_at": "2026-08-17T05:42:30.617863+00:00",
+  "phase": "dev",
+  "repo": "/home1/gyy/vla/QuantVLA",
+  "spec": {
+    "path": "/home1/gyy/vla/QuantVLA/runs/robocasa365_cs_tuning_official_spec.json",
+    "sha256": "3ceb5784e3e8a58ed77d93f87a2b87662b408a7134711ce6ac682a704537a350",
+    "bytes": 2119
+  },
+  "checkpoint": {
+    "path": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000/config.json",
+    "sha256": "6713ae6e9ee07ebf30f18a231bedcf9c06f8c64595d62529b6eb175498ef0526",
+    "bytes": 1706
+  },
+  "checkpoint_path": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000",
+  "data_config": "examples.RoboCasa365.custom_data_config:RoboCasa365DataConfig",
+  "task_set": "atomic_seen",
+  "tasks": [
+    "OpenStandMixerHead"
+  ],
+  "dev_tasks": [
+    "OpenStandMixerHead"
+  ],
+  "heldout_tasks": [],
+  "seeds": [
+    0,
+    1
+  ],
+  "shards": [
+    [
+      "OpenStandMixerHead"
+    ]
+  ],
+  "task_horizons": {
+    "OpenStandMixerHead": 450
+  },
+  "comparisons": [
+    [
+      "cscka_64to1",
+      "cscka_32to1"
+    ],
+    [
+      "cscka_64to1",
+      "cscka_16to1"
+    ],
+    [
+      "cscka_64to1",
+      "cscka_8to1"
+    ]
+  ],
+  "decision": {},
+  "protocol": {
+    "split": "target",
+    "official_task_horizons": true,
+    "n_action_steps": 16,
+    "denoising_steps": 4,
+    "paired_action_noise": true,
+    "action_noise_scheme": "sha256(task,env_seed,replan_index)/torch-cpu-normal-v1",
+    "action_noise_mode": "paired",
+    "render": true,
+    "egl_devices": {
+      "cscka_8to1": 1,
+      "cscka_16to1": 2,
+      "cscka_32to1": 3,
+      "cscka_64to1": 4
+    },
+    "scenarios_per_task": 2,
+    "trial_timeout_seconds": 1800,
+    "trial_batch_size": 2,
+    "gpu_sample_interval_seconds": 2.0
+  },
+  "configs": [
+    {
+      "id": "cscka_8to1",
+      "gpu": 1,
+      "port": 5721,
+      "expected_wrapped": 100,
+      "egl_device": 1,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_8to1_adjudicated.final_plan.json",
+        "sha256": "1e3c54c8b90423d8cefdff024cb8aabbe6f83ae30e1c5180259c4db54d1b0b62",
+        "bytes": 16045
+      },
+      "packdir": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_protocolfix_d4_w4a8_b64c32ls015",
+        "sha256_tree": "2b5c02c70053df0083b87d6feeb6872ef90592491aea44851cf1bab0edd6e5c1",
+        "files": 116,
+        "bytes": 186919968
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_8to1_official_d4.npz",
+        "sha256": "5302f563c6778839a744040ace6826b1b8d482f00f3d3ac6f93bb6911725c717",
+        "bytes": 1266188
+      },
+      "atm": null,
+      "ohb": false,
+      "meta": {
+        "cka_to_cs_ratio": 8,
+        "d_func": 0.11597
+      },
+      "config_sha256": "42091f5c0cf9cfaecd5d4a01b9f6d6f01a2e0700b5d527a3a55bf75c26763934",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_cs_tuning_batch_smoke/cscka_8to1_s0.jsonl"
+      ]
+    },
+    {
+      "id": "cscka_16to1",
+      "gpu": 2,
+      "port": 5722,
+      "expected_wrapped": 100,
+      "egl_device": 2,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.final_plan.json",
+        "sha256": "70b6b0d3190c3f4ebad9a5a874f9c0ac1044143a4912020aa9fb129f66a6eeb4",
+        "bytes": 16046
+      },
+      "packdir": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_protocolfix_d4_w4a8_b64c32ls015",
+        "sha256_tree": "2b5c02c70053df0083b87d6feeb6872ef90592491aea44851cf1bab0edd6e5c1",
+        "files": 116,
+        "bytes": 186919968
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_protocolfix_d4.npz",
+        "sha256": "40a516ea3dc20cdaf73c470c6b11d6e5a5b71b9d7e47fe5af0387c8cc1682adb",
+        "bytes": 1266192
+      },
+      "atm": null,
+      "ohb": false,
+      "meta": {
+        "cka_to_cs_ratio": 16,
+        "d_func": 0.10044
+      },
+      "config_sha256": "4a065a803acfed96ba27697e69c08abf62f22dd3462c275621c501a7bbbe2a54",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_cs_tuning_batch_smoke/cscka_16to1_s0.jsonl"
+      ]
+    },
+    {
+      "id": "cscka_32to1",
+      "gpu": 3,
+      "port": 5723,
+      "expected_wrapped": 98,
+      "egl_device": 3,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_32to1_adjudicated.final_plan.json",
+        "sha256": "4ef118fbd73565b6093825ec9bb59545a06c76836227e935acdbcefc31ef0c62",
+        "bytes": 16051
+      },
+      "packdir": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_protocolfix_d4_w4a8_b64c32ls015",
+        "sha256_tree": "2b5c02c70053df0083b87d6feeb6872ef90592491aea44851cf1bab0edd6e5c1",
+        "files": 116,
+        "bytes": 186919968
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_32to1_official_d4.npz",
+        "sha256": "ac8cc8e00480eaee70363456f9947b794ba62d831b1d062bd44f7c3335659d3c",
+        "bytes": 1246972
+      },
+      "atm": null,
+      "ohb": false,
+      "meta": {
+        "cka_to_cs_ratio": 32,
+        "d_func": 0.13395
+      },
+      "config_sha256": "495c2214318b1619321a4352169b5b7d2cbaf8f852488745b8f544d05f725a6b",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_cs_tuning_batch_smoke/cscka_32to1_s0.jsonl"
+      ]
+    },
+    {
+      "id": "cscka_64to1",
+      "gpu": 4,
+      "port": 5724,
+      "expected_wrapped": 94,
+      "egl_device": 4,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.final_plan.json",
+        "sha256": "a22c187bb2ebdf5447edaf6acb1dac45b4e0ee43c9d7c83df6fc60575067da23",
+        "bytes": 16059
+      },
+      "packdir": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_protocolfix_d4_w4a8_b64c32ls015",
+        "sha256_tree": "2b5c02c70053df0083b87d6feeb6872ef90592491aea44851cf1bab0edd6e5c1",
+        "files": 116,
+        "bytes": 186919968
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_64to1_protocolfix_d4.npz",
+        "sha256": "4aa5eb72bda90057d1591512c5d3e64a18810e674b21af9f0b6d966f36652b74",
+        "bytes": 1147328
+      },
+      "atm": null,
+      "ohb": false,
+      "meta": {
+        "cka_to_cs_ratio": 64,
+        "d_func": 0.07495
+      },
+      "config_sha256": "45d0ab2d68448712abdd803382d82f935cde586ecb3bbd4c6f3a2d0fa182a2da",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_cs_tuning_batch_smoke/cscka_64to1_s0.jsonl"
+      ]
+    }
+  ]
+}

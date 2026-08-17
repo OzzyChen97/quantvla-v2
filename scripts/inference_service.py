@@ -249,7 +249,9 @@ def _runtime_info(policy) -> dict:
     modules = list(policy.model.modules())
     return {
         "wrapped_layers": count_wrapped_layers(policy.model),
+        "model_path": str(policy.model_path.resolve()),
         "plan": os.environ.get("GR00T_DUQUANT_PLAN"),
+        "packdir": os.environ.get("GR00T_DUQUANT_PACKDIR"),
         "act_scale_path": os.environ.get("GR00T_DUQUANT_ACT_SCALE_PATH"),
         "atm_enabled": os.environ.get("GR00T_ATM_ENABLE", "0") == "1",
         "ohb_enabled": os.environ.get("GR00T_OHB_ENABLE", "0") == "1",
