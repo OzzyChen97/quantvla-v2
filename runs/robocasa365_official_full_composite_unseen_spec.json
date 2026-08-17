@@ -26,6 +26,12 @@
       "id": "w4a8_atmohb",
       "gpu": 3,
       "port": 5773,
+      "replicas": [
+        {
+          "gpu": 2,
+          "port": 5772
+        }
+      ],
       "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/quantvla_v1_uniform_w4a8_composite_unseen.json",
       "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_quantvla_v1_w4a8_composite_unseen_d4.npz",
       "atm": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_quantvla_v1_w4a8_composite_unseen_d4.json",
@@ -37,6 +43,12 @@
       "id": "cscka_final",
       "gpu": 4,
       "port": 5775,
+      "replicas": [
+        {
+          "gpu": 6,
+          "port": 5774
+        }
+      ],
       "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_composite_unseen.final_plan.json",
       "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_composite_unseen_d4.npz",
       "expected_wrapped": 100,
@@ -46,6 +58,12 @@
       "id": "cscka_final_atmohb",
       "gpu": 5,
       "port": 5776,
+      "replicas": [
+        {
+          "gpu": 7,
+          "port": 5777
+        }
+      ],
       "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_composite_unseen.final_plan.json",
       "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_composite_unseen_d4.npz",
       "atm": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_cscka_16to1_composite_unseen_d4.json",

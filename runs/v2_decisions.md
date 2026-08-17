@@ -928,10 +928,36 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   checkpoint、paired noise、official horizon、chunk=16、denoising=4、render、
   plan 或 scale；显式 `(config, task, seed)` 键与确定性 noise 保证调度不改变样本。
 - 每配置的 8 个 EGL client shard 按冻结的 round-robin 映射均匀分散到用户新授权的
-  **GPU1–7**，模型 server 仍固定在 GPU1/3/4/5；这直接并行化占单局 60%–70% 的
-  render/env-step，同时避免在 GPU6/7 上复制模型或终止已有无关进程。8-shard 的
-  最大 horizon 负载约为 4-shard 的一半；考虑共享 server 排队，预计 unseen
-  墙钟缩短约 30%–45%。manifest 会冻结每个 shard 的 EGL device，最终
+  **GPU1–7**，主模型 server 固定在 GPU1/3/4/5；这直接并行化占单局 60%–70% 的
+  render/env-step。为避免 8-client 把量化 server 排队变成新瓶颈，三套量化配置
+  各增加一个数值/产物完全相同的只读模型副本：原版 W4A8→GPU2:5772、final→
+  GPU6:5774、final+ATM→GPU7:5777；8 个 shard 在主/副本间 4:4 交替，FP16 因
+  单实例吞吐最高保留 GPU1:5771。8-shard 的最大 horizon 负载约为 4-shard 的
+  一半；结合模型副本，预计 unseen 墙钟缩短约 40%–55%。manifest 会冻结每个
+  shard 的 EGL device 和 server instances，最终
   efficiency 按 task set 分栏，不把不同并发度的 latency 冒充单实例 kernel 速度。
-- GPU2/6/7 的已有进程均不终止；新增负载只有 offscreen EGL client，并在正式启动
-  前依据实时显存再次检查，不使用 GPU0。
+- GPU2/6/7 的已有进程均不终止；正式启动前按每个 EGL client 2.3GiB、FP16/
+  quant server 12/16GiB 加 2GiB guard 做实时显存门槛，不足只等待重试，不使用
+  GPU0。GPU2/6/7 均已完成真实环境 construct/reset/50-step EGL smoke。
+
+## 2026-08-18：GPU6/7 正式占用与 unseen 双 wave 自动接力（D-054）
+
+- 为避免 GPU6/7 只做 smoke 后等待 seen，提前创建完整、不可变的
+  composite_unseen manifest，并立即启动量化配置的奇数 shards `{1,3,5,7}`：
+  原版 W4A8+ATM/OHB 在 GPU2:5772、final 在 **GPU6:5774**、final+ATM/OHB
+  在 **GPU7:5777**。三个 checkpoint runtime 均严格验证通过：wrapped layers
+  分别为 116/100/100，ATM/OHB hooks 为 16/16（需要的两配置），denoising=4；
+  共 12 个正式 rollout clients，结果直接写 manifest 声明的正式文件。
+- 启动后实测 GPU6 从 3MiB 增至约 14.7GiB，GPU7 总占用约 20.2GiB（含他人约
+  2.7GiB 既有进程，未终止或驱逐），两卡均出现持续推理利用率；首批 unseen
+  episode 已写入可恢复 journal，0 crash / 0 OOM。
+- 仅等待该提前 wave 会导致 seen 结束后 GPU1/3/4/5 空转。新增互补 primary
+  wave：seen 严格完成后，GPU1 跑 FP16 全部 8 shards，GPU3/4/5 分别跑三个
+  量化配置的偶数 shards `{0,2,4,6}`，同时 GPU2/6/7 继续奇数 shards。静态覆盖
+  检查确认 `4 configs × 8 shards = 32` 项恰好一次，无重叠、无缺口；模型实例
+  映射为 FP16 全部 GPU1，三套量化配置偶数 shard→主实例、奇数 shard→副本。
+- early/primary wave 各有 kernel advisory lock；普通 full runner 在 resume/严格
+  校验前等待两把锁，并仅启动 hash 匹配后仍缺失的 shard。自动链已重启为新逻辑：
+  等 composite_seen 完整解析 → 启动 primary wave → 等两 wave 完成 → strict
+  composite_unseen parse → 50-task aggregate。这样 crash/restart 仍按
+  `(config, task, seed)` 恢复，且不会并发写同一个正式结果文件。

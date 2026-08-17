@@ -24,7 +24,7 @@ ensure_matrix() {
     local egl_pool=${6:-}
     local extra_args=()
     if [[ -n "$egl_pool" ]]; then
-        extra_args+=(--egl-device-pool "$egl_pool")
+        extra_args+=(--egl-device-pool "$egl_pool" --skip-gpu-preflight)
     fi
 
     if [[ -f "$run_dir/manifest.json" ]] && \
@@ -66,6 +66,23 @@ ensure_matrix \
     runs/robocasa365_official_full_composite_seen_paired50 \
     "$checkpoint_root/composite_seen/checkpoint-60000" \
     4
+
+# While the early replica wave continues on GPUs 2/6/7, occupy the newly
+# released primary GPUs with disjoint unseen files: all FP16 shards on GPU1
+# and even quantized shards on GPUs 3/4/5.
+until "$groot_python" scripts/tools/run_robocasa_unseen_primary_wave.py; do
+    sleep 30
+done
+
+# An optional overlap wave may already be writing half of the unseen
+# quantized shards on GPUs 2/6/7.  Wait for its supervisor lock before the
+# full runner starts, so no formal result file ever has concurrent writers.
+unseen_run_dir=runs/robocasa365_official_full_composite_unseen_paired50
+mkdir -p "$unseen_run_dir"
+exec {early_wave_lock_fd}>"$unseen_run_dir/early_wave.lock"
+flock -x "$early_wave_lock_fd"
+flock -u "$early_wave_lock_fd"
+eval "exec ${early_wave_lock_fd}>&-"
 
 ensure_matrix \
     composite_unseen \

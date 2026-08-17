@@ -19,6 +19,7 @@ checkpoint/task-set pairs used by the official 50-task benchmark.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -260,16 +261,23 @@ def egl_pool_memory_requirements(manifest: dict) -> dict[int, float]:
         gpu: 2048.0 + count * 2300.0 for gpu, count in client_counts.items()
     }
     for config in manifest["configs"]:
-        gpu = int(config["gpu"])
         server_budget = 16384.0 if int(config["expected_wrapped"]) else 12288.0
-        requirements[gpu] = requirements.get(gpu, 2048.0) + server_budget
+        server_gpus = [int(config["gpu"])] + [
+            int(replica["gpu"]) for replica in config.get("replicas", [])
+        ]
+        for gpu in server_gpus:
+            requirements[gpu] = requirements.get(gpu, 2048.0) + server_budget
     return requirements
 
 
 def monitor_gpus(
     stop: threading.Event, path: Path, configs: list[dict], interval: float
 ) -> None:
-    gpu_to_config = {int(c["gpu"]): c["id"] for c in configs}
+    gpu_to_config = {}
+    for config in configs:
+        gpu_to_config[int(config["gpu"])] = config["id"]
+        for replica in config.get("replicas", []):
+            gpu_to_config[int(replica["gpu"])] = config["id"]
     query = [
         "nvidia-smi",
         "--query-gpu=index,memory.used,utilization.gpu,power.draw",
@@ -338,14 +346,21 @@ def build_manifest(
     ids = [c.get("id") for c in configs]
     if len(ids) != len(set(ids)):
         raise SystemExit(f"duplicate config ids: {ids}")
-    gpus = [int(c["gpu"]) for c in configs]
+    server_placements = []
+    for config in configs:
+        server_placements.append((str(config["id"]), int(config["gpu"]), int(config["port"])))
+        for replica_index, replica in enumerate(config.get("replicas", []), 1):
+            server_placements.append(
+                (f"{config['id']}/r{replica_index}", int(replica["gpu"]), int(replica["port"]))
+            )
+    gpus = [gpu for _, gpu, _ in server_placements]
+    ports = [port for _, _, port in server_placements]
     if any(g not in range(1, 8) for g in gpus):
         raise SystemExit(f"only GPUs 1-7 are authorized, got {gpus}")
     if len(gpus) != len(set(gpus)):
-        raise SystemExit("each formal configuration must have its own GPU")
-    ports = [int(c["port"]) for c in configs]
+        raise SystemExit(f"each model-server instance must have its own GPU: {server_placements}")
     if len(ports) != len(set(ports)):
-        raise SystemExit("configuration ports must be unique")
+        raise SystemExit(f"model-server ports must be unique: {server_placements}")
     if trial_timeout < 1 or trial_batch_size < 1:
         raise SystemExit("trial timeout and batch size must be positive")
 
@@ -405,6 +420,12 @@ def build_manifest(
             "ohb": bool(raw.get("ohb", False)),
             "meta": raw.get("meta") or {},
         }
+        replicas = [
+            {"gpu": int(replica["gpu"]), "port": int(replica["port"])}
+            for replica in raw.get("replicas", [])
+        ]
+        if replicas:
+            config["replicas"] = replicas
         if config["expected_wrapped"] and not config["plan"]:
             raise SystemExit(f"{config['id']}: quantized config requires plan")
         if config["expected_wrapped"] and not config["act_scale"]:
@@ -463,8 +484,12 @@ def build_manifest(
             config["id"]: config["shard_egl_devices"] for config in enriched
         }
         protocol["gpu_efficiency_scope"] = (
-            "model-GPU device totals; EGL clients are distributed across shared GPUs 1-7"
+            "model-GPU device totals; replicas and EGL clients use shared GPUs 1-7"
         )
+    if any(config.get("replicas") for config in enriched):
+        protocol["server_instances"] = {
+            config["id"]: server_instances(config) for config in enriched
+        }
     return {
         "schema_version": 1,
         "run_id": run_dir.name,
@@ -504,10 +529,37 @@ def write_or_validate_manifest(path: Path, manifest: dict) -> tuple[dict, str]:
     return manifest, sha256_file(path)
 
 
-def start_server(config: dict, manifest: dict, run_dir: Path) -> tuple[subprocess.Popen, Any]:
+def wait_for_overlap_waves(run_dir: Path) -> None:
+    """Serialize the full runner with its optional disjoint overlap waves.
+
+    Lock files are persistent, but kernel locks are held only while a wave is
+    active.  Stale files are therefore harmless.  The full runner waits for
+    both waves before applying its hash-aware completion/resume pass.
+    """
+    for name in ("early_wave.lock", "primary_wave.lock"):
+        lock_path = run_dir / name
+        with open(lock_path, "a+", encoding="utf-8") as lock_handle:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+
+
+def server_instances(config: dict) -> list[dict[str, int]]:
+    return [
+        {"gpu": int(config["gpu"]), "port": int(config["port"]), "replica": 0},
+        *[
+            {"gpu": int(replica["gpu"]), "port": int(replica["port"]),
+             "replica": replica_index}
+            for replica_index, replica in enumerate(config.get("replicas", []), 1)
+        ],
+    ]
+
+
+def start_server(
+    config: dict, instance: dict, manifest: dict, run_dir: Path
+) -> tuple[subprocess.Popen, Any]:
     env = clean_server_env(os.environ)
-    env["GR00T_GPU"] = str(config["gpu"])
-    env["GR00T_PORT"] = str(config["port"])
+    env["GR00T_GPU"] = str(instance["gpu"])
+    env["GR00T_PORT"] = str(instance["port"])
     env["GR00T_DENOISING_STEPS"] = "4"
     env["GR00T_MODEL_PATH"] = manifest["checkpoint_path"]
     env["GR00T_DATA_CONFIG"] = manifest["data_config"]
@@ -517,11 +569,11 @@ def start_server(config: dict, manifest: dict, run_dir: Path) -> tuple[subproces
         env["GR00T_DUQUANT_ACT_SCALE_PATH"] = config["act_scale"]["path"]
         cmd = ["bash", str(QUANT_SERVER)]
     else:
-        env["CUDA_VISIBLE_DEVICES"] = str(config["gpu"])
+        env["CUDA_VISIBLE_DEVICES"] = str(instance["gpu"])
         cmd = [
             str(GROOT_PY), str(REPO / "scripts/inference_service.py"), "--server",
             "--model-path", manifest["checkpoint_path"], "--data-config", manifest["data_config"],
-            "--embodiment-tag", "new_embodiment", "--port", str(config["port"]),
+            "--embodiment-tag", "new_embodiment", "--port", str(instance["port"]),
             "--denoising-steps", "4",
         ]
     if config["atm"]:
@@ -533,7 +585,8 @@ def start_server(config: dict, manifest: dict, run_dir: Path) -> tuple[subproces
         env["GR00T_ATM_ENABLE"] = "0"
         env["GR00T_OHB_ENABLE"] = "0"
         env.pop("GR00T_ATM_ALPHA_PATH", None)
-    log_handle = open(run_dir / f"server_{config['id']}.log", "a", buffering=1)
+    suffix = "" if int(instance["replica"]) == 0 else f"_r{instance['replica']}"
+    log_handle = open(run_dir / f"server_{config['id']}{suffix}.log", "a", buffering=1)
     proc = subprocess.Popen(
         cmd, cwd=REPO, env=env, stdout=log_handle, stderr=subprocess.STDOUT,
         start_new_session=True,
@@ -541,14 +594,16 @@ def start_server(config: dict, manifest: dict, run_dir: Path) -> tuple[subproces
     return proc, log_handle
 
 
-def wait_and_verify(config: dict, manifest: dict, proc: subprocess.Popen, timeout: int) -> dict:
+def wait_and_verify(
+    config: dict, instance: dict, manifest: dict, proc: subprocess.Popen, timeout: int
+) -> dict:
     deadline = time.time() + timeout
     last_error = None
     while time.time() < deadline:
         if proc.poll() is not None:
             raise RuntimeError(f"server {config['id']} exited with {proc.returncode}")
         try:
-            info = call_endpoint(config["port"], "get_runtime_info")
+            info = call_endpoint(instance["port"], "get_runtime_info")
             if "error" in info:
                 raise RuntimeError(info["error"])
             if int(info.get("wrapped_layers", -1)) != config["expected_wrapped"]:
@@ -577,20 +632,69 @@ def wait_and_verify(config: dict, manifest: dict, proc: subprocess.Popen, timeou
 
 
 def start_clients(
-    manifest: dict, manifest_sha: str, run_dir: Path
+    manifest: dict, manifest_sha: str, run_dir: Path,
+    *,
+    config_ids: set[str] | None = None,
+    shard_indices: set[int] | None = None,
+    instance_mode: str = "all",
 ) -> list[tuple[subprocess.Popen, Any, str]]:
+    """Start incomplete client shards, rebalancing them over active instances.
+
+    ``instance_mode=replica_only`` is used by the overlap wave that starts the
+    unseen quantized half-matrix on GPUs 2/6/7 while seen is still running.
+    The ordinary full runner uses all instances.  On resume, completed shard
+    files are skipped and only remaining shards are round-robin redistributed.
+    """
     children = []
     seed_arg = ",".join(str(s) for s in manifest["seeds"])
     for config in manifest["configs"]:
+        if config_ids is not None and config["id"] not in config_ids:
+            continue
+        instances = server_instances(config)
+        if instance_mode == "replica_only":
+            instances = instances[1:]
+            if not instances:
+                raise RuntimeError(f"{config['id']}: replica-only execution has no replica")
+        elif instance_mode == "primary_only":
+            instances = instances[:1]
+        elif instance_mode != "all":
+            raise ValueError(f"unknown instance mode: {instance_mode}")
+        pending_shards = []
         for shard_index, tasks in enumerate(manifest["shards"]):
+            if shard_indices is not None and shard_index not in shard_indices:
+                continue
+            out_path = Path(config["result_files"][shard_index])
+            completed = set()
+            if out_path.exists():
+                for line in out_path.read_text().splitlines():
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if (
+                        row.get("success") is not None
+                        and not row.get("crashed")
+                        and row.get("config") == config["id"]
+                        and row.get("manifest_sha256") == manifest_sha
+                        and row.get("config_sha256") == config["config_sha256"]
+                    ):
+                        completed.add((row.get("task"), row.get("seed")))
+            expected = {
+                (task, seed) for task in tasks for seed in manifest["seeds"]
+            }
+            if completed >= expected:
+                continue
+            pending_shards.append((shard_index, tasks))
+        for pending_index, (shard_index, tasks) in enumerate(pending_shards):
             out = config["result_files"][shard_index]
             shard_egl_devices = config.get("shard_egl_devices")
             egl_device = (
                 int(shard_egl_devices[shard_index])
                 if shard_egl_devices else int(config["egl_device"])
             )
+            instance = instances[pending_index % len(instances)]
             cmd = [
-                str(GROOT_PY), str(DRIVER), "--port", str(config["port"]),
+                str(GROOT_PY), str(DRIVER), "--port", str(instance["port"]),
                 "--config", config["id"], "--tasks", ",".join(tasks),
                 "--n-trials", str(len(manifest["seeds"])),
                 "--trial-seeds", seed_arg, "--max-steps", "0",
@@ -629,6 +733,7 @@ def main() -> None:
     spec_path = Path(args.spec).resolve()
     run_dir = Path(args.run_dir).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
+    wait_for_overlap_waves(run_dir)
     seeds = [int(v.strip()) for v in args.seeds.split(",") if v.strip()]
     if len(seeds) != len(set(seeds)) or not seeds:
         raise SystemExit("--seeds must contain unique integers")
@@ -654,7 +759,10 @@ def main() -> None:
     manifest, manifest_sha = write_or_validate_manifest(
         run_dir / "manifest.json", manifest
     )
-    requested_gpus = [c["gpu"] for c in manifest["configs"]]
+    requested_gpus = [
+        instance["gpu"]
+        for config in manifest["configs"] for instance in server_instances(config)
+    ]
     if not args.skip_gpu_preflight:
         busy = gpu_processes()
         conflicts = {g: busy.get(g, []) for g in requested_gpus if busy.get(g)}
@@ -679,7 +787,7 @@ def main() -> None:
         if insufficient:
             raise SystemExit(f"EGL pool lacks free memory; refusing eviction: {insufficient}")
 
-    servers: list[tuple[subprocess.Popen, Any, dict]] = []
+    servers: list[tuple[subprocess.Popen, Any, dict, dict]] = []
     clients: list[tuple[subprocess.Popen, Any, str]] = []
     monitor_stop = threading.Event()
     monitor_thread = threading.Thread(
@@ -693,13 +801,23 @@ def main() -> None:
     monitor_thread.start()
     try:
         for config in manifest["configs"]:
-            proc, handle = start_server(config, manifest, run_dir)
-            servers.append((proc, handle, config))
-            print(f"[matrix] server {config['id']} pid={proc.pid} gpu={config['gpu']} port={config['port']}")
+            for instance in server_instances(config):
+                proc, handle = start_server(config, instance, manifest, run_dir)
+                servers.append((proc, handle, config, instance))
+                print(
+                    f"[matrix] server {config['id']}/r{instance['replica']} pid={proc.pid} "
+                    f"gpu={instance['gpu']} port={instance['port']}"
+                )
         runtime = {}
-        for proc, _, config in servers:
-            runtime[config["id"]] = wait_and_verify(config, manifest, proc, args.server_timeout)
-            print(f"[matrix] verified {config['id']}: {runtime[config['id']]}")
+        for proc, _, config, instance in servers:
+            runtime_key = (
+                config["id"] if int(instance["replica"]) == 0
+                else f"{config['id']}/r{instance['replica']}"
+            )
+            runtime[runtime_key] = wait_and_verify(
+                config, instance, manifest, proc, args.server_timeout
+            )
+            print(f"[matrix] verified {runtime_key}: {runtime[runtime_key]}")
         (run_dir / "runtime_info.json").write_text(json.dumps(runtime, indent=2) + "\n")
 
         clients = start_clients(manifest, manifest_sha, run_dir)
@@ -723,7 +841,7 @@ def main() -> None:
             stop_process(proc)
             if not handle.closed:
                 handle.close()
-        for proc, handle, _ in servers:
+        for proc, handle, _, _ in servers:
             if not args.keep_servers:
                 stop_process(proc)
             if not handle.closed:
