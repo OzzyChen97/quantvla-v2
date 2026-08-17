@@ -76,16 +76,32 @@ def make_robocasa365_obs(rng: np.random.Generator) -> Dict[str, Any]:
     256x256 cameras (T,H,W,C uint8) + the five state groups (T,D float32) from
     the checkpoint's own statistics.
     """
+    # Draw continuous states from the checkpoint metadata's central 98%
+    # ranges. The previous generic [-1, 1] sampler put base_position almost
+    # entirely outside its training support (x≈0.66..5.13, y≈-3.64..-0.70)
+    # and generated non-unit quaternions.
+    yaw = rng.uniform(-2.45, 2.78)
+    base_quat = np.asarray([0.0, 0.0, np.sin(yaw / 2), np.cos(yaw / 2)], dtype=np.float32)
+    eef_quat = rng.standard_normal(4).astype(np.float32)
+    eef_quat /= max(float(np.linalg.norm(eef_quat)), 1e-8)
+    if eef_quat[-1] < 0:
+        eef_quat *= -1
     return {
         "video.robot0_agentview_left": rng.integers(0, 256, (1, 256, 256, 3), dtype=np.uint8),
         "video.robot0_agentview_right": rng.integers(0, 256, (1, 256, 256, 3), dtype=np.uint8),
         "video.robot0_eye_in_hand": rng.integers(0, 256, (1, 256, 256, 3), dtype=np.uint8),
-        "state.base_position": rng.uniform(-1.0, 1.0, (1, 3)).astype(np.float32),
-        "state.base_rotation": rng.uniform(-1.0, 1.0, (1, 4)).astype(np.float32),
-        "state.end_effector_position_relative": rng.uniform(-1.0, 1.0, (1, 3)).astype(np.float32),
-        "state.end_effector_rotation_relative": rng.uniform(-1.0, 1.0, (1, 4)).astype(np.float32),
-        "state.gripper_qpos": rng.uniform(0.0, 1.0, (1, 2)).astype(np.float32),
-        "annotation.human.action.task_description": [ROBOCASA365_LANG],
+        "state.end_effector_position_relative": rng.uniform(
+            [-0.0224, -0.4913, 0.2313], [0.5440, 0.4281, 0.7073], (1, 3)
+        ).astype(np.float32),
+        "state.end_effector_rotation_relative": eef_quat[None, :],
+        "state.gripper_qpos": rng.uniform(
+            [0.0031, -0.0406], [0.0405, -0.0053], (1, 2)
+        ).astype(np.float32),
+        "state.base_position": rng.uniform(
+            [0.6646, -3.6397, 0.7000], [5.1259, -0.7034, 0.7044], (1, 3)
+        ).astype(np.float32),
+        "state.base_rotation": base_quat[None, :],
+        "annotation.human.task_description": [ROBOCASA365_LANG],
     }
 
 
@@ -382,6 +398,23 @@ def ensure_a8_calibrated(
         raise SystemExit(f"[a8-calib] {act_scale_path} does not cover all static layers")
 
     if static_scales_ready(model):
+        # Some calibration callers intentionally complete the calibrator
+        # before entering this helper (ATM/OHB collection is one example).
+        # The old early return silently skipped persistence in that case, so
+        # the formal server had to re-derive scales and the requested .npz was
+        # never created.  A ready in-memory state is valid input to
+        # save_act_scales(); persist it before returning.
+        if act_scale_path:
+            save_act_scales(model, act_scale_path, meta=act_scale_meta)
+            print(
+                f"[a8-calib] ready frozen A8 scales saved -> {act_scale_path}",
+                flush=True,
+            )
+        print(
+            f"[a8-calib] static A8 calibration already complete "
+            f"({count_wrapped_layers(model)} wrapped layers)",
+            flush=True,
+        )
         return
     warmup_forward(policy, warm_obs, warm_noises, batch_size)
     if not all_calibrated(model):

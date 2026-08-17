@@ -1,0 +1,36 @@
+{
+  "configs": [
+    {
+      "id": "ckaonly",
+      "gpu": 1,
+      "port": 5691,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_protocolfix_d4_ckaonly_adjudicated.final_plan.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_ckaonly_protocolfix_d4.npz",
+      "expected_wrapped": 90
+    },
+    {
+      "id": "cscka_2to1",
+      "gpu": 2,
+      "port": 5692,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_protocolfix_d4_cscka_adjudicated.final_plan.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_2to1_protocolfix_d4.npz",
+      "expected_wrapped": 104
+    },
+    {
+      "id": "cscka_16to1",
+      "gpu": 3,
+      "port": 5693,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.final_plan.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_protocolfix_d4.npz",
+      "expected_wrapped": 100
+    },
+    {
+      "id": "cscka_64to1",
+      "gpu": 4,
+      "port": 5694,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.final_plan.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_64to1_protocolfix_d4.npz",
+      "expected_wrapped": 94
+    }
+  ]
+}

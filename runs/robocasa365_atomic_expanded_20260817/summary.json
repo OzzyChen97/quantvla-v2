@@ -1,0 +1,1092 @@
+{
+  "manifest_sha256": "a7b9fd1ae1ef1c84048916bfabe2501277f4672584e57da9747f48b056429869",
+  "primary_scope": {
+    "tasks": [
+      "CloseBlenderLid",
+      "CloseFridge",
+      "CloseToasterOvenDoor",
+      "NavigateKitchen",
+      "OpenDrawer",
+      "PickPlaceCounterToCabinet",
+      "PickPlaceCounterToStove",
+      "PickPlaceSinkToCounter",
+      "PickPlaceToasterToCounter",
+      "SlideDishwasherRack",
+      "TurnOffStove",
+      "TurnOnElectricKettle",
+      "TurnOnMicrowave",
+      "TurnOnSinkFaucet"
+    ],
+    "n_tasks": 14
+  },
+  "secondary_scope": {
+    "tasks": [
+      "CloseBlenderLid",
+      "CloseFridge",
+      "CloseToasterOvenDoor",
+      "CoffeeSetupMug",
+      "NavigateKitchen",
+      "OpenCabinet",
+      "OpenDrawer",
+      "OpenStandMixerHead",
+      "PickPlaceCounterToCabinet",
+      "PickPlaceCounterToStove",
+      "PickPlaceDrawerToCounter",
+      "PickPlaceSinkToCounter",
+      "PickPlaceToasterToCounter",
+      "SlideDishwasherRack",
+      "TurnOffStove",
+      "TurnOnElectricKettle",
+      "TurnOnMicrowave",
+      "TurnOnSinkFaucet"
+    ],
+    "n_tasks": 18
+  },
+  "bootstrap_draws": 10000,
+  "validation_errors": [],
+  "configs": {
+    "fp16": {
+      "per_task": {
+        "CloseBlenderLid": 0.2,
+        "CloseFridge": 1.0,
+        "CloseToasterOvenDoor": 1.0,
+        "CoffeeSetupMug": 0.8,
+        "NavigateKitchen": 1.0,
+        "OpenCabinet": 0.6,
+        "OpenDrawer": 1.0,
+        "OpenStandMixerHead": 1.0,
+        "PickPlaceCounterToCabinet": 0.6,
+        "PickPlaceCounterToStove": 0.6,
+        "PickPlaceDrawerToCounter": 0.8,
+        "PickPlaceSinkToCounter": 0.8,
+        "PickPlaceToasterToCounter": 0.6,
+        "SlideDishwasherRack": 0.8,
+        "TurnOffStove": 0.6,
+        "TurnOnElectricKettle": 0.8,
+        "TurnOnMicrowave": 0.6,
+        "TurnOnSinkFaucet": 0.4
+      },
+      "per_task_details": {
+        "CloseBlenderLid": {
+          "sr": 0.2,
+          "successes": 1,
+          "episodes": 5,
+          "mean_success_steps": 828.0,
+          "mean_failure_steps": 900.0
+        },
+        "CloseFridge": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 277.4,
+          "mean_failure_steps": null
+        },
+        "CloseToasterOvenDoor": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 160.8,
+          "mean_failure_steps": null
+        },
+        "CoffeeSetupMug": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 199.0,
+          "mean_failure_steps": 600.0
+        },
+        "NavigateKitchen": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 208.2,
+          "mean_failure_steps": null
+        },
+        "OpenCabinet": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 371.0,
+          "mean_failure_steps": 1050.0
+        },
+        "OpenDrawer": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 216.0,
+          "mean_failure_steps": null
+        },
+        "OpenStandMixerHead": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 98.0,
+          "mean_failure_steps": null
+        },
+        "PickPlaceCounterToCabinet": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 244.33333333333334,
+          "mean_failure_steps": 750.0
+        },
+        "PickPlaceCounterToStove": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 222.33333333333334,
+          "mean_failure_steps": 600.0
+        },
+        "PickPlaceDrawerToCounter": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 369.0,
+          "mean_failure_steps": 750.0
+        },
+        "PickPlaceSinkToCounter": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 477.5,
+          "mean_failure_steps": 900.0
+        },
+        "PickPlaceToasterToCounter": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 305.6666666666667,
+          "mean_failure_steps": 600.0
+        },
+        "SlideDishwasherRack": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 186.75,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOffStove": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 210.33333333333334,
+          "mean_failure_steps": 750.0
+        },
+        "TurnOnElectricKettle": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 148.5,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOnMicrowave": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 170.0,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOnSinkFaucet": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 237.0,
+          "mean_failure_steps": 600.0
+        }
+      },
+      "primary_task_macro_sr": 0.7142857142857143,
+      "primary_task_cluster_ci95": [
+        0.5857142857142856,
+        0.8428571428571427
+      ],
+      "all18_task_macro_sr": 0.7333333333333334,
+      "episode_sr": 0.7333333333333333,
+      "successes": 66,
+      "episodes": 90,
+      "mean_success_steps": 245.42424242424244,
+      "mean_failure_steps": 706.25
+    },
+    "w4a8_atmohb": {
+      "per_task": {
+        "CloseBlenderLid": 0.0,
+        "CloseFridge": 0.8,
+        "CloseToasterOvenDoor": 1.0,
+        "CoffeeSetupMug": 0.6,
+        "NavigateKitchen": 0.6,
+        "OpenCabinet": 0.4,
+        "OpenDrawer": 0.8,
+        "OpenStandMixerHead": 0.6,
+        "PickPlaceCounterToCabinet": 0.4,
+        "PickPlaceCounterToStove": 0.6,
+        "PickPlaceDrawerToCounter": 0.4,
+        "PickPlaceSinkToCounter": 0.2,
+        "PickPlaceToasterToCounter": 1.0,
+        "SlideDishwasherRack": 0.6,
+        "TurnOffStove": 0.0,
+        "TurnOnElectricKettle": 0.8,
+        "TurnOnMicrowave": 0.4,
+        "TurnOnSinkFaucet": 0.2
+      },
+      "per_task_details": {
+        "CloseBlenderLid": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 5,
+          "mean_success_steps": null,
+          "mean_failure_steps": 900.0
+        },
+        "CloseFridge": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 259.0,
+          "mean_failure_steps": 900.0
+        },
+        "CloseToasterOvenDoor": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 182.2,
+          "mean_failure_steps": null
+        },
+        "CoffeeSetupMug": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 192.66666666666666,
+          "mean_failure_steps": 600.0
+        },
+        "NavigateKitchen": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 275.3333333333333,
+          "mean_failure_steps": 450.0
+        },
+        "OpenCabinet": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 647.5,
+          "mean_failure_steps": 1050.0
+        },
+        "OpenDrawer": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 246.5,
+          "mean_failure_steps": 750.0
+        },
+        "OpenStandMixerHead": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 102.66666666666667,
+          "mean_failure_steps": 450.0
+        },
+        "PickPlaceCounterToCabinet": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 236.5,
+          "mean_failure_steps": 750.0
+        },
+        "PickPlaceCounterToStove": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 294.0,
+          "mean_failure_steps": 600.0
+        },
+        "PickPlaceDrawerToCounter": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 271.5,
+          "mean_failure_steps": 750.0
+        },
+        "PickPlaceSinkToCounter": {
+          "sr": 0.2,
+          "successes": 1,
+          "episodes": 5,
+          "mean_success_steps": 359.0,
+          "mean_failure_steps": 900.0
+        },
+        "PickPlaceToasterToCounter": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 291.4,
+          "mean_failure_steps": null
+        },
+        "SlideDishwasherRack": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 170.33333333333334,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOffStove": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 5,
+          "mean_success_steps": null,
+          "mean_failure_steps": 750.0
+        },
+        "TurnOnElectricKettle": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 284.75,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOnMicrowave": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 176.0,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOnSinkFaucet": {
+          "sr": 0.2,
+          "successes": 1,
+          "episodes": 5,
+          "mean_success_steps": 371.0,
+          "mean_failure_steps": 600.0
+        }
+      },
+      "primary_task_macro_sr": 0.5285714285714286,
+      "primary_task_cluster_ci95": [
+        0.3571428571428572,
+        0.7
+      ],
+      "all18_task_macro_sr": 0.5222222222222223,
+      "episode_sr": 0.5222222222222223,
+      "successes": 47,
+      "episodes": 90,
+      "mean_success_steps": 255.89361702127658,
+      "mean_failure_steps": 708.1395348837209
+    },
+    "csonly": {
+      "per_task": {
+        "CloseBlenderLid": 0.2,
+        "CloseFridge": 1.0,
+        "CloseToasterOvenDoor": 1.0,
+        "CoffeeSetupMug": 0.6,
+        "NavigateKitchen": 0.6,
+        "OpenCabinet": 0.6,
+        "OpenDrawer": 0.4,
+        "OpenStandMixerHead": 0.8,
+        "PickPlaceCounterToCabinet": 0.4,
+        "PickPlaceCounterToStove": 0.8,
+        "PickPlaceDrawerToCounter": 0.8,
+        "PickPlaceSinkToCounter": 0.0,
+        "PickPlaceToasterToCounter": 0.8,
+        "SlideDishwasherRack": 1.0,
+        "TurnOffStove": 0.4,
+        "TurnOnElectricKettle": 0.8,
+        "TurnOnMicrowave": 0.2,
+        "TurnOnSinkFaucet": 0.6
+      },
+      "per_task_details": {
+        "CloseBlenderLid": {
+          "sr": 0.2,
+          "successes": 1,
+          "episodes": 5,
+          "mean_success_steps": 227.0,
+          "mean_failure_steps": 900.0
+        },
+        "CloseFridge": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 266.2,
+          "mean_failure_steps": null
+        },
+        "CloseToasterOvenDoor": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 199.2,
+          "mean_failure_steps": null
+        },
+        "CoffeeSetupMug": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 310.3333333333333,
+          "mean_failure_steps": 600.0
+        },
+        "NavigateKitchen": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 229.0,
+          "mean_failure_steps": 450.0
+        },
+        "OpenCabinet": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 384.3333333333333,
+          "mean_failure_steps": 1050.0
+        },
+        "OpenDrawer": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 189.0,
+          "mean_failure_steps": 750.0
+        },
+        "OpenStandMixerHead": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 103.0,
+          "mean_failure_steps": 450.0
+        },
+        "PickPlaceCounterToCabinet": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 215.5,
+          "mean_failure_steps": 750.0
+        },
+        "PickPlaceCounterToStove": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 244.0,
+          "mean_failure_steps": 600.0
+        },
+        "PickPlaceDrawerToCounter": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 288.5,
+          "mean_failure_steps": 750.0
+        },
+        "PickPlaceSinkToCounter": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 5,
+          "mean_success_steps": null,
+          "mean_failure_steps": 900.0
+        },
+        "PickPlaceToasterToCounter": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 289.5,
+          "mean_failure_steps": 600.0
+        },
+        "SlideDishwasherRack": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 184.2,
+          "mean_failure_steps": null
+        },
+        "TurnOffStove": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 234.0,
+          "mean_failure_steps": 750.0
+        },
+        "TurnOnElectricKettle": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 172.75,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOnMicrowave": {
+          "sr": 0.2,
+          "successes": 1,
+          "episodes": 5,
+          "mean_success_steps": 171.0,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOnSinkFaucet": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 234.0,
+          "mean_failure_steps": 600.0
+        }
+      },
+      "primary_task_macro_sr": 0.5857142857142857,
+      "primary_task_cluster_ci95": [
+        0.4142857142857144,
+        0.7428571428571429
+      ],
+      "all18_task_macro_sr": 0.6111111111111112,
+      "episode_sr": 0.6111111111111112,
+      "successes": 55,
+      "episodes": 90,
+      "mean_success_steps": 232.4909090909091,
+      "mean_failure_steps": 711.4285714285714
+    },
+    "ckaonly": {
+      "per_task": {
+        "CloseBlenderLid": 0.0,
+        "CloseFridge": 1.0,
+        "CloseToasterOvenDoor": 1.0,
+        "CoffeeSetupMug": 0.6,
+        "NavigateKitchen": 0.6,
+        "OpenCabinet": 0.6,
+        "OpenDrawer": 0.6,
+        "OpenStandMixerHead": 0.8,
+        "PickPlaceCounterToCabinet": 0.4,
+        "PickPlaceCounterToStove": 0.8,
+        "PickPlaceDrawerToCounter": 0.8,
+        "PickPlaceSinkToCounter": 0.4,
+        "PickPlaceToasterToCounter": 1.0,
+        "SlideDishwasherRack": 0.6,
+        "TurnOffStove": 0.0,
+        "TurnOnElectricKettle": 0.8,
+        "TurnOnMicrowave": 0.2,
+        "TurnOnSinkFaucet": 0.6
+      },
+      "per_task_details": {
+        "CloseBlenderLid": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 5,
+          "mean_success_steps": null,
+          "mean_failure_steps": 900.0
+        },
+        "CloseFridge": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 281.2,
+          "mean_failure_steps": null
+        },
+        "CloseToasterOvenDoor": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 201.8,
+          "mean_failure_steps": null
+        },
+        "CoffeeSetupMug": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 180.33333333333334,
+          "mean_failure_steps": 600.0
+        },
+        "NavigateKitchen": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 198.33333333333334,
+          "mean_failure_steps": 450.0
+        },
+        "OpenCabinet": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 437.3333333333333,
+          "mean_failure_steps": 1050.0
+        },
+        "OpenDrawer": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 187.66666666666666,
+          "mean_failure_steps": 750.0
+        },
+        "OpenStandMixerHead": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 103.0,
+          "mean_failure_steps": 450.0
+        },
+        "PickPlaceCounterToCabinet": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 215.0,
+          "mean_failure_steps": 750.0
+        },
+        "PickPlaceCounterToStove": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 252.0,
+          "mean_failure_steps": 600.0
+        },
+        "PickPlaceDrawerToCounter": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 285.75,
+          "mean_failure_steps": 750.0
+        },
+        "PickPlaceSinkToCounter": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 325.0,
+          "mean_failure_steps": 900.0
+        },
+        "PickPlaceToasterToCounter": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 288.6,
+          "mean_failure_steps": null
+        },
+        "SlideDishwasherRack": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 218.0,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOffStove": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 5,
+          "mean_success_steps": null,
+          "mean_failure_steps": 750.0
+        },
+        "TurnOnElectricKettle": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 194.25,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOnMicrowave": {
+          "sr": 0.2,
+          "successes": 1,
+          "episodes": 5,
+          "mean_success_steps": 148.0,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOnSinkFaucet": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 240.0,
+          "mean_failure_steps": 600.0
+        }
+      },
+      "primary_task_macro_sr": 0.5714285714285714,
+      "primary_task_cluster_ci95": [
+        0.39999999999999997,
+        0.7428571428571429
+      ],
+      "all18_task_macro_sr": 0.6000000000000001,
+      "episode_sr": 0.6,
+      "successes": 54,
+      "episodes": 90,
+      "mean_success_steps": 237.24074074074073,
+      "mean_failure_steps": 695.8333333333334
+    },
+    "cscka_adjusted": {
+      "per_task": {
+        "CloseBlenderLid": 0.2,
+        "CloseFridge": 1.0,
+        "CloseToasterOvenDoor": 0.8,
+        "CoffeeSetupMug": 0.8,
+        "NavigateKitchen": 0.8,
+        "OpenCabinet": 0.8,
+        "OpenDrawer": 0.4,
+        "OpenStandMixerHead": 0.6,
+        "PickPlaceCounterToCabinet": 0.4,
+        "PickPlaceCounterToStove": 0.8,
+        "PickPlaceDrawerToCounter": 0.6,
+        "PickPlaceSinkToCounter": 0.8,
+        "PickPlaceToasterToCounter": 1.0,
+        "SlideDishwasherRack": 1.0,
+        "TurnOffStove": 0.6,
+        "TurnOnElectricKettle": 0.8,
+        "TurnOnMicrowave": 0.4,
+        "TurnOnSinkFaucet": 0.4
+      },
+      "per_task_details": {
+        "CloseBlenderLid": {
+          "sr": 0.2,
+          "successes": 1,
+          "episodes": 5,
+          "mean_success_steps": 306.0,
+          "mean_failure_steps": 900.0
+        },
+        "CloseFridge": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 303.0,
+          "mean_failure_steps": null
+        },
+        "CloseToasterOvenDoor": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 160.75,
+          "mean_failure_steps": 450.0
+        },
+        "CoffeeSetupMug": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 195.75,
+          "mean_failure_steps": 600.0
+        },
+        "NavigateKitchen": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 200.25,
+          "mean_failure_steps": 450.0
+        },
+        "OpenCabinet": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 471.75,
+          "mean_failure_steps": 1050.0
+        },
+        "OpenDrawer": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 181.5,
+          "mean_failure_steps": 750.0
+        },
+        "OpenStandMixerHead": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 101.0,
+          "mean_failure_steps": 450.0
+        },
+        "PickPlaceCounterToCabinet": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 204.5,
+          "mean_failure_steps": 750.0
+        },
+        "PickPlaceCounterToStove": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 324.75,
+          "mean_failure_steps": 600.0
+        },
+        "PickPlaceDrawerToCounter": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 270.3333333333333,
+          "mean_failure_steps": 750.0
+        },
+        "PickPlaceSinkToCounter": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 328.5,
+          "mean_failure_steps": 900.0
+        },
+        "PickPlaceToasterToCounter": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 291.4,
+          "mean_failure_steps": null
+        },
+        "SlideDishwasherRack": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 198.2,
+          "mean_failure_steps": null
+        },
+        "TurnOffStove": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 223.66666666666666,
+          "mean_failure_steps": 750.0
+        },
+        "TurnOnElectricKettle": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 171.75,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOnMicrowave": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 193.5,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOnSinkFaucet": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 254.5,
+          "mean_failure_steps": 600.0
+        }
+      },
+      "primary_task_macro_sr": 0.6714285714285715,
+      "primary_task_cluster_ci95": [
+        0.5428571428571428,
+        0.8
+      ],
+      "all18_task_macro_sr": 0.6777777777777778,
+      "episode_sr": 0.6777777777777778,
+      "successes": 61,
+      "episodes": 90,
+      "mean_success_steps": 248.13114754098362,
+      "mean_failure_steps": 677.5862068965517
+    },
+    "cka_atmohb": {
+      "per_task": {
+        "CloseBlenderLid": 0.4,
+        "CloseFridge": 0.6,
+        "CloseToasterOvenDoor": 1.0,
+        "CoffeeSetupMug": 0.6,
+        "NavigateKitchen": 0.4,
+        "OpenCabinet": 0.8,
+        "OpenDrawer": 0.6,
+        "OpenStandMixerHead": 0.8,
+        "PickPlaceCounterToCabinet": 0.6,
+        "PickPlaceCounterToStove": 0.6,
+        "PickPlaceDrawerToCounter": 0.8,
+        "PickPlaceSinkToCounter": 0.8,
+        "PickPlaceToasterToCounter": 1.0,
+        "SlideDishwasherRack": 0.6,
+        "TurnOffStove": 0.4,
+        "TurnOnElectricKettle": 0.6,
+        "TurnOnMicrowave": 0.4,
+        "TurnOnSinkFaucet": 0.4
+      },
+      "per_task_details": {
+        "CloseBlenderLid": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 465.5,
+          "mean_failure_steps": 900.0
+        },
+        "CloseFridge": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 240.66666666666666,
+          "mean_failure_steps": 900.0
+        },
+        "CloseToasterOvenDoor": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 149.6,
+          "mean_failure_steps": null
+        },
+        "CoffeeSetupMug": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 197.0,
+          "mean_failure_steps": 600.0
+        },
+        "NavigateKitchen": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 224.0,
+          "mean_failure_steps": 450.0
+        },
+        "OpenCabinet": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 413.75,
+          "mean_failure_steps": 1050.0
+        },
+        "OpenDrawer": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 211.66666666666666,
+          "mean_failure_steps": 750.0
+        },
+        "OpenStandMixerHead": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 103.5,
+          "mean_failure_steps": 450.0
+        },
+        "PickPlaceCounterToCabinet": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 247.66666666666666,
+          "mean_failure_steps": 750.0
+        },
+        "PickPlaceCounterToStove": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 269.6666666666667,
+          "mean_failure_steps": 600.0
+        },
+        "PickPlaceDrawerToCounter": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 267.25,
+          "mean_failure_steps": 750.0
+        },
+        "PickPlaceSinkToCounter": {
+          "sr": 0.8,
+          "successes": 4,
+          "episodes": 5,
+          "mean_success_steps": 440.25,
+          "mean_failure_steps": 900.0
+        },
+        "PickPlaceToasterToCounter": {
+          "sr": 1.0,
+          "successes": 5,
+          "episodes": 5,
+          "mean_success_steps": 294.6,
+          "mean_failure_steps": null
+        },
+        "SlideDishwasherRack": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 175.66666666666666,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOffStove": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 352.5,
+          "mean_failure_steps": 750.0
+        },
+        "TurnOnElectricKettle": {
+          "sr": 0.6,
+          "successes": 3,
+          "episodes": 5,
+          "mean_success_steps": 124.33333333333333,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOnMicrowave": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 212.5,
+          "mean_failure_steps": 450.0
+        },
+        "TurnOnSinkFaucet": {
+          "sr": 0.4,
+          "successes": 2,
+          "episodes": 5,
+          "mean_success_steps": 255.5,
+          "mean_failure_steps": 600.0
+        }
+      },
+      "primary_task_macro_sr": 0.6,
+      "primary_task_cluster_ci95": [
+        0.5000000000000001,
+        0.7142857142857143
+      ],
+      "all18_task_macro_sr": 0.6333333333333333,
+      "episode_sr": 0.6333333333333333,
+      "successes": 57,
+      "episodes": 90,
+      "mean_success_steps": 255.08771929824562,
+      "mean_failure_steps": 654.5454545454545
+    }
+  },
+  "comparisons": {
+    "cscka_adjusted_vs_ckaonly": {
+      "a": "cscka_adjusted",
+      "b": "ckaonly",
+      "primary_task_macro_delta": 0.10000000000000002,
+      "task_cluster_ci95": [
+        -0.014285714285714275,
+        0.2285714285714286
+      ],
+      "paired_permutation_p": 0.22265625,
+      "episode_mcnemar": {
+        "a_wins": 11,
+        "b_wins": 4,
+        "two_sided_p": 0.11846923828125
+      },
+      "holm_adjusted_p": 0.890625
+    },
+    "cscka_adjusted_vs_csonly": {
+      "a": "cscka_adjusted",
+      "b": "csonly",
+      "primary_task_macro_delta": 0.08571428571428572,
+      "task_cluster_ci95": [
+        -0.028571428571428553,
+        0.21428571428571436
+      ],
+      "paired_permutation_p": 0.34375,
+      "episode_mcnemar": {
+        "a_wins": 11,
+        "b_wins": 5,
+        "two_sided_p": 0.210113525390625
+      },
+      "holm_adjusted_p": 1.0
+    },
+    "cka_atmohb_vs_ckaonly": {
+      "a": "cka_atmohb",
+      "b": "ckaonly",
+      "primary_task_macro_delta": 0.028571428571428564,
+      "task_cluster_ci95": [
+        -0.1,
+        0.15714285714285717
+      ],
+      "paired_permutation_p": 0.8359375,
+      "episode_mcnemar": {
+        "a_wins": 11,
+        "b_wins": 9,
+        "two_sided_p": 0.8238029479980469
+      },
+      "holm_adjusted_p": 1.0
+    },
+    "cka_atmohb_vs_w4a8_atmohb": {
+      "a": "cka_atmohb",
+      "b": "w4a8_atmohb",
+      "primary_task_macro_delta": 0.07142857142857142,
+      "task_cluster_ci95": [
+        -0.04285714285714289,
+        0.2
+      ],
+      "paired_permutation_p": 0.42578125,
+      "episode_mcnemar": {
+        "a_wins": 15,
+        "b_wins": 10,
+        "two_sided_p": 0.42435622215270996
+      },
+      "holm_adjusted_p": 1.0
+    }
+  },
+  "acceptance": {
+    "enable_cs": false,
+    "default": "ckaonly",
+    "rule": "held-out delta > 0 and task-cluster bootstrap CI95 lower bound > 0"
+  },
+  "libero_context": {
+    "v1.4_macro_avg": 0.892,
+    "uniform_w6_macro_avg": 0.882,
+    "v1.3_macro_avg": 0.852,
+    "note": "cross-benchmark context only; not pooled with RoboCasa365"
+  }
+}

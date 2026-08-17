@@ -486,7 +486,7 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
 ## 2026-08-16：RoboCasa365 criterion-4 五配置闭环实验启动（D-032）
 
 - 量化管线完成：scripts/run_robocasa365_quant_serve.sh（直连 inference_service：
-  robocasa365 data config + GR00T_DUQUANT_PLAN + robocasa365 pack + 
+  robocasa365 data config + GR00T_DUQUANT_PLAN + robocasa365 pack +
   GR00T_OBS_FORMAT=robocasa365 的 A8 静态校准）；
 - 5 台 server 全部就绪（A8 静态校准完成）：fp16:5570(GPU5)、uniform W6:5571、
   CS-only:5572（GPU4）、CS+CKA:5573、CKA-only:5574（GPU6）；
@@ -631,3 +631,161 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   跨进程串行化构造，永久生效；(b) 10 driver 错峰重启（每 60s 一个）。
 - 注：flock 用 repo 路径而非 /tmp（/tmp 是启动器私有 tmpfs，跨进程不可见）。
 
+
+## 2026-08-17：服务器显存泄漏→分配器自旋卡死（D-042）
+
+- **症状**：~23:00 起 criterion-4 全部 stalled、10 客户端 ~0.03 核空转；5 台
+  robocasa365 服务器瞬时 10-25 核 CPU、GPU util≈0。long 服务器正常（响应秒回），
+  仅受 load 254 拖慢。
+- **定位**（faulthandler SIGUSR1 栈转储）：w6 主线程卡在
+  `duquant_preprocess.py:628 apply_output_restore_optimized` 的生成器表达式；
+  fp16 卡在 torchvision `normalize_image`——两处均为"任意点"，真正的病因是
+  torch CUDA 分配器：**量化服务器显存泄漏**（每台 8→16GB / ~2.5h），GPU4/6
+  显存耗尽后分配器进入病态重试自旋 → 所有请求永久挂起。
+- **佐证**：全新 w6 服务器在旧服务器占用 32.7GB 下直接 OOM（44.4GB 卡）；全新
+  fp16 服务器（5568）真视频 60 步正常（97s，输出与旧服务器一致）。
+- **处理**：kill 全部 5 台旧服务器 + 10 客户端 + 10 driver；5 台服务器以原配置
+  重启（v3 日志）；driver 错峰重启；jsonl 保留真视频时代的有效 trial
+  （fp16_h1/h2 各 1），resume 自动跳过。
+- **后续**：监控 v3 服务器显存增长速率；若 ~40min 的 criterion-4 窗口内再接近
+  阈值 → 中途按需重启 + 排查泄漏点（优先查 per-request 未释放的激活缓存）。
+- 注：盲视频时代 2.5h 无楔死说明泄漏与请求路径有关、速率 ~1GB/15min/台。
+
+## 2026-08-17：criterion-4 服务器翻倍 + fp16_h2 误量化纠正（D-043）
+
+- **瓶颈**：每台服务器串行处理请求，2 client 共享 → 每 trial ~18-20min，60
+  trials 需 ~2h。
+- **处理**：每配置加一台镜像服务器（同 plan 新端口 5611-5615），h2 半区独占：
+  fp16_h2→GPU1:5611、w6_h2→GPU1:5612、csonly_h2→GPU7:5613、cscka_h2→GPU7:5614、
+  ckaonly_h2→GPU5:5615。吞吐翻倍 → ETA ~1h。
+- **纠错**：fp16_h2 初次误用 run_robocasa365_quant_serve.sh（脚本无条件导出
+  GR00T_DUQUANT_* → W4A8 包装 116 层，"plan None"），已改直启 inference_service
+  纯 fp16。其余四台镜像 plan 与主服务器一致（uniform_w6 / csonly / cscka /
+  ckaonly adjudicated）。
+- h2 五台服务器与 long s0(GPU1)/s2(GPU5) 共卡，显存 40-44.5/46GB，注意余量。
+
+## 2026-08-17：fp16_h1 纠错 + 双路重跑（D-044）
+
+- **配置纠错**：端口 5567 的所谓 fp16_h1 仍带
+  `GR00T_DUQUANT_WBITS_DEFAULT=4`，实际为 plan=None 的 116 层 W4A8；已停止该
+  server/driver，旧结果移入 `runs/robocasa365_eval/fp16_h1_invalid_20260817_0126/`
+  留档，不进入 criterion-4 汇总。
+- **trial 正确性修复**：旧 crash-tolerant driver 把 seed 在外层和 client 内层各
+  变换一次，且单-trial child 始终回写 `trial=0`，重启后会重复追加。client 新增
+  `--exact-seed`；driver 回写逻辑 trial/seed，并补齐独立启动所需
+  `PYTHONUSERBASE`、EGL device 3、NUMBA cache；parser 按 `(config, task, seed)`
+  去重，未满 12 条唯一有效 trial 时只报 PENDING。
+- **提速重跑**：GPU3 上保留已验证的纯 FP16 5568，并将 5567 以无任何 DuQuant
+  环境变量的纯 FP16 方式重启；`OpenCabinet`→5567、`OpenStandMixerHead`→5568，
+  两任务并行、每路串行 3 trials，吞吐相对单 server 约 2×。两客户端已建立 ZMQ
+  连接，GPU3 占用约 31.7/46.1GB。
+- 首次 detached driver 因缺 repo-local pyzmq 立即失败（未构造 env/未跑 episode），
+  其 6 条 crash 标记及日志已移至
+  `runs/robocasa365_eval/fp16_h1_startup_failed_20260817_0130/`，随后以修复后的
+  self-contained 环境重启。
+
+## 2026-08-17：criterion-4 官方协议对齐，旧结果与旧方案失效（D-045）
+
+- **结论：不是模型/任务不兼容，而是本地评测协议错误。** 四个任务均属于
+  RoboCasa365 `atomic_seen`，当前 `checkpoint-60000` 正是对应的官方
+  target-posttraining checkpoint；官方基准中该 checkpoint 的 atomic-seen
+  平均成功率为 68.5%。
+- 对照官方 `PandaOmronDataConfig`、`run_eval.py`、`simulation.py` 与
+  `MultistepWrapper` 后发现本地链路仍有八处错位：
+  1. state 拼接顺序错误；
+  2. action 拼接顺序错误；
+  3. 连续量错误地使用 `mean_std`（官方为 `min_max`），gripper/control-mode
+     应使用 `binary`；
+  4. eef/base quaternion 缺少 `rotation_6d` 变换；
+  5. language key 错用 `annotation.human.action.task_description`（官方为
+     `annotation.human.task_description`）；
+  6. 每次推理只执行 action chunk 的第 0 步（官方连续执行 16 步）；
+  7. 全任务固定 horizon=720（官方四任务分别为 1050/450/750/600）；
+  8. denoising=8（官方评测为 4）。
+- 修复已落到 `custom_data_config.py`、`run_robocasa365_gr00t_eval.py`、
+  `run_crit4_trial_driver.py` 及相关 smoke/sanity/解析工具；driver 的
+  `--max-steps 0` 表示使用官方 task horizon，action chunk 默认 16。
+- **纯 FP16 修复后单种子探针：3/4 成功**：OpenCabinet 193/1050 成功，
+  OpenStandMixerHead 450/450 失败，PickPlaceDrawerToCounter 295/750 成功，
+  CoffeeSetupMug 272/600 成功。单轮不能当正式 SR，但足以否定“四任务不兼容”
+  并验证协议修复；每 episode 约 25–46 秒，相比旧链路的 20–28 分钟约提速
+  30–50 倍。
+- **证据有效性修正**：此前 criterion-4 全部结果作废；D-040 中“量化 plan
+  不受污染”的判断也被本次发现推翻。旧 sensitivity/CS-only/CS+CKA/CKA-only
+  方案使用了错误 data config、language key、state 分布与 denoising=8，不能作为
+  最终 criterion-4 证据。旧文件保留归档，需在正确协议下重做 probe → selector
+  → TopK adjudication → criterion-4。
+
+## 2026-08-17：criterion-4 修复后正式结果（D-046）
+
+- 在 D-045 的官方协议下完整重做 sensitivity（W4/W6、116 个可量化 Linear +
+  16 个 DiT attention 观测项、denoising=4、16 obs、8 rollout obs × 2 paired
+  noises）→ 三态 selector → TopK D_func 裁决。
+  新的固定校准 buffer SHA256 为
+  `1f61d740384e97ec1e1d2b527591331e40cda3927190d342e2df26cc218f531c`。
+- 额外修复 selector 消融污染：默认 lambda sweep 会把混合 CKA 候选放入
+  “CS-only”、把含 CS 候选放入“CKA-only”。本轮分别限制为纯 CS、纯 CKA
+  候选池；CS+CKA 候选则保证两个系数均非零。
+- 修正后的 TopK 最终 D_func：**CKA-only 0.09157 < CS+CKA 0.13415 <
+  CS-only 0.13950**；三个最终候选分别为 flip8 / lambda(2,1) / greedy。
+- 正式闭环（每任务 3 个固定种子，官方 task horizon，chunk=16）：
+
+  | config | OpenCabinet | OpenStandMixerHead | DrawerToCounter | CoffeeSetupMug | Avg/SR |
+  |---|---:|---:|---:|---:|---:|
+  | FP16 | 3/3 | 3/3 | 2/3 | 3/3 | **11/12 = 91.7%** |
+  | uniform W6 | 2/3 | 1/3 | 2/3 | 2/3 | **7/12 = 58.3%** |
+  | CS-only | 3/3 | 2/3 | 3/3 | 1/3 | **9/12 = 75.0%** |
+  | CS+CKA(dit) | 3/3 | 2/3 | 3/3 | 1/3 | **9/12 = 75.0%** |
+  | CKA-only | 3/3 | 2/3 | 3/3 | 2/3 | **10/12 = 83.3%** |
+
+- **criterion-4 FAIL**：预注册判据要求 CS+CKA 的闭环 SR 严格高于 CS-only，
+  实测二者均为 75.0%，因此不重新启用 CS+CKA。诊断性的 CKA-only 达 83.3%，
+  与其最低 D_func 方向一致，但 n=12 的区间较宽，不能据此替代预注册判据或宣称
+  普遍显著优于 CS-only。
+- 结果目录：`runs/robocasa365_eval/v2/`（共 60 条、每配置 12 条，无 crash）；
+  D-045 前的旧数据完整归档为
+  `runs/robocasa365_eval/v2_pre_protocolfix_invalid_20260817_094749/`。
+
+## 2026-08-17：v1.4 LIBERO 四套件 Avg（D-047）
+
+- v1.4：Spatial 100.0 / Goal 84.0 / Object 94.0 / Long 78.7（118/150），
+  四套件 **macro Avg = 89.2%**；不同套件 episode 数不同时，不用总 episode
+  加权值冒充官方四套件 Avg（加权值为 257/300 = 85.7%）。
+- 同预算 uniform W6：96.0 / 86.0 / 94.0 / 76.7，macro Avg = **88.2%**，
+  因此 v1.4 **+1.0pp**。
+- v1.3 frozen：98.0 / 80.0 / 86.0 / 76.7，macro Avg = **85.2%**，
+  因此 v1.4 **+4.0pp**。
+
+## 2026-08-17：RoboCasa365 18-task 扩展消融与 CS 降噪（D-048）
+
+- **CS 噪声定位**：正确读取 116 层 sensitivity 后，`1−CKA` 对 `D_func` 的
+  Pearson/Spearman 为 **0.982/0.814**，CS 仅为 **−0.042/0.370**；旧 2:1
+  CS+CKA 最终 mask 与 CS-only 只差 1 层。因而保持 min-max/预算/护栏不变，
+  只把 CKA:CS 扫为 {8,16,32,64}:1。
+- TopK `D_func` 排名：**64:1 0.07495 < 16:1 0.10044 < 8:1 0.11597 <
+  32:1 0.13395**；64:1 也低于 CKA-only 0.09157。四任务开发集（3 paired
+  seeds）64:1 为 **11/12**，CKA-only 9/12，16:1 与旧 2:1 均 8/12，按
+  预注册规则冻结 64:1。
+- 正式矩阵：18 atomic_seen tasks × 5 seeds × 6 configs = **540/540**，
+  common-random-number diffusion noise、官方 horizon、chunk=16、denoising=4，
+  **0 crash / 0 timeout**。新增 14 个 held-out 任务为主要统计口径：
+
+  | config | held-out macro SR (95% task-cluster CI) | all-18 SR |
+  |---|---:|---:|
+  | FP16 | 71.4% [58.6, 84.3] | 66/90 = 73.3% |
+  | 原版 W4A8 + static ATM/OHB | 52.9% [35.7, 70.0] | 47/90 = 52.2% |
+  | CS-only | 58.6% [41.4, 74.3] | 55/90 = 61.1% |
+  | CKA-only | 57.1% [40.0, 74.3] | 54/90 = 60.0% |
+  | **CS+CKA 64:1** | **67.1% [54.3, 80.0]** | **61/90 = 67.8%** |
+  | CKA + static ATM/OHB | 60.0% [50.0, 71.4] | 57/90 = 63.3% |
+
+- **统计裁决**：64:1 相对 CKA-only held-out `+10.0pp`，但 task-cluster CI
+  `[-1.4,+22.9]pp`、Holm p=0.891；相对 CS-only `+8.6pp`，CI
+  `[-2.9,+21.4]pp`、Holm p=1.0。因此它是数值最优量化配置，但未达到预注册的
+  “CI 下界 > 0”启用门槛，**默认仍保留 CKA-only，CS 结论为 promising but
+  not significant**。CKA+ATM/OHB 对 CKA-only 为 +2.9pp，也不显著。
+- 完整 manifest、per-task 表、10k task bootstrap、paired permutation、Holm 与
+  McNemar：`runs/robocasa365_atomic_expanded_20260817/{summary.md,summary.json}`。
+  旧 RoboCasa 日志已移至可恢复归档
+  `/home1/gyy/vla/QuantVLA_old_logs_20260817_pre_expanded/`；废弃四任务 parser 与
+  旧 smoke 入口已移除，避免旧协议结果混入新汇总。

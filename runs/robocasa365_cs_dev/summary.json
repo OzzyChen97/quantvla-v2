@@ -1,0 +1,233 @@
+{
+  "manifest_sha256": "69e87131da891d2df25802667b3abd3a72d533becc88817a199a4f6a51529afc",
+  "primary_scope": {
+    "tasks": [
+      "OpenCabinet",
+      "OpenStandMixerHead",
+      "PickPlaceDrawerToCounter",
+      "CoffeeSetupMug"
+    ],
+    "n_tasks": 4
+  },
+  "secondary_scope": {
+    "tasks": [
+      "OpenCabinet",
+      "OpenStandMixerHead",
+      "PickPlaceDrawerToCounter",
+      "CoffeeSetupMug"
+    ],
+    "n_tasks": 4
+  },
+  "bootstrap_draws": 10000,
+  "validation_errors": [],
+  "configs": {
+    "ckaonly": {
+      "per_task": {
+        "OpenCabinet": 0.6666666666666666,
+        "OpenStandMixerHead": 0.6666666666666666,
+        "PickPlaceDrawerToCounter": 1.0,
+        "CoffeeSetupMug": 0.6666666666666666
+      },
+      "per_task_details": {
+        "OpenCabinet": {
+          "sr": 0.6666666666666666,
+          "successes": 2,
+          "episodes": 3,
+          "mean_success_steps": 317.5,
+          "mean_failure_steps": 1050.0
+        },
+        "OpenStandMixerHead": {
+          "sr": 0.6666666666666666,
+          "successes": 2,
+          "episodes": 3,
+          "mean_success_steps": 106.0,
+          "mean_failure_steps": 450.0
+        },
+        "PickPlaceDrawerToCounter": {
+          "sr": 1.0,
+          "successes": 3,
+          "episodes": 3,
+          "mean_success_steps": 253.66666666666666,
+          "mean_failure_steps": null
+        },
+        "CoffeeSetupMug": {
+          "sr": 0.6666666666666666,
+          "successes": 2,
+          "episodes": 3,
+          "mean_success_steps": 185.5,
+          "mean_failure_steps": 600.0
+        }
+      },
+      "primary_task_macro_sr": 0.7499999999999999,
+      "primary_task_cluster_ci95": [
+        0.6666666666666666,
+        0.9166666666666666
+      ],
+      "all18_task_macro_sr": 0.7499999999999999,
+      "episode_sr": 0.75,
+      "successes": 9,
+      "episodes": 12,
+      "mean_success_steps": 219.88888888888889,
+      "mean_failure_steps": 700.0
+    },
+    "cscka_2to1": {
+      "per_task": {
+        "OpenCabinet": 1.0,
+        "OpenStandMixerHead": 0.6666666666666666,
+        "PickPlaceDrawerToCounter": 0.6666666666666666,
+        "CoffeeSetupMug": 0.3333333333333333
+      },
+      "per_task_details": {
+        "OpenCabinet": {
+          "sr": 1.0,
+          "successes": 3,
+          "episodes": 3,
+          "mean_success_steps": 464.6666666666667,
+          "mean_failure_steps": null
+        },
+        "OpenStandMixerHead": {
+          "sr": 0.6666666666666666,
+          "successes": 2,
+          "episodes": 3,
+          "mean_success_steps": 110.0,
+          "mean_failure_steps": 450.0
+        },
+        "PickPlaceDrawerToCounter": {
+          "sr": 0.6666666666666666,
+          "successes": 2,
+          "episodes": 3,
+          "mean_success_steps": 246.5,
+          "mean_failure_steps": 750.0
+        },
+        "CoffeeSetupMug": {
+          "sr": 0.3333333333333333,
+          "successes": 1,
+          "episodes": 3,
+          "mean_success_steps": 165.0,
+          "mean_failure_steps": 600.0
+        }
+      },
+      "primary_task_macro_sr": 0.6666666666666666,
+      "primary_task_cluster_ci95": [
+        0.41666666666666663,
+        0.9166666666666666
+      ],
+      "all18_task_macro_sr": 0.6666666666666666,
+      "episode_sr": 0.6666666666666666,
+      "successes": 8,
+      "episodes": 12,
+      "mean_success_steps": 284.0,
+      "mean_failure_steps": 600.0
+    },
+    "cscka_16to1": {
+      "per_task": {
+        "OpenCabinet": 1.0,
+        "OpenStandMixerHead": 0.6666666666666666,
+        "PickPlaceDrawerToCounter": 0.6666666666666666,
+        "CoffeeSetupMug": 0.3333333333333333
+      },
+      "per_task_details": {
+        "OpenCabinet": {
+          "sr": 1.0,
+          "successes": 3,
+          "episodes": 3,
+          "mean_success_steps": 368.3333333333333,
+          "mean_failure_steps": null
+        },
+        "OpenStandMixerHead": {
+          "sr": 0.6666666666666666,
+          "successes": 2,
+          "episodes": 3,
+          "mean_success_steps": 107.0,
+          "mean_failure_steps": 450.0
+        },
+        "PickPlaceDrawerToCounter": {
+          "sr": 0.6666666666666666,
+          "successes": 2,
+          "episodes": 3,
+          "mean_success_steps": 268.5,
+          "mean_failure_steps": 750.0
+        },
+        "CoffeeSetupMug": {
+          "sr": 0.3333333333333333,
+          "successes": 1,
+          "episodes": 3,
+          "mean_success_steps": 174.0,
+          "mean_failure_steps": 600.0
+        }
+      },
+      "primary_task_macro_sr": 0.6666666666666666,
+      "primary_task_cluster_ci95": [
+        0.41666666666666663,
+        0.9166666666666666
+      ],
+      "all18_task_macro_sr": 0.6666666666666666,
+      "episode_sr": 0.6666666666666666,
+      "successes": 8,
+      "episodes": 12,
+      "mean_success_steps": 253.75,
+      "mean_failure_steps": 600.0
+    },
+    "cscka_64to1": {
+      "per_task": {
+        "OpenCabinet": 1.0,
+        "OpenStandMixerHead": 0.6666666666666666,
+        "PickPlaceDrawerToCounter": 1.0,
+        "CoffeeSetupMug": 1.0
+      },
+      "per_task_details": {
+        "OpenCabinet": {
+          "sr": 1.0,
+          "successes": 3,
+          "episodes": 3,
+          "mean_success_steps": 440.3333333333333,
+          "mean_failure_steps": null
+        },
+        "OpenStandMixerHead": {
+          "sr": 0.6666666666666666,
+          "successes": 2,
+          "episodes": 3,
+          "mean_success_steps": 103.5,
+          "mean_failure_steps": 450.0
+        },
+        "PickPlaceDrawerToCounter": {
+          "sr": 1.0,
+          "successes": 3,
+          "episodes": 3,
+          "mean_success_steps": 283.0,
+          "mean_failure_steps": null
+        },
+        "CoffeeSetupMug": {
+          "sr": 1.0,
+          "successes": 3,
+          "episodes": 3,
+          "mean_success_steps": 203.66666666666666,
+          "mean_failure_steps": null
+        }
+      },
+      "primary_task_macro_sr": 0.9166666666666666,
+      "primary_task_cluster_ci95": [
+        0.7499999999999999,
+        1.0
+      ],
+      "all18_task_macro_sr": 0.9166666666666666,
+      "episode_sr": 0.9166666666666666,
+      "successes": 11,
+      "episodes": 12,
+      "mean_success_steps": 271.6363636363636,
+      "mean_failure_steps": 450.0
+    }
+  },
+  "comparisons": {},
+  "acceptance": {
+    "enable_cs": false,
+    "default": "ckaonly",
+    "rule": "held-out delta > 0 and task-cluster bootstrap CI95 lower bound > 0"
+  },
+  "libero_context": {
+    "v1.4_macro_avg": 0.892,
+    "uniform_w6_macro_avg": 0.882,
+    "v1.3_macro_avg": 0.852,
+    "note": "cross-benchmark context only; not pooled with RoboCasa365"
+  }
+}

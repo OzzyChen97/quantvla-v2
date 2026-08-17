@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "run_id": "robocasa365_atomic_expanded_20260817",
+  "created_at": "2026-08-17T03:25:00.308190+00:00",
+  "phase": "formal",
+  "repo": "/home1/gyy/vla/QuantVLA",
+  "spec": {
+    "path": "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_spec.json",
+    "sha256": "787fd22377dc9b5993e2b60720be0e3d410b895f9c528cdece9a4cca41bfd1f1",
+    "bytes": 2196
+  },
+  "checkpoint": {
+    "path": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000/config.json",
+    "sha256": "6713ae6e9ee07ebf30f18a231bedcf9c06f8c64595d62529b6eb175498ef0526",
+    "bytes": 1706
+  },
+  "checkpoint_path": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000",
+  "data_config": "examples.RoboCasa365.custom_data_config:RoboCasa365DataConfig",
+  "task_set": "atomic_seen",
+  "tasks": [
+    "CloseBlenderLid",
+    "CloseFridge",
+    "CloseToasterOvenDoor",
+    "CoffeeSetupMug",
+    "NavigateKitchen",
+    "OpenCabinet",
+    "OpenDrawer",
+    "OpenStandMixerHead",
+    "PickPlaceCounterToCabinet",
+    "PickPlaceCounterToStove",
+    "PickPlaceDrawerToCounter",
+    "PickPlaceSinkToCounter",
+    "PickPlaceToasterToCounter",
+    "SlideDishwasherRack",
+    "TurnOffStove",
+    "TurnOnElectricKettle",
+    "TurnOnMicrowave",
+    "TurnOnSinkFaucet"
+  ],
+  "dev_tasks": [
+    "OpenCabinet",
+    "OpenStandMixerHead",
+    "PickPlaceDrawerToCounter",
+    "CoffeeSetupMug"
+  ],
+  "heldout_tasks": [
+    "CloseBlenderLid",
+    "CloseFridge",
+    "CloseToasterOvenDoor",
+    "NavigateKitchen",
+    "OpenDrawer",
+    "PickPlaceCounterToCabinet",
+    "PickPlaceCounterToStove",
+    "PickPlaceSinkToCounter",
+    "PickPlaceToasterToCounter",
+    "SlideDishwasherRack",
+    "TurnOffStove",
+    "TurnOnElectricKettle",
+    "TurnOnMicrowave",
+    "TurnOnSinkFaucet"
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "shards": [
+    [
+      "CloseBlenderLid",
+      "CloseToasterOvenDoor",
+      "NavigateKitchen",
+      "OpenDrawer",
+      "PickPlaceCounterToCabinet",
+      "PickPlaceDrawerToCounter",
+      "PickPlaceToasterToCounter",
+      "TurnOffStove",
+      "TurnOnMicrowave"
+    ],
+    [
+      "CloseFridge",
+      "CoffeeSetupMug",
+      "OpenCabinet",
+      "OpenStandMixerHead",
+      "PickPlaceCounterToStove",
+      "PickPlaceSinkToCounter",
+      "SlideDishwasherRack",
+      "TurnOnElectricKettle",
+      "TurnOnSinkFaucet"
+    ]
+  ],
+  "protocol": {
+    "split": "target",
+    "official_task_horizons": true,
+    "n_action_steps": 16,
+    "denoising_steps": 4,
+    "paired_action_noise": true,
+    "action_noise_scheme": "sha256(task,env_seed,replan_index)/torch-cpu-normal-v1",
+    "render": true,
+    "egl_device": 3
+  },
+  "configs": [
+    {
+      "id": "fp16",
+      "gpu": 1,
+      "port": 5701,
+      "expected_wrapped": 0,
+      "plan": null,
+      "act_scale": null,
+      "atm": null,
+      "ohb": false,
+      "config_sha256": "61c446b93bcf925f0fa961608983bd252f2d2ec319d4788e0e544ad22d58f91f",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_20260817/fp16_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_20260817/fp16_s1.jsonl"
+      ]
+    },
+    {
+      "id": "w4a8_atmohb",
+      "gpu": 2,
+      "port": 5702,
+      "expected_wrapped": 116,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/quantvla_v1_uniform_w4a8.json",
+        "sha256": "cc8fd13ec6d6800abf4651b15ad1f19274b9bcdc146a4c83ecb7200c2af646c3",
+        "bytes": 15946
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_quantvla_v1_w4a8_protocolfix_d4.npz",
+        "sha256": "0667ab4ba1deadd6832cea65ab77f10cc1845984c130156d469be20067c7aec4",
+        "bytes": 1417402
+      },
+      "atm": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_quantvla_v1_w4a8_protocolfix_d4.json",
+        "sha256": "43ef7570c979b1c547079f8ea889ab12423fa4245a78cbc4e17ed1df9af230e9",
+        "bytes": 27586
+      },
+      "ohb": true,
+      "config_sha256": "75f15f429fd8fcc222cfbb68e5e630eba28e34cd99d765eae22897a409a580a1",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_20260817/w4a8_atmohb_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_20260817/w4a8_atmohb_s1.jsonl"
+      ]
+    },
+    {
+      "id": "csonly",
+      "gpu": 3,
+      "port": 5703,
+      "expected_wrapped": 105,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_protocolfix_d4_csonly_adjudicated.final_plan.json",
+        "sha256": "98b74f49725135161e4e67a37f8c309f353bceceee1d1f41d304a462944d8a5f",
+        "bytes": 16038
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_csonly_protocolfix_d4.npz",
+        "sha256": "8d814a5fa6a34f717be94fe9ee6bf8b46f08b987d8560d2cf8b327de924e5638",
+        "bytes": 1306880
+      },
+      "atm": null,
+      "ohb": false,
+      "config_sha256": "fd3c8cd63a629f40f520a36658ebdd39f19c793e401f1932ea626ab038b54050",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_20260817/csonly_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_20260817/csonly_s1.jsonl"
+      ]
+    },
+    {
+      "id": "ckaonly",
+      "gpu": 4,
+      "port": 5704,
+      "expected_wrapped": 90,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_protocolfix_d4_ckaonly_adjudicated.final_plan.json",
+        "sha256": "f1365d5fe52f65207bc6d1d65c7f647ea805ea9dbd0b76a05b8c545aa4194e21",
+        "bytes": 16066
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_ckaonly_protocolfix_d4.npz",
+        "sha256": "252df1920a1ea3015828b71b69c112789abb184f9c283387e672eeea75874ec0",
+        "bytes": 1145792
+      },
+      "atm": null,
+      "ohb": false,
+      "config_sha256": "6eab766431af1fc3543ba515a636412fdafab3f7cb9e9c219554de26a2f9127a",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_20260817/ckaonly_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_20260817/ckaonly_s1.jsonl"
+      ]
+    },
+    {
+      "id": "cscka_adjusted",
+      "gpu": 5,
+      "port": 5705,
+      "expected_wrapped": 94,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.final_plan.json",
+        "sha256": "a22c187bb2ebdf5447edaf6acb1dac45b4e0ee43c9d7c83df6fc60575067da23",
+        "bytes": 16059
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_64to1_protocolfix_d4.npz",
+        "sha256": "4aa5eb72bda90057d1591512c5d3e64a18810e674b21af9f0b6d966f36652b74",
+        "bytes": 1147328
+      },
+      "atm": null,
+      "ohb": false,
+      "config_sha256": "70b835a4360575c0bab1991cfd52c0db4c06ff5ccb23dd2a4c1933903e3e19a5",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_20260817/cscka_adjusted_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_20260817/cscka_adjusted_s1.jsonl"
+      ]
+    },
+    {
+      "id": "cka_atmohb",
+      "gpu": 6,
+      "port": 5706,
+      "expected_wrapped": 90,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_protocolfix_d4_ckaonly_adjudicated.final_plan.json",
+        "sha256": "f1365d5fe52f65207bc6d1d65c7f647ea805ea9dbd0b76a05b8c545aa4194e21",
+        "bytes": 16066
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_ckaonly_protocolfix_d4.npz",
+        "sha256": "252df1920a1ea3015828b71b69c112789abb184f9c283387e672eeea75874ec0",
+        "bytes": 1145792
+      },
+      "atm": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_ckaonly_protocolfix_d4.json",
+        "sha256": "5a9dcf50d03fc1945f98f4a0cc1cf152e4f10c0a09d112a1827076d48009cd12",
+        "bytes": 23072
+      },
+      "ohb": true,
+      "config_sha256": "b8bac5cb29cc74838728e34da9474a999d3ee999e7951c9b11f26c48a57614d6",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_20260817/cka_atmohb_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_atomic_expanded_20260817/cka_atmohb_s1.jsonl"
+      ]
+    }
+  ]
+}

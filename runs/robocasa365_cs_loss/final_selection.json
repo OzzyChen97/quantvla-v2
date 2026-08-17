@@ -1,0 +1,84 @@
+{
+  "proxy_ranking": [
+    {
+      "ratio": 64,
+      "d_func": 0.07495230534968582,
+      "d_solver": 0.001014358946122229,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.final_plan.json",
+      "report": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.report.json",
+      "source": "flip12"
+    },
+    {
+      "ratio": 16,
+      "d_func": 0.10043752359183383,
+      "d_solver": 0.0015971572138369083,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.final_plan.json",
+      "report": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.report.json",
+      "source": "flip8"
+    },
+    {
+      "ratio": 8,
+      "d_func": 0.11596524464765805,
+      "d_solver": 0.0017831593286246061,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_8to1_adjudicated.final_plan.json",
+      "report": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_8to1_adjudicated.report.json",
+      "source": "flip8"
+    },
+    {
+      "ratio": 32,
+      "d_func": 0.1339461521963599,
+      "d_solver": 0.0023254130501300097,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_32to1_adjudicated.final_plan.json",
+      "report": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_32to1_adjudicated.report.json",
+      "source": "greedy"
+    }
+  ],
+  "dev_candidates": [
+    {
+      "ratio": 64,
+      "d_func": 0.07495230534968582,
+      "d_solver": 0.001014358946122229,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.final_plan.json",
+      "report": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.report.json",
+      "source": "flip12"
+    },
+    {
+      "ratio": 16,
+      "d_func": 0.10043752359183383,
+      "d_solver": 0.0015971572138369083,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.final_plan.json",
+      "report": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.report.json",
+      "source": "flip8"
+    }
+  ],
+  "dev_ranking": [
+    {
+      "ratio": 64,
+      "d_func": 0.07495230534968582,
+      "d_solver": 0.001014358946122229,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.final_plan.json",
+      "report": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.report.json",
+      "source": "flip12",
+      "dev_task_macro_sr": 0.9166666666666666
+    },
+    {
+      "ratio": 16,
+      "d_func": 0.10043752359183383,
+      "d_solver": 0.0015971572138369083,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.final_plan.json",
+      "report": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.report.json",
+      "source": "flip8",
+      "dev_task_macro_sr": 0.6666666666666666
+    }
+  ],
+  "selected": {
+    "ratio": 64,
+    "d_func": 0.07495230534968582,
+    "d_solver": 0.001014358946122229,
+    "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.final_plan.json",
+    "report": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.report.json",
+    "source": "flip12",
+    "dev_task_macro_sr": 0.9166666666666666
+  },
+  "selection_rule": "max dev task-macro SR; tie -> min D_func; tie -> larger CKA:CS ratio"
+}

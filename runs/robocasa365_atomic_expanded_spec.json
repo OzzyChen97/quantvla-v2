@@ -1,0 +1,54 @@
+{
+  "configs": [
+    {
+      "id": "fp16",
+      "gpu": 1,
+      "port": 5701,
+      "expected_wrapped": 0
+    },
+    {
+      "id": "w4a8_atmohb",
+      "gpu": 2,
+      "port": 5702,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/quantvla_v1_uniform_w4a8.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_quantvla_v1_w4a8_protocolfix_d4.npz",
+      "atm": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_quantvla_v1_w4a8_protocolfix_d4.json",
+      "ohb": true,
+      "expected_wrapped": 116
+    },
+    {
+      "id": "csonly",
+      "gpu": 3,
+      "port": 5703,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_protocolfix_d4_csonly_adjudicated.final_plan.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_csonly_protocolfix_d4.npz",
+      "expected_wrapped": 105
+    },
+    {
+      "id": "ckaonly",
+      "gpu": 4,
+      "port": 5704,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_protocolfix_d4_ckaonly_adjudicated.final_plan.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_ckaonly_protocolfix_d4.npz",
+      "expected_wrapped": 90
+    },
+    {
+      "id": "cscka_adjusted",
+      "gpu": 5,
+      "port": 5705,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.final_plan.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_64to1_protocolfix_d4.npz",
+      "expected_wrapped": 94
+    },
+    {
+      "id": "cka_atmohb",
+      "gpu": 6,
+      "port": 5706,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_protocolfix_d4_ckaonly_adjudicated.final_plan.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_ckaonly_protocolfix_d4.npz",
+      "atm": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_ckaonly_protocolfix_d4.json",
+      "ohb": true,
+      "expected_wrapped": 90
+    }
+  ]
+}

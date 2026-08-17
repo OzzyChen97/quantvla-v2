@@ -17,6 +17,8 @@ export PYTHONPATH="$REPO/code:$REPO/scripts/tools:${PYTHONPATH:-}"
 PY=/home1/gyy/probe/miniforge3/envs/groot_test/bin/python
 export CUDA_VISIBLE_DEVICES=${GR00T_GPU:-4}
 PORT=${GR00T_PORT:-5571}
+DENOISING_STEPS=${GR00T_DENOISING_STEPS:-4}
+export GR00T_DENOISING_STEPS="$DENOISING_STEPS"
 
 MODEL_PATH=${GR00T_MODEL_PATH:-$REPO/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000}
 DATA_CONFIG=${GR00T_DATA_CONFIG:-examples.RoboCasa365.custom_data_config:RoboCasa365DataConfig}
@@ -47,4 +49,4 @@ exec "$PY" scripts/inference_service.py --server \
     --data-config "$DATA_CONFIG" \
     --embodiment-tag new_embodiment \
     --port "$PORT" \
-    --denoising-steps 8
+    --denoising-steps "$DENOISING_STEPS"

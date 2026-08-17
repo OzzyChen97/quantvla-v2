@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import gc
+import hashlib
 import json
 import math
 import sys
@@ -58,7 +59,7 @@ from gr00t_v2_common import (  # noqa: E402
     chunked,
     ensure_flash_attn_rpath,
     load_policy,
-    make_l1_obs,
+    make_obs,
     make_noises,
     resolve_data_config,
     set_quant_env,
@@ -287,10 +288,20 @@ def run_collection_pass(
 # --------------------------------------------------------------------------- #
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="P2-G data-free per-step ATM/OHB calibration (GR00T)")
-    p.add_argument("--suite", default="spatial", choices=["spatial", "goal", "object", "90", "10"])
+    p.add_argument(
+        "--suite",
+        default="spatial",
+        choices=["spatial", "goal", "object", "90", "10", "robocasa365_atomic"],
+    )
     p.add_argument("--model-path", default=None)
     p.add_argument("--data-config", default=None,
                    help="Default: resolved per suite via SUITE_DATA_CONFIG (goal -> MeanStd).")
+    p.add_argument(
+        "--obs-format",
+        default=None,
+        choices=["libero", "gr1", "robocasa365"],
+        help="Synthetic observation format; defaults to robocasa365 for that suite.",
+    )
     p.add_argument("--device", default="cuda")
     p.add_argument("--denoising-steps", type=int, default=8)
     p.add_argument("--n-obs", type=int, default=16)
@@ -304,6 +315,12 @@ def parse_args() -> argparse.Namespace:
                         "otherwise alpha/beta are calibrated on a different act mode.")
     p.add_argument("--row-rot", default="restore")
     p.add_argument("--calib-steps", type=int, default=32)
+    p.add_argument(
+        "--calibration-seed",
+        type=int,
+        default=0,
+        help="Fixed A8 calibration-buffer seed; deployment uses seed 0.",
+    )
     p.add_argument("--include", default=DEFAULT_INCLUDE)
     p.add_argument("--exclude", default=DEFAULT_EXCLUDE)
     p.add_argument("--packdir", default=None)
@@ -402,6 +419,8 @@ def main() -> None:
         return
 
     args.data_config = resolve_data_config(args.suite, args.data_config)
+    if args.obs_format is None:
+        args.obs_format = "robocasa365" if args.suite == "robocasa365_atomic" else "libero"
     suite_dir = SUITE_DIRS[args.suite]
     if args.model_path is None:
         args.model_path = str(REPO_ROOT / "checkpoints" / "gr00t" / suite_dir)
@@ -424,7 +443,7 @@ def main() -> None:
     print(f"[calibrate-perstep] out={args.out}")
     print("=" * 100)
 
-    obs_list = [make_l1_obs(rng) for _ in range(args.n_obs)]
+    obs_list = [make_obs(rng, args.obs_format) for _ in range(args.n_obs)]
 
     # ---------------- teacher (FP16) ----------------
     saved_env = strip_quant_env()
@@ -474,8 +493,8 @@ def main() -> None:
     n_warm_obs = args.calib_steps * args.batch_size
     print(f"[calibrate-perstep] A8 calibration: {n_warm_obs} obs = {args.calib_steps} batches ...")
     warm_obs, warm_noises, warm_sha = fixed_calibration_buffer(
-        1, n_warm_obs, int(policy_q.model.action_head.config.action_horizon),
-        int(policy_q.model.action_head.config.action_dim), fmt="libero"
+        args.calibration_seed, n_warm_obs, int(policy_q.model.action_head.config.action_horizon),
+        int(policy_q.model.action_head.config.action_dim), fmt=args.obs_format
     )
     for batched_obs, batched_noise in chunked(warm_obs, warm_noises, args.batch_size):
         norm = policy_q.apply_transforms(batched_obs)
@@ -494,16 +513,25 @@ def main() -> None:
         expected_wrapped = sum(
             1 for v in (_plan_doc.get("layers") or {}).values() if not v.get("skip")
         )
+    plan_sha = None
+    if args.plan:
+        with open(args.plan, "rb") as f:
+            plan_sha = hashlib.sha256(f.read()).hexdigest()
     ensure_a8_calibrated(
         policy_q, warm_obs, warm_noises, args.batch_size,
         act_dynamic=args.act_dynamic, expected_wrapped=expected_wrapped,
         act_scale_path=args.act_scale_path,
         act_scale_meta={
             "buffer_sha256": warm_sha,
+            "calibration_seed": args.calibration_seed,
             "data_config": args.data_config,
+            "obs_format": args.obs_format,
             "act_percentile": args.act_pct,
             "calib_batches": args.calib_steps,
             "denoising_steps": args.denoising_steps,
+            "plan_sha256": plan_sha,
+            "checkpoint_path": str(Path(args.model_path).resolve()),
+            "wrapped_layers": expected_wrapped,
         },
     )
 

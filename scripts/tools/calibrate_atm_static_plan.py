@@ -22,6 +22,7 @@ Usage (groot_test env, one idle GPU):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -30,9 +31,17 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _sha256(path: str) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="v1.4 static plan-specific ATM/OHB calibration wrapper")
-    p.add_argument("--suite", default="spatial", choices=["spatial", "goal", "object", "90", "10"])
+    p.add_argument(
+        "--suite",
+        default="spatial",
+        choices=["spatial", "goal", "object", "90", "10", "robocasa365_atomic"],
+    )
     p.add_argument("--plan", required=True, help="v1.4 quant plan JSON (final_plan).")
     p.add_argument("--act-scale-path", default=None,
                    help="Shared plan-specific A8 scale artifact (.npz).")
@@ -85,6 +94,9 @@ def main() -> None:
         json.dump({
             "static_only": True,
             "plan": args.plan,
+            "plan_sha256": _sha256(args.plan),
+            "act_scale_path": args.act_scale_path,
+            "act_scale_sha256": _sha256(args.act_scale_path) if args.act_scale_path else None,
             "per_step_source": tmp_out,
             "plan_marks": sidecar.get("plan_marks", {}),
             "cv_stats": sidecar.get("cv_stats", {}),

@@ -35,7 +35,11 @@ COMPUTE_DTYPE = torch.bfloat16
 
 class BasePolicy(ABC):
     @abstractmethod
-    def get_action(self, observations: Dict[str, Any]) -> Dict[str, Any]:
+    def get_action(
+        self,
+        observations: Dict[str, Any],
+        action_noise: torch.Tensor | np.ndarray | None = None,
+    ) -> Dict[str, Any]:
         """
         Abstract method to get the action for a given state.
 
@@ -144,7 +148,11 @@ class Gr00tPolicy(BasePolicy):
         """
         return self._modality_transform.unapply(action)
 
-    def get_action(self, observations: Dict[str, Any]) -> Dict[str, Any]:
+    def get_action(
+        self,
+        observations: Dict[str, Any],
+        action_noise: torch.Tensor | np.ndarray | None = None,
+    ) -> Dict[str, Any]:
         """
         Make a prediction with the model.
         Args:
@@ -179,17 +187,27 @@ class Gr00tPolicy(BasePolicy):
                 obs_copy[k] = np.array(v)
 
         normalized_input = self.apply_transforms(obs_copy)
-        normalized_action = self._get_action_from_normalized_input(normalized_input)
+        normalized_action = self._get_action_from_normalized_input(
+            normalized_input, action_noise=action_noise
+        )
         unnormalized_action = self._get_unnormalized_action(normalized_action)
 
         if not is_batch:
             unnormalized_action = squeeze_dict_values(unnormalized_action)
         return unnormalized_action
 
-    def _get_action_from_normalized_input(self, normalized_input: Dict[str, Any]) -> torch.Tensor:
+    def _get_action_from_normalized_input(
+        self,
+        normalized_input: Dict[str, Any],
+        action_noise: torch.Tensor | np.ndarray | None = None,
+    ) -> torch.Tensor:
         # Set up autocast context if needed
+        if action_noise is not None and not isinstance(action_noise, torch.Tensor):
+            action_noise = torch.as_tensor(action_noise)
         with torch.inference_mode(), torch.autocast(device_type="cuda", dtype=COMPUTE_DTYPE):
-            model_pred = self.model.get_action(normalized_input)
+            model_pred = self.model.get_action(
+                normalized_input, action_noise=action_noise
+            )
 
         normalized_action = model_pred["action_pred"].float()
         return normalized_action

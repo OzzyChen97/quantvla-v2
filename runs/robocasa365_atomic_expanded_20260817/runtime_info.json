@@ -1,0 +1,68 @@
+{
+  "fp16": {
+    "wrapped_layers": 0,
+    "plan": null,
+    "act_scale_path": null,
+    "atm_enabled": false,
+    "ohb_enabled": false,
+    "atm_path": null,
+    "atm_layers": 0,
+    "ohb_layers": 0,
+    "denoising_steps": 4
+  },
+  "w4a8_atmohb": {
+    "wrapped_layers": 116,
+    "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/quantvla_v1_uniform_w4a8.json",
+    "act_scale_path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_quantvla_v1_w4a8_protocolfix_d4.npz",
+    "atm_enabled": true,
+    "ohb_enabled": true,
+    "atm_path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_quantvla_v1_w4a8_protocolfix_d4.json",
+    "atm_layers": 16,
+    "ohb_layers": 16,
+    "denoising_steps": 4
+  },
+  "csonly": {
+    "wrapped_layers": 105,
+    "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_protocolfix_d4_csonly_adjudicated.final_plan.json",
+    "act_scale_path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_csonly_protocolfix_d4.npz",
+    "atm_enabled": false,
+    "ohb_enabled": false,
+    "atm_path": null,
+    "atm_layers": 0,
+    "ohb_layers": 0,
+    "denoising_steps": 4
+  },
+  "ckaonly": {
+    "wrapped_layers": 90,
+    "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_protocolfix_d4_ckaonly_adjudicated.final_plan.json",
+    "act_scale_path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_ckaonly_protocolfix_d4.npz",
+    "atm_enabled": false,
+    "ohb_enabled": false,
+    "atm_path": null,
+    "atm_layers": 0,
+    "ohb_layers": 0,
+    "denoising_steps": 4
+  },
+  "cscka_adjusted": {
+    "wrapped_layers": 94,
+    "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_64to1_adjudicated.final_plan.json",
+    "act_scale_path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_64to1_protocolfix_d4.npz",
+    "atm_enabled": false,
+    "ohb_enabled": false,
+    "atm_path": null,
+    "atm_layers": 0,
+    "ohb_layers": 0,
+    "denoising_steps": 4
+  },
+  "cka_atmohb": {
+    "wrapped_layers": 90,
+    "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_protocolfix_d4_ckaonly_adjudicated.final_plan.json",
+    "act_scale_path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_ckaonly_protocolfix_d4.npz",
+    "atm_enabled": true,
+    "ohb_enabled": true,
+    "atm_path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_ckaonly_protocolfix_d4.json",
+    "atm_layers": 16,
+    "ohb_layers": 16,
+    "denoising_steps": 4
+  }
+}
