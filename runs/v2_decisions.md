@@ -874,3 +874,33 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   denoising、render 或 paired-noise 协议；不可变 manifest 会记录实际 shards。
   16 client 的 CPU 需求远低于 128 核容量，EGL 构造仍按物理设备加锁串行，
   rollout 保持并发，预计将 composite 墙钟时间降低约 2 倍。
+
+## 2026-08-17：official atomic_seen 18-task × 50-scenario 结果（D-052）
+
+- atomic_seen 正式矩阵 **3600/3600** rows 完整（18 tasks × 50 scenarios ×
+  4 configs），0 crash / 0 timeout；严格 parser 对 manifest/config hash、task、
+  seed、paired noise 和矩阵完整性检查均通过。
+
+  | config | 18-task macro SR (95% task-cluster CI) | episodes |
+  |---|---:|---:|
+  | FP16 | **75.6% [68.8, 81.8]** | 680/900 |
+  | 原版 W4A8 + static ATM/OHB | 49.6% [39.4, 59.7] | 446/900 |
+  | **CS+CKA final (16:1)** | **69.0% [61.4, 75.9]** | 621/900 |
+  | CS+CKA final + static ATM/OHB | 66.7% [57.1, 75.3] | 600/900 |
+
+- 预注册配对比较：final 相对原版 W4A8+ATM/OHB **+19.4pp**，task-cluster
+  CI `[+13.8,+25.2]pp`，Holm p=0.000076；final 相对 FP16 `-6.6pp`，CI
+  `[-10.2,-3.1]pp`，Holm p=0.0067。给 final 加 static ATM/OHB 为
+  `-2.3pp`，CI `[-5.7,+0.6]pp`、Holm p=0.209，点估计为负且不显著，atomic
+  不支持启用该校正。
+- efficiency（mean episode wall / inference per replan / peak GPU memory / mean
+  GPU memory）：FP16 `26.9s / 0.139s / 12.8GiB / 10.4GiB`；原版 W4A8+ATM
+  `37.5s / 0.268s / 18.0GiB / 15.7GiB`；final `30.9s / 0.254s / 17.7GiB /
+  15.2GiB`；final+ATM `31.6s / 0.259s / 17.7GiB / 15.2GiB`。环境 step
+  四配置均约 0.048s，差异主要来自推理和任务成功/失败 horizon。
+- 结果与完整 per-task/统计/效率表：
+  `runs/robocasa365_official_full_atomic_paired50/{summary.json,summary.md}`。
+- composite formal 启动时发现 formal 阶段错误校验默认 atomic
+  `--smoke-task OpenCabinet`；修复为仅在 `phase=smoke` 时校验。错误发生在
+  manifest/server 创建前，没有产生 episode；修复后 composite_seen 的 4×4
+  driver 与 checkpoint-specific runtime 校验均成功。

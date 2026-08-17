@@ -1,0 +1,341 @@
+{
+  "schema_version": 1,
+  "run_id": "robocasa365_official_full_atomic_paired50",
+  "created_at": "2026-08-17T07:37:30.302764+00:00",
+  "phase": "formal",
+  "repo": "/home1/gyy/vla/QuantVLA",
+  "spec": {
+    "path": "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_atomic_spec.json",
+    "sha256": "0786e34ac0e6f9be7883e7ce5415a6de0f82993369c9151d756ccb99c763475b",
+    "bytes": 2347
+  },
+  "checkpoint": {
+    "path": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000/config.json",
+    "sha256": "6713ae6e9ee07ebf30f18a231bedcf9c06f8c64595d62529b6eb175498ef0526",
+    "bytes": 1706
+  },
+  "checkpoint_path": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/atomic_seen/checkpoint-60000",
+  "data_config": "examples.RoboCasa365.custom_data_config:RoboCasa365DataConfig",
+  "task_set": "atomic_seen",
+  "tasks": [
+    "CloseBlenderLid",
+    "CloseFridge",
+    "CloseToasterOvenDoor",
+    "CoffeeSetupMug",
+    "NavigateKitchen",
+    "OpenCabinet",
+    "OpenDrawer",
+    "OpenStandMixerHead",
+    "PickPlaceCounterToCabinet",
+    "PickPlaceCounterToStove",
+    "PickPlaceDrawerToCounter",
+    "PickPlaceSinkToCounter",
+    "PickPlaceToasterToCounter",
+    "SlideDishwasherRack",
+    "TurnOffStove",
+    "TurnOnElectricKettle",
+    "TurnOnMicrowave",
+    "TurnOnSinkFaucet"
+  ],
+  "dev_tasks": [],
+  "heldout_tasks": [
+    "CloseBlenderLid",
+    "CloseFridge",
+    "CloseToasterOvenDoor",
+    "CoffeeSetupMug",
+    "NavigateKitchen",
+    "OpenCabinet",
+    "OpenDrawer",
+    "OpenStandMixerHead",
+    "PickPlaceCounterToCabinet",
+    "PickPlaceCounterToStove",
+    "PickPlaceDrawerToCounter",
+    "PickPlaceSinkToCounter",
+    "PickPlaceToasterToCounter",
+    "SlideDishwasherRack",
+    "TurnOffStove",
+    "TurnOnElectricKettle",
+    "TurnOnMicrowave",
+    "TurnOnSinkFaucet"
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49
+  ],
+  "shards": [
+    [
+      "OpenCabinet",
+      "PickPlaceSinkToCounter",
+      "PickPlaceCounterToCabinet",
+      "TurnOffStove",
+      "PickPlaceCounterToStove",
+      "TurnOnSinkFaucet",
+      "NavigateKitchen",
+      "SlideDishwasherRack",
+      "TurnOnMicrowave"
+    ],
+    [
+      "CloseBlenderLid",
+      "CloseFridge",
+      "OpenDrawer",
+      "PickPlaceDrawerToCounter",
+      "CoffeeSetupMug",
+      "PickPlaceToasterToCounter",
+      "CloseToasterOvenDoor",
+      "OpenStandMixerHead",
+      "TurnOnElectricKettle"
+    ]
+  ],
+  "task_horizons": {
+    "CloseBlenderLid": 900,
+    "CloseFridge": 900,
+    "CloseToasterOvenDoor": 450,
+    "CoffeeSetupMug": 600,
+    "NavigateKitchen": 450,
+    "OpenCabinet": 1050,
+    "OpenDrawer": 750,
+    "OpenStandMixerHead": 450,
+    "PickPlaceCounterToCabinet": 750,
+    "PickPlaceCounterToStove": 600,
+    "PickPlaceDrawerToCounter": 750,
+    "PickPlaceSinkToCounter": 900,
+    "PickPlaceToasterToCounter": 600,
+    "SlideDishwasherRack": 450,
+    "TurnOffStove": 750,
+    "TurnOnElectricKettle": 450,
+    "TurnOnMicrowave": 450,
+    "TurnOnSinkFaucet": 600
+  },
+  "comparisons": [
+    [
+      "w4a8_atmohb",
+      "fp16"
+    ],
+    [
+      "cscka_final",
+      "fp16"
+    ],
+    [
+      "cscka_final",
+      "w4a8_atmohb"
+    ],
+    [
+      "cscka_final_atmohb",
+      "cscka_final"
+    ],
+    [
+      "cscka_final_atmohb",
+      "w4a8_atmohb"
+    ]
+  ],
+  "decision": {
+    "final_config": "cscka_final",
+    "cka_to_cs_ratio": 16,
+    "selection_tasks": [
+      "OpenCabinet",
+      "OpenStandMixerHead",
+      "PickPlaceDrawerToCounter",
+      "CoffeeSetupMug"
+    ],
+    "selection_scenarios_per_task": 50,
+    "selection_successes": 161,
+    "selection_macro_sr": 0.805
+  },
+  "protocol": {
+    "split": "target",
+    "official_task_horizons": true,
+    "n_action_steps": 16,
+    "denoising_steps": 4,
+    "paired_action_noise": true,
+    "action_noise_scheme": "sha256(task,env_seed,replan_index)/torch-cpu-normal-v1",
+    "action_noise_mode": "paired",
+    "render": true,
+    "egl_devices": {
+      "fp16": 1,
+      "w4a8_atmohb": 3,
+      "cscka_final": 4,
+      "cscka_final_atmohb": 5
+    },
+    "scenarios_per_task": 50,
+    "trial_timeout_seconds": 3600,
+    "trial_batch_size": 10,
+    "gpu_sample_interval_seconds": 10.0
+  },
+  "configs": [
+    {
+      "id": "fp16",
+      "gpu": 1,
+      "port": 5751,
+      "expected_wrapped": 0,
+      "egl_device": 1,
+      "plan": null,
+      "packdir": null,
+      "act_scale": null,
+      "atm": null,
+      "ohb": false,
+      "meta": {},
+      "config_sha256": "61bfb32c96915b0be5d67a5babdbeddf2e05211fee4f8f7897a567dcec040501",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_atomic_paired50/fp16_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_atomic_paired50/fp16_s1.jsonl"
+      ]
+    },
+    {
+      "id": "w4a8_atmohb",
+      "gpu": 3,
+      "port": 5753,
+      "expected_wrapped": 116,
+      "egl_device": 3,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/quantvla_v1_uniform_w4a8.json",
+        "sha256": "cc8fd13ec6d6800abf4651b15ad1f19274b9bcdc146a4c83ecb7200c2af646c3",
+        "bytes": 15946
+      },
+      "packdir": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_protocolfix_d4_w4a8_b64c32ls015",
+        "sha256_tree": "2b5c02c70053df0083b87d6feeb6872ef90592491aea44851cf1bab0edd6e5c1",
+        "files": 116,
+        "bytes": 186919968
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_quantvla_v1_w4a8_protocolfix_d4.npz",
+        "sha256": "0667ab4ba1deadd6832cea65ab77f10cc1845984c130156d469be20067c7aec4",
+        "bytes": 1417402
+      },
+      "atm": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_quantvla_v1_w4a8_protocolfix_d4.json",
+        "sha256": "43ef7570c979b1c547079f8ea889ab12423fa4245a78cbc4e17ed1df9af230e9",
+        "bytes": 27586
+      },
+      "ohb": true,
+      "meta": {
+        "method": "original QuantVLA W4A8 + static ATM/OHB"
+      },
+      "config_sha256": "c55b57177872ecba36b71c3b8c799f1d810aa1372a32f65b8ec1a583566c45b6",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_atomic_paired50/w4a8_atmohb_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_atomic_paired50/w4a8_atmohb_s1.jsonl"
+      ]
+    },
+    {
+      "id": "cscka_final",
+      "gpu": 4,
+      "port": 5755,
+      "expected_wrapped": 100,
+      "egl_device": 4,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.final_plan.json",
+        "sha256": "70b6b0d3190c3f4ebad9a5a874f9c0ac1044143a4912020aa9fb129f66a6eeb4",
+        "bytes": 16046
+      },
+      "packdir": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_protocolfix_d4_w4a8_b64c32ls015",
+        "sha256_tree": "2b5c02c70053df0083b87d6feeb6872ef90592491aea44851cf1bab0edd6e5c1",
+        "files": 116,
+        "bytes": 186919968
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_protocolfix_d4.npz",
+        "sha256": "40a516ea3dc20cdaf73c470c6b11d6e5a5b71b9d7e47fe5af0387c8cc1682adb",
+        "bytes": 1266192
+      },
+      "atm": null,
+      "ohb": false,
+      "meta": {
+        "cka_to_cs_ratio": 16,
+        "d_func": 0.10043752359183383
+      },
+      "config_sha256": "f8ff9a6678163b49b55004281829c3b51a21d29ed8a9febe57b895fca9bcd2ee",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_atomic_paired50/cscka_final_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_atomic_paired50/cscka_final_s1.jsonl"
+      ]
+    },
+    {
+      "id": "cscka_final_atmohb",
+      "gpu": 5,
+      "port": 5756,
+      "expected_wrapped": 100,
+      "egl_device": 5,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.final_plan.json",
+        "sha256": "70b6b0d3190c3f4ebad9a5a874f9c0ac1044143a4912020aa9fb129f66a6eeb4",
+        "bytes": 16046
+      },
+      "packdir": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_protocolfix_d4_w4a8_b64c32ls015",
+        "sha256_tree": "2b5c02c70053df0083b87d6feeb6872ef90592491aea44851cf1bab0edd6e5c1",
+        "files": 116,
+        "bytes": 186919968
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_protocolfix_d4.npz",
+        "sha256": "40a516ea3dc20cdaf73c470c6b11d6e5a5b71b9d7e47fe5af0387c8cc1682adb",
+        "bytes": 1266192
+      },
+      "atm": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_cscka_16to1_protocolfix_d4.json",
+        "sha256": "7106294c66a9e2680cb6d70c0111bb95bb466b4a271859d127c15a09630d15af",
+        "bytes": 23387
+      },
+      "ohb": true,
+      "meta": {
+        "cka_to_cs_ratio": 16,
+        "d_func": 0.10043752359183383
+      },
+      "config_sha256": "1e8f40bb6c5b33861e9f65cc8e30a2a18edcc404f9fdef39940c9571539de247",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_atomic_paired50/cscka_final_atmohb_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_atomic_paired50/cscka_final_atmohb_s1.jsonl"
+      ]
+    }
+  ]
+}

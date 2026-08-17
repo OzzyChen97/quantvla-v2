@@ -313,7 +313,10 @@ def build_manifest(
     unknown = sorted(set(requested_tasks) - set(registered_tasks))
     if unknown:
         raise SystemExit(f"tasks do not belong to {task_set}: {unknown}")
-    if smoke_task not in registered_tasks:
+    # ``--smoke-task`` is irrelevant to dev/formal runs.  Rejecting the
+    # default atomic task while launching a composite formal matrix made the
+    # otherwise valid composite manifest impossible to create.
+    if phase == "smoke" and smoke_task not in registered_tasks:
         raise SystemExit(f"unknown --smoke-task {smoke_task}")
     if task_override:
         tasks = requested_tasks
@@ -609,10 +612,19 @@ def main() -> None:
         print(f"[matrix] complete: {len(manifest['tasks'])} tasks x "
               f"{len(manifest['seeds'])} seeds x {len(manifest['configs'])} configs")
     finally:
+        # Client drivers are process-group leaders and their RoboCasa children
+        # inherit that group.  Stop them on Ctrl-C/server failure as well as on
+        # normal completion; otherwise orphaned clients keep rendering and
+        # retrying against a server that the block below has already stopped.
+        for proc, handle, _ in clients:
+            stop_process(proc)
+            if not handle.closed:
+                handle.close()
         for proc, handle, _ in servers:
             if not args.keep_servers:
                 stop_process(proc)
-            handle.close()
+            if not handle.closed:
+                handle.close()
         monitor_stop.set()
         monitor_thread.join(timeout=max(5.0, args.gpu_sample_interval + 2.0))
 
