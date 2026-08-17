@@ -1,0 +1,203 @@
+{
+  "manifest_sha256": "a01ca888337d87435b4f17401378e434c55414bf3f6e84fc616940e00bf4d923",
+  "primary_scope": {
+    "tasks": [
+      "OpenCabinet",
+      "OpenStandMixerHead",
+      "PickPlaceDrawerToCounter",
+      "CoffeeSetupMug"
+    ],
+    "n_tasks": 4
+  },
+  "secondary_scope": {
+    "tasks": [
+      "OpenCabinet",
+      "OpenStandMixerHead",
+      "PickPlaceDrawerToCounter",
+      "CoffeeSetupMug"
+    ],
+    "n_tasks": 4
+  },
+  "bootstrap_draws": 10000,
+  "validation_errors": [],
+  "configs": {
+    "cscka_128to1": {
+      "per_task": {
+        "OpenCabinet": 0.92,
+        "OpenStandMixerHead": 0.8,
+        "PickPlaceDrawerToCounter": 0.62,
+        "CoffeeSetupMug": 0.74
+      },
+      "per_task_details": {
+        "OpenCabinet": {
+          "sr": 0.92,
+          "successes": 46,
+          "episodes": 50,
+          "mean_success_steps": 397.9782608695652,
+          "mean_failure_steps": 1050.0
+        },
+        "OpenStandMixerHead": {
+          "sr": 0.8,
+          "successes": 40,
+          "episodes": 50,
+          "mean_success_steps": 98.8,
+          "mean_failure_steps": 450.0
+        },
+        "PickPlaceDrawerToCounter": {
+          "sr": 0.62,
+          "successes": 31,
+          "episodes": 50,
+          "mean_success_steps": 322.48387096774195,
+          "mean_failure_steps": 750.0
+        },
+        "CoffeeSetupMug": {
+          "sr": 0.74,
+          "successes": 37,
+          "episodes": 50,
+          "mean_success_steps": 243.13513513513513,
+          "mean_failure_steps": 600.0
+        }
+      },
+      "primary_task_macro_sr": 0.77,
+      "primary_task_cluster_ci95": [
+        0.665,
+        0.875
+      ],
+      "all18_task_macro_sr": 0.77,
+      "task_macro_sr": 0.77,
+      "episode_sr": 0.77,
+      "successes": 154,
+      "episodes": 200,
+      "mean_success_steps": 267.87012987012986,
+      "mean_failure_steps": 668.4782608695652,
+      "efficiency": {
+        "driver_wall_samples": 200,
+        "mean_driver_wall_seconds": 48.491857327222895,
+        "p50_driver_wall_seconds": 46.75152257680893,
+        "p90_driver_wall_seconds": 69.68330679655068,
+        "mean_episode_wall_seconds": 38.24749605147168,
+        "total_replans": 4588,
+        "mean_inference_seconds_per_replan": 0.5062639871246808,
+        "mean_env_step_seconds": 0.052644872413202363,
+        "mean_env_construct_seconds": 10.103737522084266,
+        "steps_per_driver_second": 7.424133036824176,
+        "episodes_per_aggregate_driver_hour": 74.23926816634825,
+        "gpu": {
+          "samples": 579,
+          "peak_memory_mib": 39305.0,
+          "mean_memory_mib": 17855.822107081174,
+          "mean_gpu_utilization_pct": 16.689119170984455,
+          "p95_gpu_utilization_pct": 47.0,
+          "mean_power_w": 103.79371329879108,
+          "p95_power_w": 132.15
+        }
+      }
+    },
+    "cscka_256to1": {
+      "per_task": {
+        "OpenCabinet": 0.96,
+        "OpenStandMixerHead": 0.84,
+        "PickPlaceDrawerToCounter": 0.7,
+        "CoffeeSetupMug": 0.68
+      },
+      "per_task_details": {
+        "OpenCabinet": {
+          "sr": 0.96,
+          "successes": 48,
+          "episodes": 50,
+          "mean_success_steps": 398.1458333333333,
+          "mean_failure_steps": 1050.0
+        },
+        "OpenStandMixerHead": {
+          "sr": 0.84,
+          "successes": 42,
+          "episodes": 50,
+          "mean_success_steps": 98.5,
+          "mean_failure_steps": 450.0
+        },
+        "PickPlaceDrawerToCounter": {
+          "sr": 0.7,
+          "successes": 35,
+          "episodes": 50,
+          "mean_success_steps": 325.8285714285714,
+          "mean_failure_steps": 750.0
+        },
+        "CoffeeSetupMug": {
+          "sr": 0.68,
+          "successes": 34,
+          "episodes": 50,
+          "mean_success_steps": 226.7058823529412,
+          "mean_failure_steps": 600.0
+        }
+      },
+      "primary_task_macro_sr": 0.795,
+      "primary_task_cluster_ci95": [
+        0.69,
+        0.8999999999999999
+      ],
+      "all18_task_macro_sr": 0.795,
+      "task_macro_sr": 0.795,
+      "episode_sr": 0.795,
+      "successes": 159,
+      "episodes": 200,
+      "mean_success_steps": 266.41509433962267,
+      "mean_failure_steps": 647.560975609756,
+      "efficiency": {
+        "driver_wall_samples": 200,
+        "mean_driver_wall_seconds": 48.23415480256086,
+        "p50_driver_wall_seconds": 45.27933098077774,
+        "p90_driver_wall_seconds": 67.37678503513331,
+        "mean_episode_wall_seconds": 37.18307441018056,
+        "total_replans": 4399,
+        "mean_inference_seconds_per_replan": 0.5113463993839518,
+        "mean_env_step_seconds": 0.05292326299347413,
+        "mean_env_construct_seconds": 10.903263295860961,
+        "steps_per_driver_second": 7.143278479956013,
+        "episodes_per_aggregate_driver_hour": 74.63590923767711,
+        "gpu": {
+          "samples": 579,
+          "peak_memory_mib": 21677.0,
+          "mean_memory_mib": 16686.2780656304,
+          "mean_gpu_utilization_pct": 15.820379965457686,
+          "p95_gpu_utilization_pct": 46.0,
+          "mean_power_w": 106.35504317789301,
+          "p95_power_w": 139.049
+        }
+      }
+    }
+  },
+  "comparisons": {
+    "cscka_256to1_vs_cscka_128to1": {
+      "a": "cscka_256to1",
+      "b": "cscka_128to1",
+      "primary_task_macro_delta": 0.024999999999999967,
+      "task_cluster_ci95": [
+        -0.034999999999999976,
+        0.06999999999999995
+      ],
+      "paired_permutation_p": 0.5,
+      "episode_mcnemar": {
+        "a_wins": 19,
+        "b_wins": 14,
+        "two_sided_p": 0.48685024166479707
+      },
+      "holm_adjusted_p": 0.5
+    }
+  },
+  "decision": {
+    "spec": {},
+    "passed": false
+  },
+  "acceptance": {
+    "enable_cs": false,
+    "default": "ckaonly",
+    "rule": "held-out delta > 0 and task-cluster bootstrap CI95 lower bound > 0"
+  },
+  "libero_context": {
+    "v1.4_macro_avg": 0.892,
+    "uniform_w6_macro_avg": 0.882,
+    "v1.3_macro_avg": 0.852,
+    "note": "cross-benchmark context only; not pooled with RoboCasa365"
+  },
+  "task_set": "atomic_seen"
+}

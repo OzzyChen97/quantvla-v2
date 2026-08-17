@@ -1,0 +1,57 @@
+{
+  "purpose": "Official-scale paired RoboCasa365 composite_seen comparison using the frozen atomic_seen CS+CKA mask and checkpoint-specific quantization artifacts.",
+  "decision": {
+    "final_config": "cscka_final",
+    "cka_to_cs_ratio": 16,
+    "mask_source_task_set": "atomic_seen",
+    "selection_scenarios_per_task": 50,
+    "selection_successes": 161,
+    "selection_macro_sr": 0.805
+  },
+  "comparisons": [
+    ["w4a8_atmohb", "fp16"],
+    ["cscka_final", "fp16"],
+    ["cscka_final", "w4a8_atmohb"],
+    ["cscka_final_atmohb", "cscka_final"],
+    ["cscka_final_atmohb", "w4a8_atmohb"]
+  ],
+  "configs": [
+    {
+      "id": "fp16",
+      "gpu": 1,
+      "port": 5761,
+      "expected_wrapped": 0
+    },
+    {
+      "id": "w4a8_atmohb",
+      "gpu": 3,
+      "port": 5763,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/quantvla_v1_uniform_w4a8_composite_seen.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_quantvla_v1_w4a8_composite_seen_d4.npz",
+      "atm": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_quantvla_v1_w4a8_composite_seen_d4.json",
+      "ohb": true,
+      "expected_wrapped": 116,
+      "meta": {"method": "original QuantVLA W4A8 + static ATM/OHB"}
+    },
+    {
+      "id": "cscka_final",
+      "gpu": 4,
+      "port": 5765,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_composite_seen.final_plan.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_composite_seen_d4.npz",
+      "expected_wrapped": 100,
+      "meta": {"cka_to_cs_ratio": 16, "mask_transfer": "atomic_seen"}
+    },
+    {
+      "id": "cscka_final_atmohb",
+      "gpu": 5,
+      "port": 5766,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_composite_seen.final_plan.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_composite_seen_d4.npz",
+      "atm": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_cscka_16to1_composite_seen_d4.json",
+      "ohb": true,
+      "expected_wrapped": 100,
+      "meta": {"cka_to_cs_ratio": 16, "mask_transfer": "atomic_seen"}
+    }
+  ]
+}

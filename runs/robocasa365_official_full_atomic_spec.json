@@ -1,0 +1,62 @@
+{
+  "purpose": "Official-scale paired RoboCasa365 atomic_seen comparison after freezing CS+CKA on the four predeclared development tasks.",
+  "decision": {
+    "final_config": "cscka_final",
+    "cka_to_cs_ratio": 16,
+    "selection_tasks": [
+      "OpenCabinet",
+      "OpenStandMixerHead",
+      "PickPlaceDrawerToCounter",
+      "CoffeeSetupMug"
+    ],
+    "selection_scenarios_per_task": 50,
+    "selection_successes": 161,
+    "selection_macro_sr": 0.805
+  },
+  "comparisons": [
+    ["w4a8_atmohb", "fp16"],
+    ["cscka_final", "fp16"],
+    ["cscka_final", "w4a8_atmohb"],
+    ["cscka_final_atmohb", "cscka_final"],
+    ["cscka_final_atmohb", "w4a8_atmohb"]
+  ],
+  "configs": [
+    {
+      "id": "fp16",
+      "gpu": 1,
+      "port": 5751,
+      "expected_wrapped": 0
+    },
+    {
+      "id": "w4a8_atmohb",
+      "gpu": 3,
+      "port": 5753,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/quantvla_v1_uniform_w4a8.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_quantvla_v1_w4a8_protocolfix_d4.npz",
+      "atm": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_quantvla_v1_w4a8_protocolfix_d4.json",
+      "ohb": true,
+      "expected_wrapped": 116,
+      "meta": {"method": "original QuantVLA W4A8 + static ATM/OHB"}
+    },
+    {
+      "id": "cscka_final",
+      "gpu": 4,
+      "port": 5755,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.final_plan.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_protocolfix_d4.npz",
+      "expected_wrapped": 100,
+      "meta": {"cka_to_cs_ratio": 16, "d_func": 0.10043752359183383}
+    },
+    {
+      "id": "cscka_final_atmohb",
+      "gpu": 5,
+      "port": 5756,
+      "plan": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_adjudicated.final_plan.json",
+      "act_scale": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_protocolfix_d4.npz",
+      "atm": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_cscka_16to1_protocolfix_d4.json",
+      "ohb": true,
+      "expected_wrapped": 100,
+      "meta": {"cka_to_cs_ratio": 16, "d_func": 0.10043752359183383}
+    }
+  ]
+}

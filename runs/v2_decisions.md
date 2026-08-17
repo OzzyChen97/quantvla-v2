@@ -793,7 +793,8 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
 ## 2026-08-17：官方规模复测、paired diffusion noise 与安全提速（D-049）
 
 - 本轮调参冻结口径升级为四个预声明任务各 50 个 target scenarios；候选仍为
-  CKA:CS = {8,16,32,64}:1，主判据为四任务 macro SR，并列依次按更低
+  CKA:CS = {8,16,32,64,128,256}:1，并加入 CKA-only 作为
+  `lambda_cs=0`（无穷大比例）边界；主判据为四任务 macro SR，并列依次按更低
   `D_func`、更高 CKA:CS 裁决。8:1 与 32:1 缺失的 plan-specific static-A8
   产物已经补齐，分别校验为 100/98 个 wrapped layers；两者与 16:1、64:1
   都固定使用同一 calibration buffer、P99.9、32 batches 和 denoising=4。
@@ -814,3 +815,47 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
 - efficiency 新增每 episode 的环境构造、推理、env-step 与 wall time，以及每卡
   显存峰值/均值、GPU utilization、power；smoke 中环境构造约 5.7–6.9 秒，
   inference 约 0.285–0.304 秒/replan，峰值显存随 mask 为 14.3–14.8 GiB。
+
+## 2026-08-17：50-scenario CS+CKA 最终冻结（D-050）
+
+- 严格完成 7 个候选 × 4 个预声明 atomic_seen 任务 × 50 target scenarios：
+  `{8,16,32,64,128,256}:1` 与 `CKA-only (lambda_cs=0)` 共 **1400/1400**
+  episodes；均使用相同 `(task, env_seed, replan_index)` deterministic diffusion
+  noise、官方 horizon、chunk=16、denoising=4，所有 client exit=0，0 crash / 0
+  timeout。该阶段是 paired evaluation，不与 native GPU-RNG 结果混写。
+- 正式开发集排序：
+
+  | CKA:CS | successes | 四任务 macro SR |
+  |---:|---:|---:|
+  | **16:1** | **161/200** | **80.5%** |
+  | 256:1 | 159/200 | 79.5% |
+  | CKA-only | 155/200 | 77.5% |
+  | 128:1 | 154/200 | 77.0% |
+  | 8:1 | 154/200 | 77.0% |
+  | 32:1 | 153/200 | 76.5% |
+  | 64:1 | 150/200 | 75.0% |
+
+- 因此按预注册的“最高 macro SR；并列时更低 D_func；再并列时更高比例”规则，
+  **冻结 16:1 为 final**。大比例并非单调改善：256:1 虽接近 CKA-only mask，
+  仍低 1.0pp；CKA-only 比 16:1 低 3.0pp。结论是 CS 确实需要降权，但本轮不应
+  设为零；旧 3-seed 选择的 64:1 被 50-scenario 结果推翻。
+- CKA-only 四任务为 OpenCabinet 90%、OpenStandMixerHead 88%、
+  PickPlaceDrawerToCounter 62%、CoffeeSetupMug 70%，总计 155/200。完整选择文件：
+  `runs/robocasa365_cs_loss/final_selection_official50.json`；三批严格 summaries：
+  `runs/robocasa365_cs_tuning_{official_core,large_ratio_official,
+  cka_boundary_gpu1}/summary.json`。
+- final checkpoint-specific 产物已完成：atomic/composite_seen/composite_unseen 的
+  16:1 plan-specific A8 均为 100 wrapped layers，plan/A8/checkpoint/buffer hashes
+  全部匹配；三套 static ATM/OHB 的 CV_t `static_sufficient=True`（α/β 达标比例
+  分别为 99.8/99.2%、99.8/99.0%、99.8/99.6%）。原版 W4A8 的 composite
+  static ATM/OHB 也已生成，但 seen/unseen 的 CV_t 均判为不充分，正式测试仍保留
+  该预注册 static baseline 并在报告中披露。
+- 修复 A8 scale 加载到 PyTorch inference-tensor buffer 时在普通上下文执行
+  `copy_` 会报错的问题：状态恢复现包在 `torch.inference_mode()` 内，并新增了
+  inference-buffer round-trip 回归。原始失败在两个 composite checkpoint 上均可
+  复现，修复后两套 W4A8 ATM/OHB 标定均成功。
+- 已生成并只读验证三套正式 spec：
+  `runs/robocasa365_official_full_{atomic,composite_seen,
+  composite_unseen}_spec.json`，每套固定比较 FP16、原版 W4A8+static ATM/OHB、
+  CS+CKA(16:1)、CS+CKA(16:1)+static ATM/OHB；正式矩阵启动前先逐 checkpoint
+  做 1 task × 1 seed smoke。
