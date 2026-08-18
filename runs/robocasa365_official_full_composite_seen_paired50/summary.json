@@ -1010,12 +1010,14 @@
       "selection_successes": 161,
       "selection_macro_sr": 0.805
     },
-    "passed": false
+    "status": "frozen",
+    "passed": null
   },
   "acceptance": {
-    "enable_cs": false,
-    "default": "ckaonly",
-    "rule": "held-out delta > 0 and task-cluster bootstrap CI95 lower bound > 0"
+    "applicable": false,
+    "enable_cs": null,
+    "default": "cscka_final",
+    "rule": "not applicable; configuration was frozen before this matrix"
   },
   "libero_context": {
     "v1.4_macro_avg": 0.892,

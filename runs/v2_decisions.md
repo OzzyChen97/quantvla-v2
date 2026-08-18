@@ -1038,3 +1038,18 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   已与 server-process memory 和理论 packed memory 分栏。
 - 严格结果与 per-task 表：
   `runs/robocasa365_official_full_composite_seen_paired50/{summary.json,summary.md}`。
+
+## 2026-08-19：formal decision/acceptance 语义修复（D-059）
+
+- official 四配置 spec 只记录开发集已经冻结的 `final_config=cscka_final` 和
+  `CKA:CS=16:1`，并不包含 CKA-only acceptance comparison。旧 parser 将缺失的
+  comparison 强制转换成 `passed=false`，又无条件套用旧六配置消融的 fallback，
+  导致 summary JSON 错写 `default=ckaonly`；该字段与实际运行配置和冻结规则冲突，
+  但不影响任何 episode、SR、CI、p 值或 efficiency 数值。
+- parser 现将这种情况明确写为 `decision.status=frozen`、`passed=null`、
+  `acceptance.applicable=false`、`default=cscka_final`。只有矩阵确实包含
+  `cscka_adjusted_vs_ckaonly` 时才计算旧 enable-CS acceptance；回归测试同时覆盖
+  frozen formal 和 legacy acceptance 两条路径。
+- atomic/Composite-Seen 已重新严格解析，数值报告不变。更新后 summary SHA256
+  分别为 `9f06db12444b6c582f451c2cc096bcb5ba5738cf888558955acc039aedfed29f`
+  和 `372688e3ac4e20eb83f2b752b2bf357d190e91d75b6cb0629e02eaf5296aa58e`。

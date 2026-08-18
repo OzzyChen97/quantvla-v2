@@ -59,11 +59,11 @@ Theoretical tightly-packed deployment storage (QuantVLA Tables 1/2 scope); this 
 
 ## Efficiency
 
-| Config | Mean episode wall (s) | Env construct (s) | Inference/replan (s) | Env step (s) | Peak GPU memory (MiB) | Mean GPU util |
-|---|---:|---:|---:|---:|---:|---:|
-| fp16 | 26.9 | 7.5 | 0.139 | 0.048 | 12769 | 11.4% |
-| w4a8_atmohb | 37.5 | 7.3 | 0.268 | 0.048 | 17973 | 14.9% |
-| cscka_final | 30.9 | 7.6 | 0.254 | 0.048 | 17671 | 13.3% |
-| cscka_final_atmohb | 31.6 | 7.5 | 0.259 | 0.048 | 17719 | 13.2% |
+| Config | Mean episode wall (s) | Env construct (s) | Inference/replan (s) | Env step (s) | Peak server memory (MiB) | Peak device memory (MiB) | Mean GPU util |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| fp16 | 26.9 | 7.5 | 0.139 | 0.048 | n/a | 12769 | 11.4% |
+| w4a8_atmohb | 37.5 | 7.3 | 0.268 | 0.048 | n/a | 17973 | 14.9% |
+| cscka_final | 30.9 | 7.6 | 0.254 | 0.048 | n/a | 17671 | 13.3% |
+| cscka_final_atmohb | 31.6 | 7.5 | 0.259 | 0.048 | n/a | 17719 | 13.2% |
 
 Scheduling: 2 shards/config; EGL pool=None; GPU sampling scope=dedicated model-GPU device total.

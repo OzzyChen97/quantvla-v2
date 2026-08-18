@@ -254,6 +254,64 @@ def load_rows(run_dir: Path, manifest: dict, manifest_sha: str, allow_incomplete
     return {"rows": all_rows, "validation_errors": errors}
 
 
+def decision_metadata(decision: dict, comparisons: dict) -> tuple[dict, dict]:
+    """Report frozen selection separately from an in-matrix acceptance test.
+
+    Official four-configuration matrices carry provenance for a configuration
+    frozen by an earlier development sweep, but intentionally do not include a
+    CKA-only acceptance contrast.  Treating the absent comparison as ``False``
+    incorrectly made those summaries look as if they had rejected the frozen
+    final configuration and fallen back to CKA-only.
+    """
+    comparison_name = decision.get("comparison")
+    comparison = comparisons.get(comparison_name) if comparison_name else None
+    if comparison_name:
+        passed = bool(
+            comparison
+            and comparison["primary_task_macro_delta"]
+            > float(decision.get("min_delta", 0.0))
+            and comparison["task_cluster_ci95"][0]
+            > float(decision.get("min_ci_lower", 0.0))
+            and comparison.get("holm_adjusted_p", 1.0)
+            <= float(decision.get("max_holm_p", 0.05))
+        )
+        decision_summary = {
+            "spec": decision,
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+        }
+    elif decision.get("final_config"):
+        decision_summary = {"spec": decision, "status": "frozen", "passed": None}
+    else:
+        decision_summary = {
+            "spec": decision, "status": "not_applicable", "passed": None,
+        }
+
+    legacy_comparison = comparisons.get("cscka_adjusted_vs_ckaonly")
+    if legacy_comparison:
+        enable_cs = bool(
+            legacy_comparison["primary_task_macro_delta"] > 0
+            and legacy_comparison["task_cluster_ci95"][0] > 0
+        )
+        acceptance = {
+            "applicable": True,
+            "enable_cs": enable_cs,
+            "default": "cscka_adjusted" if enable_cs else "ckaonly",
+            "rule": (
+                "held-out delta > 0 and task-cluster bootstrap CI95 "
+                "lower bound > 0"
+            ),
+        }
+    else:
+        acceptance = {
+            "applicable": False,
+            "enable_cs": None,
+            "default": decision.get("final_config"),
+            "rule": "not applicable; configuration was frozen before this matrix",
+        }
+    return decision_summary, acceptance
+
+
 def summarize(run_dir: Path, n_boot: int, allow_incomplete: bool) -> dict:
     manifest_path = run_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
@@ -368,20 +426,7 @@ def summarize(run_dir: Path, n_boot: int, allow_incomplete: bool) -> dict:
     for name, value in adjusted.items():
         comparisons[name]["holm_adjusted_p"] = value
 
-    decision = manifest.get("decision") or {}
-    decision_name = decision.get("comparison")
-    decision_cmp = comparisons.get(decision_name) if decision_name else None
-    decision_passed = bool(
-        decision_cmp
-        and decision_cmp["primary_task_macro_delta"] > float(decision.get("min_delta", 0.0))
-        and decision_cmp["task_cluster_ci95"][0] > float(decision.get("min_ci_lower", 0.0))
-        and decision_cmp.get("holm_adjusted_p", 1.0) <= float(decision.get("max_holm_p", 0.05))
-    )
-    legacy_cmp = comparisons.get("cscka_adjusted_vs_ckaonly")
-    legacy_enable_cs = bool(
-        legacy_cmp and legacy_cmp["primary_task_macro_delta"] > 0
-        and legacy_cmp["task_cluster_ci95"][0] > 0
-    )
+    decision, acceptance = decision_metadata(manifest.get("decision") or {}, comparisons)
     return {
         "manifest_sha256": manifest_sha,
         "primary_scope": {"tasks": primary_tasks, "n_tasks": len(primary_tasks)},
@@ -391,12 +436,8 @@ def summarize(run_dir: Path, n_boot: int, allow_incomplete: bool) -> dict:
         "paper_style_memory": paper_memory,
         "configs": configs,
         "comparisons": comparisons,
-        "decision": {"spec": decision, "passed": decision_passed},
-        "acceptance": {
-            "enable_cs": legacy_enable_cs,
-            "default": "cscka_adjusted" if legacy_enable_cs else "ckaonly",
-            "rule": "held-out delta > 0 and task-cluster bootstrap CI95 lower bound > 0",
-        },
+        "decision": decision,
+        "acceptance": acceptance,
         "libero_context": {
             "v1.4_macro_avg": 0.892,
             "uniform_w6_macro_avg": 0.882,
@@ -498,6 +539,26 @@ def selftest() -> None:
     assert 0 <= exact_sign_flip_p(diffs) <= 1
     adjusted = holm_adjust({"a": 0.01, "b": 0.03, "c": 0.2})
     assert adjusted["a"] <= adjusted["b"] <= adjusted["c"]
+    frozen, frozen_acceptance = decision_metadata(
+        {"final_config": "cscka_final", "cka_to_cs_ratio": 16}, {}
+    )
+    assert frozen["status"] == "frozen" and frozen["passed"] is None
+    assert frozen_acceptance == {
+        "applicable": False,
+        "enable_cs": None,
+        "default": "cscka_final",
+        "rule": "not applicable; configuration was frozen before this matrix",
+    }
+    legacy_comparison = {
+        "primary_task_macro_delta": 0.1,
+        "task_cluster_ci95": [0.01, 0.2],
+    }
+    _, legacy_acceptance = decision_metadata(
+        {}, {"cscka_adjusted_vs_ckaonly": legacy_comparison}
+    )
+    assert legacy_acceptance["applicable"] is True
+    assert legacy_acceptance["enable_cs"] is True
+    assert legacy_acceptance["default"] == "cscka_adjusted"
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         manifest = {
