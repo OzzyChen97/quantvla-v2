@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the complementary unseen shards after composite_seen completes.
+"""Run the complementary unseen shards, normally after composite_seen.
 
 This wave can overlap safely with ``run_robocasa_unseen_early_wave.py``:
 
@@ -10,6 +10,11 @@ This wave can overlap safely with ``run_robocasa_unseen_early_wave.py``:
 Together the two waves cover the immutable 4-config x 8-shard matrix exactly
 once while keeping GPUs 1-7 occupied.  The ordinary full runner subsequently
 performs strict resume/validation and starts only genuinely missing shards.
+
+When some seen configurations finish early, ``--replica-config-ids`` can move
+selected unseen servers to replicas already declared by the immutable manifest.
+This permits a safe pre-seen launch without changing result files or protocol;
+the caller must still hold ``primary_wave.lock`` before releasing/reusing GPUs.
 """
 
 from __future__ import annotations
@@ -47,6 +52,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
     parser.add_argument("--checkpoint", default=str(DEFAULT_CHECKPOINT))
     parser.add_argument("--server-timeout", type=int, default=300)
+    parser.add_argument(
+        "--replica-config-ids",
+        default="",
+        help=(
+            "Comma-separated configuration ids whose manifest-declared replica "
+            "is used instead of the primary server. Result shards are unchanged."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -65,14 +78,25 @@ def build(args: argparse.Namespace) -> tuple[dict, str, Path]:
     return manifest, manifest_sha, run_dir
 
 
-def selected_instances(manifest: dict) -> list[tuple[dict, dict, set[int]]]:
+def selected_instances(
+    manifest: dict, replica_config_ids: set[str]
+) -> list[tuple[dict, dict, set[int]]]:
     selected = []
     for config in manifest["configs"]:
         config_id = config["id"]
         if config_id not in CONFIG_SHARDS:
             continue
-        primary = matrix.server_instances(config)[0]
-        selected.append((config, primary, CONFIG_SHARDS[config_id]))
+        instances = matrix.server_instances(config)
+        if config_id in replica_config_ids:
+            replicas = instances[1:]
+            if len(replicas) != 1:
+                raise RuntimeError(
+                    f"{config_id}: expected exactly one manifest-declared replica"
+                )
+            instance = replicas[0]
+        else:
+            instance = instances[0]
+        selected.append((config, instance, CONFIG_SHARDS[config_id]))
     if {config["id"] for config, _, _ in selected} != set(CONFIG_SHARDS):
         raise RuntimeError("unseen manifest does not contain all primary-wave configs")
     return selected
@@ -98,7 +122,16 @@ def memory_requirements(
 
 def run(args: argparse.Namespace) -> None:
     manifest, manifest_sha, run_dir = build(args)
-    selected = selected_instances(manifest)
+    replica_config_ids = {
+        value.strip() for value in args.replica_config_ids.split(",") if value.strip()
+    }
+    unknown = replica_config_ids - set(CONFIG_SHARDS)
+    if unknown:
+        raise SystemExit(
+            "--replica-config-ids contains unknown primary-wave configs: "
+            f"{sorted(unknown)}"
+        )
+    selected = selected_instances(manifest, replica_config_ids)
     required = memory_requirements(selected)
     free = matrix.gpu_free_memory_mib()
     insufficient = {
@@ -109,6 +142,14 @@ def run(args: argparse.Namespace) -> None:
         "sampled_at": datetime.now(timezone.utc).isoformat(),
         "selected_shards": {
             config["id"]: sorted(shards) for config, _, shards in selected
+        },
+        "selected_instances": {
+            config["id"]: {
+                "gpu": int(instance["gpu"]),
+                "port": int(instance["port"]),
+                "replica": int(instance["replica"]),
+            }
+            for config, instance, _ in selected
         },
         "free_memory_mib": free,
         "required_free_memory_mib": required,
@@ -156,7 +197,11 @@ def run(args: argparse.Namespace) -> None:
                 [
                     {
                         "config": config["id"], "gpu": instance["gpu"],
-                        "pid": proc.pid, "instance_role": "primary",
+                        "pid": proc.pid,
+                        "instance_role": (
+                            "primary" if int(instance["replica"]) == 0
+                            else f"replica_{instance['replica']}"
+                        ),
                     }
                     for proc, _, config, instance in servers
                 ],
@@ -167,7 +212,11 @@ def run(args: argparse.Namespace) -> None:
         )
         server_monitor.start()
         for proc, _, config, instance in servers:
-            key = f"{config['id']}/primary"
+            role = (
+                "primary" if int(instance["replica"]) == 0
+                else f"r{instance['replica']}"
+            )
+            key = f"{config['id']}/{role}"
             runtime[key] = matrix.wait_and_verify(
                 config, instance, manifest, proc, args.server_timeout
             )
@@ -176,11 +225,16 @@ def run(args: argparse.Namespace) -> None:
             json.dumps(runtime, indent=2) + "\n"
         )
         for config, _, shard_indices in selected:
+            instance_mode = (
+                "replica_only"
+                if config["id"] in replica_config_ids
+                else "primary_only"
+            )
             clients.extend(matrix.start_clients(
                 manifest, manifest_sha, run_dir,
                 config_ids={config["id"]},
                 shard_indices=shard_indices,
-                instance_mode="primary_only",
+                instance_mode=instance_mode,
             ))
         failures = []
         for proc, handle, label in clients:

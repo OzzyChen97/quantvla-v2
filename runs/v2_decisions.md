@@ -993,3 +993,21 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   affinity；恢复后 CPU busy 回到 95%–99%。实验无重启、无 crash、无样本或协议
   变化。结论：当前不做静态 CPU 分区，也不据此增加 clients；完整 A/B 记录保存在
   `runs/robocasa365_cpu_affinity_ab.json`。
+
+## 2026-08-19：unseen primary 提前启动（D-057）
+
+- composite_seen 的 FP16、final、final+ATM/OHB 已各自完成 800/800，只有原版
+  W4A8 尚余少量长-horizon episodes。用户授权 primary wave 提前启动后，保持
+  composite_unseen 不可变 manifest、结果文件、shards 和协议均不变，仅让原版
+  W4A8 的偶数 shards 使用 manifest 已声明的 GPU2 replica；FP16、final、
+  final+ATM/OHB 仍分别使用 GPU1/4/5 primary。`primary_wave.lock` 在启动前已
+  独占，seen 完成后的自动链只会等待并严格 resume，不会并发写同一文件。
+- 启动前保守门禁同时计入仍驻留的 seen servers、20 个 EGL clients 和外部 GPU
+  作业，所有 GPU 均满足余量要求，因此无需终止 seen 空闲 server 或任何无关进程。
+  runtime 重新严格验证 FP16/W4A8/final/final+ATM 的 wrapped layers 为
+  0/116/100/100，checkpoint-specific plan/A8 与 ATM/OHB 校验通过；主波次 20 个
+  drivers 已启动，覆盖 FP16 全部 8 shards 和三个量化配置的偶数 4 shards。
+- `run_robocasa_unseen_primary_wave.py` 新增向后兼容的
+  `--replica-config-ids`，默认空值仍保持原 post-seen GPU1/3/4/5 行为；本次仅将
+  `w4a8_atmohb` 映射到其 manifest replica GPU2:5772。preflight 和 runtime
+  metadata 显式记录每个配置实际使用的 GPU、端口和 replica 编号。
