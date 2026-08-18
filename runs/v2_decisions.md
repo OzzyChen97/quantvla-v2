@@ -979,3 +979,17 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   eager/fake-quant 常驻显存，后者用于披露包含 EGL clients 与外部作业的整卡峰值；
   inference/replan 仍来自每 episode 的服务请求计时，论文式 LLM+DiT packed
   memory 继续单独分栏，不与两种实测显存混用。
+
+## 2026-08-18：CPU 亲和性 A/B 负结果（D-056）
+
+- 七个 PyTorch server 默认各暴露 64 intra-op / 64 inter-op threads，OS 线程数
+  324/server；128 核机器在 seen+early-unseen 并发时 load≈222、CPU busy≈94%。
+  为验证线程过度并发是否拖慢环境/render，做了不改变模型数值的可逆 affinity A/B。
+- 12 cores/server 使机器立即出现 33%–36% idle，明显饿住推理，直接否决；随后
+  测试 16 个互不重叠 cores/server，机器仍有 14%–24% idle，但进程级 runnable
+  wait 达 25.8%–49.0%，说明 affinity 分区造成“有空核但服务线程不可用”，短窗口
+  也未建立唯一结果行吞吐增益。
+- 按预先记录的 keep/restore 规则，七个正在运行的 server 已全部恢复 `0-127`
+  affinity；恢复后 CPU busy 回到 95%–99%。实验无重启、无 crash、无样本或协议
+  变化。结论：当前不做静态 CPU 分区，也不据此增加 clients；完整 A/B 记录保存在
+  `runs/robocasa365_cpu_affinity_ab.json`。

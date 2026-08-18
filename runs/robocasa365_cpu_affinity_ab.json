@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "started_at": "2026-08-18T09:39:46+08:00",
+  "reason": "Seven PyTorch servers each exposed 64 intra-op and 64 inter-op threads (324 OS threads/server); machine load was about 222 on 128 CPUs.",
+  "accuracy_semantics_changed": false,
+  "baseline": {
+    "sampled_at": "2026-08-18T09:31:50+08:00",
+    "composite_seen_durable_rows": 1007,
+    "composite_unseen_early_durable_rows": 450,
+    "cpu_busy_pct": 94,
+    "load_average_1m": 222.03
+  },
+  "twelve_core_probe": {
+    "result": "rejected_immediately",
+    "observed_cpu_busy_pct_range": [64, 67],
+    "reason": "33-36% idle CPU showed that 12 cores/server unnecessarily starved inference."
+  },
+  "active_sixteen_core_mapping": {
+    "5973": "0-15",
+    "5975": "16-31",
+    "5976": "32-47",
+    "5977": "48-63",
+    "125221": "64-79",
+    "125222": "80-95",
+    "125225": "96-111"
+  },
+  "sixteen_core_started_at": "2026-08-18T09:41:42+08:00",
+  "sixteen_core_throughput_baseline": {
+    "sampled_at": "2026-08-18T09:43:11+08:00",
+    "composite_seen_unique_durable_rows": 1021,
+    "composite_unseen_early_unique_durable_rows": 462
+  },
+  "initial_sixteen_core_cpu_busy_pct_range": [77, 86],
+  "restore_affinity": "0-127",
+  "decision_rule": "Keep only if per-shard durable-row throughput improves without crashes/timeouts; otherwise restore all seven servers to CPUs 0-127.",
+  "ended_at": "2026-08-18T09:45:54+08:00",
+  "decision": "restore_full_affinity",
+  "decision_evidence": {
+    "sixteen_core_process_wait_pct_range": [25.8, 49.0],
+    "sixteen_core_machine_idle_pct_range": [14, 24],
+    "restored_full_affinity_machine_busy_pct_range": [95, 99],
+    "interpretation": "Disjoint affinity left usable CPUs idle while server threads waited on their restricted masks; no reliable unique-row throughput gain had been established."
+  }
+}
