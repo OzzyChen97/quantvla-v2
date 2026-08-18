@@ -76,26 +76,66 @@ def load_gpu_rows(run_dirs: list[Path], config_ids: set[str]) -> dict[str, list[
     return grouped
 
 
-def summarize_gpu(rows: list[dict]) -> dict[str, Any] | None:
-    if not rows:
+def load_server_gpu_rows(
+    run_dirs: list[Path], config_ids: set[str]
+) -> dict[str, list[dict]]:
+    grouped = {config: [] for config in config_ids}
+    for run_dir in run_dirs:
+        path = run_dir / "gpu_server_efficiency.jsonl"
+        if not path.exists():
+            continue
+        for line_no, line in enumerate(path.read_text().splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"{path}:{line_no}: malformed server GPU sample: {exc}"
+                ) from exc
+            config = str(row.get("config"))
+            if config not in grouped:
+                raise ValueError(f"{path}:{line_no}: unknown config {config}")
+            grouped[config].append(row)
+    return grouped
+
+
+def summarize_gpu(
+    rows: list[dict], server_rows: list[dict] | None = None
+) -> dict[str, Any] | None:
+    server_rows = server_rows or []
+    if not rows and not server_rows:
         return None
-    memory = [float(row["memory_used_mib"]) for row in rows]
-    utilization = [float(row["utilization_gpu_pct"]) for row in rows]
-    power = [float(row["power_draw_w"]) for row in rows]
-    return {
-        "samples": len(rows),
-        "peak_memory_mib": max(memory),
-        "mean_memory_mib": mean(memory),
-        "mean_gpu_utilization_pct": mean(utilization),
-        "p95_gpu_utilization_pct": percentile(utilization, 0.95),
-        "mean_power_w": mean(power),
-        "p95_power_w": percentile(power, 0.95),
-    }
+    result: dict[str, Any] = {"samples": len(rows)}
+    if rows:
+        memory = [float(row["memory_used_mib"]) for row in rows]
+        utilization = [float(row["utilization_gpu_pct"]) for row in rows]
+        power = [float(row["power_draw_w"]) for row in rows]
+        result.update({
+            "peak_memory_mib": max(memory),
+            "mean_memory_mib": mean(memory),
+            "mean_gpu_utilization_pct": mean(utilization),
+            "p95_gpu_utilization_pct": percentile(utilization, 0.95),
+            "mean_power_w": mean(power),
+            "p95_power_w": percentile(power, 0.95),
+        })
+    if server_rows:
+        server_memory = [float(row["server_memory_used_mib"]) for row in server_rows]
+        result.update({
+            "server_memory_samples": len(server_rows),
+            "peak_server_process_memory_mib": max(server_memory),
+            "mean_server_process_memory_mib": mean(server_memory),
+            "server_instance_roles": sorted({
+                str(row.get("instance_role")) for row in server_rows
+            }),
+        })
+    return result
 
 
 def summarize_efficiency(
     rows: dict[tuple[str, int], dict],
     gpu_rows: list[dict],
+    server_gpu_rows: list[dict] | None = None,
     *,
     protocol: dict[str, Any] | None = None,
     rollout_shards: int | None = None,
@@ -131,7 +171,7 @@ def summarize_efficiency(
         "episodes_per_aggregate_driver_hour": (
             3600 * len(driver_seconds) / driver_total if driver_total else None
         ),
-        "gpu": summarize_gpu(gpu_rows),
+        "gpu": summarize_gpu(gpu_rows, server_gpu_rows),
     }
 
 
@@ -234,6 +274,7 @@ def aggregate(
             )
 
     gpu_rows = load_gpu_rows(run_dirs, set(config_ids))
+    server_gpu_rows = load_server_gpu_rows(run_dirs, set(config_ids))
     matrix_by_task_set = {
         str(manifest["task_set"]): matrix
         for matrix, (_, manifest, _) in zip(matrices, manifests)
@@ -244,6 +285,10 @@ def aggregate(
     }
     gpu_rows_by_task_set = {
         task_set: load_gpu_rows([run_dir], set(config_ids))
+        for task_set, (run_dir, _) in manifest_by_task_set.items()
+    }
+    server_gpu_rows_by_task_set = {
+        task_set: load_server_gpu_rows([run_dir], set(config_ids))
         for task_set, (run_dir, _) in manifest_by_task_set.items()
     }
     rng = random.Random(20260817)
@@ -270,6 +315,7 @@ def aggregate(
             _, split_manifest = manifest_by_task_set[task_set]
             per_task_set_efficiency[task_set] = summarize_efficiency(
                 matrix[config], gpu_rows_by_task_set[task_set][config],
+                server_gpu_rows_by_task_set[task_set][config],
                 protocol=split_manifest["protocol"],
                 rollout_shards=len(split_manifest["shards"]),
             )
@@ -311,7 +357,9 @@ def aggregate(
                 for task_set, tasks in split_tasks.items()
             },
             "paper_style_memory": paper_config,
-            "efficiency": summarize_efficiency(rows, gpu_rows[config]),
+            "efficiency": summarize_efficiency(
+                rows, gpu_rows[config], server_gpu_rows[config]
+            ),
             "per_task_set_efficiency": per_task_set_efficiency,
         }
 
@@ -428,8 +476,8 @@ def write_markdown(path: Path, summary: dict[str, Any]) -> None:
             )
     lines += [
         "", "## Efficiency", "",
-        "| Config | Episode wall (s) | Inference/replan (s) | Env step (s) | Peak memory (MiB) | Mean util | Mean power (W) |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Config | Episode wall (s) | Inference/replan (s) | Env step (s) | Peak server memory (MiB) | Peak device memory (MiB) | Mean util | Mean power (W) |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for config, row in summary["configs"].items():
         efficiency = row["efficiency"]
@@ -438,6 +486,7 @@ def write_markdown(path: Path, summary: dict[str, Any]) -> None:
             f"| {config} | {efficiency['mean_episode_wall_seconds']:.1f} | "
             f"{efficiency['mean_inference_seconds_per_replan']:.3f} | "
             f"{efficiency['mean_env_step_seconds']:.3f} | "
+            f"{gpu.get('peak_server_process_memory_mib', float('nan')):.0f} | "
             f"{gpu.get('peak_memory_mib', float('nan')):.0f} | "
             f"{gpu.get('mean_gpu_utilization_pct', float('nan')):.1f}% | "
             f"{gpu.get('mean_power_w', float('nan')):.1f} |"
@@ -447,8 +496,8 @@ def write_markdown(path: Path, summary: dict[str, Any]) -> None:
         "Aggregate efficiency above mixes task horizons and execution concurrency; "
         "use the task-set table below for scheduling-aware comparisons.",
         "", "## Efficiency by task set", "",
-        "| Task set | Config | Shards | Episode wall (s) | Inference/replan (s) | Env step (s) | Peak model-GPU device memory (MiB) |",
-        "|---|---|---:|---:|---:|---:|---:|",
+        "| Task set | Config | Shards | Episode wall (s) | Inference/replan (s) | Env step (s) | Peak server memory (MiB) | Peak device memory (MiB) |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
     ]
     for task_set in summary["task_sets"]:
         for config, row in summary["configs"].items():
@@ -459,6 +508,7 @@ def write_markdown(path: Path, summary: dict[str, Any]) -> None:
                 f"{efficiency['mean_episode_wall_seconds']:.1f} | "
                 f"{efficiency['mean_inference_seconds_per_replan']:.3f} | "
                 f"{efficiency['mean_env_step_seconds']:.3f} | "
+                f"{gpu.get('peak_server_process_memory_mib', float('nan')):.0f} | "
                 f"{gpu.get('peak_memory_mib', float('nan')):.0f} |"
             )
     lines += ["", "Scheduling/GPU sampling notes:", ""]

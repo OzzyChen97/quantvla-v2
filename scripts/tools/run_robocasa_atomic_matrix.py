@@ -306,6 +306,60 @@ def monitor_gpus(
             stop.wait(max(1.0, interval))
 
 
+def process_rss_mib(pid: int) -> float | None:
+    try:
+        for line in Path(f"/proc/{pid}/status").read_text().splitlines():
+            if line.startswith("VmRSS:"):
+                return float(line.split()[1]) / 1024.0
+    except (FileNotFoundError, PermissionError, ValueError):
+        return None
+    return None
+
+
+def monitor_server_processes(
+    stop: threading.Event,
+    path: Path,
+    placements: list[dict],
+    interval: float,
+    source: str,
+) -> None:
+    """Record per-server CUDA memory independently of shared device load."""
+    query = [
+        "nvidia-smi",
+        "--query-compute-apps=pid,used_memory",
+        "--format=csv,noheader,nounits",
+    ]
+    with open(path, "a", encoding="utf-8", buffering=1) as handle:
+        while not stop.is_set():
+            sampled_at = datetime.now(timezone.utc).isoformat()
+            proc = subprocess.run(query, text=True, stdout=subprocess.PIPE, check=False)
+            memory_by_pid = {}
+            if proc.returncode == 0:
+                for line in proc.stdout.splitlines():
+                    fields = [value.strip() for value in line.split(",", 1)]
+                    if len(fields) != 2:
+                        continue
+                    try:
+                        memory_by_pid[int(fields[0])] = float(fields[1])
+                    except ValueError:
+                        continue
+            for placement in placements:
+                pid = int(placement["pid"])
+                if pid not in memory_by_pid:
+                    continue
+                handle.write(json.dumps({
+                    "sampled_at": sampled_at,
+                    "config": placement["config"],
+                    "gpu": int(placement["gpu"]),
+                    "server_pid": pid,
+                    "instance_role": placement["instance_role"],
+                    "source": source,
+                    "server_memory_used_mib": memory_by_pid[pid],
+                    "server_rss_mib": process_rss_mib(pid),
+                }) + "\n")
+            stop.wait(max(1.0, interval))
+
+
 def call_endpoint(port: int, endpoint: str, timeout_ms: int = 3000) -> dict:
     ctx = zmq.Context()
     sock = ctx.socket(zmq.REQ)
@@ -799,6 +853,8 @@ def main() -> None:
         daemon=True,
     )
     monitor_thread.start()
+    server_monitor_stop = threading.Event()
+    server_monitor_thread = None
     try:
         for config in manifest["configs"]:
             for instance in server_instances(config):
@@ -808,6 +864,29 @@ def main() -> None:
                     f"[matrix] server {config['id']}/r{instance['replica']} pid={proc.pid} "
                     f"gpu={instance['gpu']} port={instance['port']}"
                 )
+        server_monitor_thread = threading.Thread(
+            target=monitor_server_processes,
+            args=(
+                server_monitor_stop,
+                run_dir / "gpu_server_efficiency.jsonl",
+                [
+                    {
+                        "config": config["id"],
+                        "gpu": instance["gpu"],
+                        "pid": proc.pid,
+                        "instance_role": (
+                            "primary" if int(instance["replica"]) == 0
+                            else f"replica_{instance['replica']}"
+                        ),
+                    }
+                    for proc, _, config, instance in servers
+                ],
+                args.gpu_sample_interval,
+                "full_matrix",
+            ),
+            daemon=True,
+        )
+        server_monitor_thread.start()
         runtime = {}
         for proc, _, config, instance in servers:
             runtime_key = (
@@ -848,6 +927,11 @@ def main() -> None:
                 handle.close()
         monitor_stop.set()
         monitor_thread.join(timeout=max(5.0, args.gpu_sample_interval + 2.0))
+        server_monitor_stop.set()
+        if server_monitor_thread is not None:
+            server_monitor_thread.join(
+                timeout=max(5.0, args.gpu_sample_interval + 2.0)
+            )
 
 
 if __name__ == "__main__":

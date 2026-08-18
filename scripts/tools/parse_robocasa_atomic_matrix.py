@@ -148,30 +148,56 @@ def manifest_contrasts(manifest: dict) -> list[tuple[str, str]]:
 def gpu_efficiency(run_dir: Path) -> dict[str, dict[str, Any]]:
     path = run_dir / "gpu_efficiency.jsonl"
     grouped: dict[str, list[dict]] = {}
-    if not path.exists():
-        return {}
-    for line_no, line in enumerate(path.read_text().splitlines(), 1):
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"{path}:{line_no}: malformed GPU sample: {exc}") from exc
-        grouped.setdefault(str(row["config"]), []).append(row)
+    if path.exists():
+        for line_no, line in enumerate(path.read_text().splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{path}:{line_no}: malformed GPU sample: {exc}") from exc
+            grouped.setdefault(str(row["config"]), []).append(row)
+    server_path = run_dir / "gpu_server_efficiency.jsonl"
+    server_grouped: dict[str, list[dict]] = {}
+    if server_path.exists():
+        for line_no, line in enumerate(server_path.read_text().splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"{server_path}:{line_no}: malformed server GPU sample: {exc}"
+                ) from exc
+            server_grouped.setdefault(str(row["config"]), []).append(row)
     result = {}
-    for config, rows in grouped.items():
-        memory = [float(r["memory_used_mib"]) for r in rows]
-        util = [float(r["utilization_gpu_pct"]) for r in rows]
-        power = [float(r["power_draw_w"]) for r in rows]
-        result[config] = {
-            "samples": len(rows),
-            "peak_memory_mib": max(memory),
-            "mean_memory_mib": sum(memory) / len(memory),
-            "mean_gpu_utilization_pct": sum(util) / len(util),
-            "p95_gpu_utilization_pct": percentile(util, 0.95),
-            "mean_power_w": sum(power) / len(power),
-            "p95_power_w": percentile(power, 0.95),
-        }
+    for config in sorted(set(grouped) | set(server_grouped)):
+        rows = grouped.get(config, [])
+        server_rows = server_grouped.get(config, [])
+        metric: dict[str, Any] = {"samples": len(rows)}
+        if rows:
+            memory = [float(r["memory_used_mib"]) for r in rows]
+            util = [float(r["utilization_gpu_pct"]) for r in rows]
+            power = [float(r["power_draw_w"]) for r in rows]
+            metric.update({
+                "peak_memory_mib": max(memory),
+                "mean_memory_mib": sum(memory) / len(memory),
+                "mean_gpu_utilization_pct": sum(util) / len(util),
+                "p95_gpu_utilization_pct": percentile(util, 0.95),
+                "mean_power_w": sum(power) / len(power),
+                "p95_power_w": percentile(power, 0.95),
+            })
+        if server_rows:
+            server_memory = [float(r["server_memory_used_mib"]) for r in server_rows]
+            metric.update({
+                "server_memory_samples": len(server_rows),
+                "peak_server_process_memory_mib": max(server_memory),
+                "mean_server_process_memory_mib": sum(server_memory) / len(server_memory),
+                "server_instance_roles": sorted({
+                    str(r.get("instance_role")) for r in server_rows
+                }),
+            })
+        result[config] = metric
     return result
 
 
@@ -435,8 +461,8 @@ def write_markdown(path: Path, summary: dict) -> None:
                 f"{metric['compression_ratio']:.2f}× |"
             )
     lines += ["", "## Efficiency", "",
-              "| Config | Mean episode wall (s) | Env construct (s) | Inference/replan (s) | Env step (s) | Peak GPU memory (MiB) | Mean GPU util |",
-              "|---|---:|---:|---:|---:|---:|---:|"]
+              "| Config | Mean episode wall (s) | Env construct (s) | Inference/replan (s) | Env step (s) | Peak server memory (MiB) | Peak device memory (MiB) | Mean GPU util |",
+              "|---|---:|---:|---:|---:|---:|---:|---:|"]
     for cid, row in summary["configs"].items():
         eff = row.get("efficiency") or {}
         gpu = eff.get("gpu") or {}
@@ -447,6 +473,7 @@ def write_markdown(path: Path, summary: dict) -> None:
             f"{fmt(eff.get('mean_env_construct_seconds'), 1)} | "
             f"{fmt(eff.get('mean_inference_seconds_per_replan'))} | "
             f"{fmt(eff.get('mean_env_step_seconds'))} | "
+            f"{fmt(gpu.get('peak_server_process_memory_mib'), 0)} | "
             f"{fmt(gpu.get('peak_memory_mib'), 0)} | "
             f"{fmt(gpu.get('mean_gpu_utilization_pct'), 1)}% |"
         )

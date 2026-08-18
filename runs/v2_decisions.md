@@ -961,3 +961,21 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   等 composite_seen 完整解析 → 启动 primary wave → 等两 wave 完成 → strict
   composite_unseen parse → 50-task aggregate。这样 crash/restart 仍按
   `(config, task, seed)` 恢复，且不会并发写同一个正式结果文件。
+
+## 2026-08-18：外部 GPU 负载归因与 server-process efficiency（D-055）
+
+- 运行约 8 小时后，GPU6/7 整卡占用升至约 35.8/42.4GiB。逐 PID 核查确认并非
+  QuantVLA 泄漏：我方三个 unseen server 的 CUDA memory 稳定为原版 W4A8
+  13.17GiB、final 12.75GiB、final+ATM/OHB 12.75GiB；新增占用来自 07:49/08:17
+  后启动的两套无关 Ollama server（GPU6/7 各约 22GiB）和 GPU7 原有约 2.7GiB
+  任务。未终止或迁移任何外部进程，正式 rollout 保持 0 crash / 0 OOM。
+- 因此 `nvidia-smi` 整卡 memory/utilization/power 仍保留为真实调度环境记录，但
+  不能再解释为 QuantVLA 单模型开销。新增 `gpu_server_efficiency.jsonl`，按我方
+  server PID 独立采集 CUDA memory、CPU RSS、GPU、主/副实例和采样来源；已经为
+  正在运行的 seen 4 个 server 与 unseen 3 个副本启动 sidecar，并集成到后续
+  primary/full runner，从 server 启动起自动采样。
+- strict parser 与 50-task aggregator 的 efficiency 表改为同时报告
+  `Peak server-process memory` 和 `Peak device memory`。前者用于比较模型实际
+  eager/fake-quant 常驻显存，后者用于披露包含 EGL clients 与外部作业的整卡峰值；
+  inference/replan 仍来自每 episode 的服务请求计时，论文式 LLM+DiT packed
+  memory 继续单独分栏，不与两种实测显存混用。

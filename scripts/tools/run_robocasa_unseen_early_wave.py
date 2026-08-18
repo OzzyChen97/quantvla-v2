@@ -125,11 +125,31 @@ def run(args: argparse.Namespace) -> None:
         daemon=True,
     )
     monitor.start()
+    server_monitor_stop = threading.Event()
+    server_monitor = None
     try:
         runtime = {}
         for config, instance in selected:
             proc, handle = matrix.start_server(config, instance, manifest, run_dir)
             servers.append((proc, handle, config, instance))
+        server_monitor = threading.Thread(
+            target=matrix.monitor_server_processes,
+            args=(
+                server_monitor_stop,
+                run_dir / "gpu_server_efficiency.jsonl",
+                [
+                    {
+                        "config": config["id"], "gpu": instance["gpu"],
+                        "pid": proc.pid, "instance_role": f"replica_{instance['replica']}",
+                    }
+                    for proc, _, config, instance in servers
+                ],
+                10.0,
+                "early_wave",
+            ),
+            daemon=True,
+        )
+        server_monitor.start()
         for proc, _, config, instance in servers:
             key = f"{config['id']}/r{instance['replica']}"
             runtime[key] = matrix.wait_and_verify(
@@ -166,6 +186,9 @@ def run(args: argparse.Namespace) -> None:
                 handle.close()
         monitor_stop.set()
         monitor.join(timeout=15)
+        server_monitor_stop.set()
+        if server_monitor is not None:
+            server_monitor.join(timeout=15)
 
 
 def main() -> None:
