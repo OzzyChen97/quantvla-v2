@@ -1,0 +1,1027 @@
+{
+  "manifest_sha256": "e1a29cf361ec0cc439be03470eb6213f5daab82b8f2126395ee6e5d71b95ab0f",
+  "primary_scope": {
+    "tasks": [
+      "DeliverStraw",
+      "GetToastedBread",
+      "KettleBoiling",
+      "LoadDishwasher",
+      "PackIdenticalLunches",
+      "PreSoakPan",
+      "PrepareCoffee",
+      "RinseSinkBasin",
+      "ScrubCuttingBoard",
+      "SearingMeat",
+      "SetUpCuttingStation",
+      "StackBowlsCabinet",
+      "SteamInMicrowave",
+      "StirVegetables",
+      "StoreLeftoversInBowl",
+      "WashLettuce"
+    ],
+    "n_tasks": 16
+  },
+  "secondary_scope": {
+    "tasks": [
+      "DeliverStraw",
+      "GetToastedBread",
+      "KettleBoiling",
+      "LoadDishwasher",
+      "PackIdenticalLunches",
+      "PreSoakPan",
+      "PrepareCoffee",
+      "RinseSinkBasin",
+      "ScrubCuttingBoard",
+      "SearingMeat",
+      "SetUpCuttingStation",
+      "StackBowlsCabinet",
+      "SteamInMicrowave",
+      "StirVegetables",
+      "StoreLeftoversInBowl",
+      "WashLettuce"
+    ],
+    "n_tasks": 16
+  },
+  "bootstrap_draws": 10000,
+  "validation_errors": [],
+  "paper_style_memory": {
+    "scope": "LLM+DiT Linear weights/biases (QuantVLA Tables 1/2)",
+    "unit_note": "GiB (2^30 bytes), displayed as GB in the paper",
+    "estimate_kind": "theoretical tightly-packed deployment component storage",
+    "excluded": [
+      "vision modules",
+      "activation peaks",
+      "CUDA/runtime workspaces",
+      "fake-quant caches",
+      "simulator"
+    ],
+    "atm_ohb": "folded into existing scales; zero additional operators/buffers",
+    "checkpoint": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/composite_seen/checkpoint-60000",
+    "scope_linear_layers": 180,
+    "fp16_weight_bytes": 2139095040,
+    "fp16_bias_bytes": 442368,
+    "fp16_component_bytes": 2139537408,
+    "fp16_component_gib": 1.9925994873046875,
+    "configs": {
+      "fp16": {
+        "plan_sha256": null,
+        "quantized_layers": 0,
+        "fp16_layers": 180,
+        "planned_fp16_skips": 0,
+        "quantized_parameters": 0,
+        "component_bytes": 2139537408,
+        "component_mib": 2040.421875,
+        "component_gib": 1.9925994873046875,
+        "relative_savings": 0.0,
+        "compression_ratio": 1.0,
+        "breakdown_mib": {
+          "packed_weights": 0.0,
+          "weight_scales": 0.0,
+          "rotations": 0.0,
+          "permutation_indices": 0.0
+        }
+      },
+      "w4a8_atmohb": {
+        "plan_sha256": "8ec43c724ddbe2f195ab4fcff619a3568372decd45d306e697edeb098705e093",
+        "quantized_layers": 116,
+        "fp16_layers": 64,
+        "planned_fp16_skips": 0,
+        "quantized_parameters": 905969664,
+        "component_bytes": 963772416,
+        "component_mib": 919.125,
+        "component_gib": 0.8975830078125,
+        "relative_savings": 0.5495416848537756,
+        "compression_ratio": 2.2199612403100777,
+        "breakdown_mib": {
+          "packed_weights": 432.0,
+          "weight_scales": 0.703125,
+          "rotations": 174.0,
+          "permutation_indices": 0.0
+        }
+      },
+      "cscka_final": {
+        "plan_sha256": "abe7571b4dd1548fdf24042c7b508f34a3607a787cd92d7fb6f66f4855b46532",
+        "quantized_layers": 100,
+        "fp16_layers": 80,
+        "planned_fp16_skips": 16,
+        "quantized_parameters": 818937856,
+        "component_bytes": 1074710528,
+        "component_mib": 1024.923828125,
+        "component_gib": 1.0009021759033203,
+        "relative_savings": 0.497690237159901,
+        "compression_ratio": 1.990803432419711,
+        "breakdown_mib": {
+          "packed_weights": 390.5,
+          "weight_scales": 0.626953125,
+          "rotations": 155.375,
+          "permutation_indices": 0.0
+        }
+      },
+      "cscka_final_atmohb": {
+        "plan_sha256": "abe7571b4dd1548fdf24042c7b508f34a3607a787cd92d7fb6f66f4855b46532",
+        "quantized_layers": 100,
+        "fp16_layers": 80,
+        "planned_fp16_skips": 16,
+        "quantized_parameters": 818937856,
+        "component_bytes": 1074710528,
+        "component_mib": 1024.923828125,
+        "component_gib": 1.0009021759033203,
+        "relative_savings": 0.497690237159901,
+        "compression_ratio": 1.990803432419711,
+        "breakdown_mib": {
+          "packed_weights": 390.5,
+          "weight_scales": 0.626953125,
+          "rotations": 155.375,
+          "permutation_indices": 0.0
+        }
+      }
+    }
+  },
+  "configs": {
+    "fp16": {
+      "per_task": {
+        "DeliverStraw": 0.14,
+        "GetToastedBread": 0.0,
+        "KettleBoiling": 0.7,
+        "LoadDishwasher": 0.6,
+        "PackIdenticalLunches": 0.14,
+        "PreSoakPan": 0.6,
+        "PrepareCoffee": 0.18,
+        "RinseSinkBasin": 0.48,
+        "ScrubCuttingBoard": 0.7,
+        "SearingMeat": 0.26,
+        "SetUpCuttingStation": 0.52,
+        "StackBowlsCabinet": 0.84,
+        "SteamInMicrowave": 0.42,
+        "StirVegetables": 0.32,
+        "StoreLeftoversInBowl": 0.24,
+        "WashLettuce": 0.56
+      },
+      "per_task_details": {
+        "DeliverStraw": {
+          "sr": 0.14,
+          "successes": 7,
+          "episodes": 50,
+          "mean_success_steps": 1130.142857142857,
+          "mean_failure_steps": 2550.0
+        },
+        "GetToastedBread": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 50,
+          "mean_success_steps": null,
+          "mean_failure_steps": 3000.0
+        },
+        "KettleBoiling": {
+          "sr": 0.7,
+          "successes": 35,
+          "episodes": 50,
+          "mean_success_steps": 571.6857142857143,
+          "mean_failure_steps": 1500.0
+        },
+        "LoadDishwasher": {
+          "sr": 0.6,
+          "successes": 30,
+          "episodes": 50,
+          "mean_success_steps": 906.8,
+          "mean_failure_steps": 1800.0
+        },
+        "PackIdenticalLunches": {
+          "sr": 0.14,
+          "successes": 7,
+          "episodes": 50,
+          "mean_success_steps": 1755.5714285714287,
+          "mean_failure_steps": 3900.0
+        },
+        "PreSoakPan": {
+          "sr": 0.6,
+          "successes": 30,
+          "episodes": 50,
+          "mean_success_steps": 1035.7,
+          "mean_failure_steps": 2400.0
+        },
+        "PrepareCoffee": {
+          "sr": 0.18,
+          "successes": 9,
+          "episodes": 50,
+          "mean_success_steps": 924.7777777777778,
+          "mean_failure_steps": 1800.0
+        },
+        "RinseSinkBasin": {
+          "sr": 0.48,
+          "successes": 24,
+          "episodes": 50,
+          "mean_success_steps": 519.0416666666666,
+          "mean_failure_steps": 1350.0
+        },
+        "ScrubCuttingBoard": {
+          "sr": 0.7,
+          "successes": 35,
+          "episodes": 50,
+          "mean_success_steps": 653.0571428571428,
+          "mean_failure_steps": 1200.0
+        },
+        "SearingMeat": {
+          "sr": 0.26,
+          "successes": 13,
+          "episodes": 50,
+          "mean_success_steps": 1399.6153846153845,
+          "mean_failure_steps": 4350.0
+        },
+        "SetUpCuttingStation": {
+          "sr": 0.52,
+          "successes": 26,
+          "episodes": 50,
+          "mean_success_steps": 1090.423076923077,
+          "mean_failure_steps": 2400.0
+        },
+        "StackBowlsCabinet": {
+          "sr": 0.84,
+          "successes": 42,
+          "episodes": 50,
+          "mean_success_steps": 444.8333333333333,
+          "mean_failure_steps": 2100.0
+        },
+        "SteamInMicrowave": {
+          "sr": 0.42,
+          "successes": 21,
+          "episodes": 50,
+          "mean_success_steps": 1219.3333333333333,
+          "mean_failure_steps": 2100.0
+        },
+        "StirVegetables": {
+          "sr": 0.32,
+          "successes": 16,
+          "episodes": 50,
+          "mean_success_steps": 1102.5625,
+          "mean_failure_steps": 2400.0
+        },
+        "StoreLeftoversInBowl": {
+          "sr": 0.24,
+          "successes": 12,
+          "episodes": 50,
+          "mean_success_steps": 908.1666666666666,
+          "mean_failure_steps": 2550.0
+        },
+        "WashLettuce": {
+          "sr": 0.56,
+          "successes": 28,
+          "episodes": 50,
+          "mean_success_steps": 623.9285714285714,
+          "mean_failure_steps": 1650.0
+        }
+      },
+      "primary_task_macro_sr": 0.41875000000000007,
+      "primary_task_cluster_ci95": [
+        0.30249999999999994,
+        0.53375
+      ],
+      "all18_task_macro_sr": 0.41875000000000007,
+      "task_macro_sr": 0.41875000000000007,
+      "episode_sr": 0.41875,
+      "successes": 335,
+      "episodes": 800,
+      "mean_success_steps": 832.7313432835821,
+      "mean_failure_steps": 2520.0,
+      "efficiency": {
+        "rollout_shards": 4,
+        "egl_device_pool": null,
+        "gpu_measurement_scope": "dedicated model-GPU device total",
+        "driver_wall_samples": 800,
+        "mean_driver_wall_seconds": 396.43196199804413,
+        "p50_driver_wall_seconds": 374.00203639268875,
+        "p90_driver_wall_seconds": 667.4030847525598,
+        "mean_episode_wall_seconds": 382.3974369095394,
+        "total_replans": 91014,
+        "mean_inference_seconds_per_replan": 1.8502221238059116,
+        "mean_env_step_seconds": 0.08761692763955738,
+        "mean_env_construct_seconds": 13.848414588494926,
+        "steps_per_driver_second": 4.574445109975636,
+        "episodes_per_aggregate_driver_hour": 9.081003413185341,
+        "gpu": {
+          "samples": 9726,
+          "peak_memory_mib": 45392.0,
+          "mean_memory_mib": 20175.694530125438,
+          "mean_gpu_utilization_pct": 17.936356158749742,
+          "p95_gpu_utilization_pct": 86.0,
+          "mean_power_w": 374.2884310096644,
+          "p95_power_w": 218.09,
+          "server_memory_samples": 5951,
+          "peak_server_process_memory_mib": 7654.0,
+          "mean_server_process_memory_mib": 7634.199294236263,
+          "server_instance_roles": [
+            "primary"
+          ]
+        }
+      },
+      "paper_style_memory": {
+        "plan_sha256": null,
+        "quantized_layers": 0,
+        "fp16_layers": 180,
+        "planned_fp16_skips": 0,
+        "quantized_parameters": 0,
+        "component_bytes": 2139537408,
+        "component_mib": 2040.421875,
+        "component_gib": 1.9925994873046875,
+        "relative_savings": 0.0,
+        "compression_ratio": 1.0,
+        "breakdown_mib": {
+          "packed_weights": 0.0,
+          "weight_scales": 0.0,
+          "rotations": 0.0,
+          "permutation_indices": 0.0
+        }
+      }
+    },
+    "w4a8_atmohb": {
+      "per_task": {
+        "DeliverStraw": 0.0,
+        "GetToastedBread": 0.0,
+        "KettleBoiling": 0.26,
+        "LoadDishwasher": 0.58,
+        "PackIdenticalLunches": 0.06,
+        "PreSoakPan": 0.28,
+        "PrepareCoffee": 0.02,
+        "RinseSinkBasin": 0.2,
+        "ScrubCuttingBoard": 0.28,
+        "SearingMeat": 0.06,
+        "SetUpCuttingStation": 0.26,
+        "StackBowlsCabinet": 0.66,
+        "SteamInMicrowave": 0.06,
+        "StirVegetables": 0.18,
+        "StoreLeftoversInBowl": 0.0,
+        "WashLettuce": 0.24
+      },
+      "per_task_details": {
+        "DeliverStraw": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 50,
+          "mean_success_steps": null,
+          "mean_failure_steps": 2550.0
+        },
+        "GetToastedBread": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 50,
+          "mean_success_steps": null,
+          "mean_failure_steps": 3000.0
+        },
+        "KettleBoiling": {
+          "sr": 0.26,
+          "successes": 13,
+          "episodes": 50,
+          "mean_success_steps": 721.0769230769231,
+          "mean_failure_steps": 1500.0
+        },
+        "LoadDishwasher": {
+          "sr": 0.58,
+          "successes": 29,
+          "episodes": 50,
+          "mean_success_steps": 1044.5862068965516,
+          "mean_failure_steps": 1800.0
+        },
+        "PackIdenticalLunches": {
+          "sr": 0.06,
+          "successes": 3,
+          "episodes": 50,
+          "mean_success_steps": 1778.6666666666667,
+          "mean_failure_steps": 3900.0
+        },
+        "PreSoakPan": {
+          "sr": 0.28,
+          "successes": 14,
+          "episodes": 50,
+          "mean_success_steps": 1168.142857142857,
+          "mean_failure_steps": 2400.0
+        },
+        "PrepareCoffee": {
+          "sr": 0.02,
+          "successes": 1,
+          "episodes": 50,
+          "mean_success_steps": 847.0,
+          "mean_failure_steps": 1800.0
+        },
+        "RinseSinkBasin": {
+          "sr": 0.2,
+          "successes": 10,
+          "episodes": 50,
+          "mean_success_steps": 563.0,
+          "mean_failure_steps": 1350.0
+        },
+        "ScrubCuttingBoard": {
+          "sr": 0.28,
+          "successes": 14,
+          "episodes": 50,
+          "mean_success_steps": 737.7142857142857,
+          "mean_failure_steps": 1200.0
+        },
+        "SearingMeat": {
+          "sr": 0.06,
+          "successes": 3,
+          "episodes": 50,
+          "mean_success_steps": 1779.3333333333333,
+          "mean_failure_steps": 4350.0
+        },
+        "SetUpCuttingStation": {
+          "sr": 0.26,
+          "successes": 13,
+          "episodes": 50,
+          "mean_success_steps": 1247.6153846153845,
+          "mean_failure_steps": 2400.0
+        },
+        "StackBowlsCabinet": {
+          "sr": 0.66,
+          "successes": 33,
+          "episodes": 50,
+          "mean_success_steps": 582.4545454545455,
+          "mean_failure_steps": 2100.0
+        },
+        "SteamInMicrowave": {
+          "sr": 0.06,
+          "successes": 3,
+          "episodes": 50,
+          "mean_success_steps": 1081.6666666666667,
+          "mean_failure_steps": 2100.0
+        },
+        "StirVegetables": {
+          "sr": 0.18,
+          "successes": 9,
+          "episodes": 50,
+          "mean_success_steps": 1265.111111111111,
+          "mean_failure_steps": 2400.0
+        },
+        "StoreLeftoversInBowl": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 50,
+          "mean_success_steps": null,
+          "mean_failure_steps": 2550.0
+        },
+        "WashLettuce": {
+          "sr": 0.24,
+          "successes": 12,
+          "episodes": 50,
+          "mean_success_steps": 669.8333333333334,
+          "mean_failure_steps": 1650.0
+        }
+      },
+      "primary_task_macro_sr": 0.19625000000000004,
+      "primary_task_cluster_ci95": [
+        0.10750000000000001,
+        0.29625000000000007
+      ],
+      "all18_task_macro_sr": 0.19625000000000004,
+      "task_macro_sr": 0.19625000000000004,
+      "episode_sr": 0.19625,
+      "successes": 157,
+      "episodes": 800,
+      "mean_success_steps": 901.968152866242,
+      "mean_failure_steps": 2398.367029548989,
+      "efficiency": {
+        "rollout_shards": 4,
+        "egl_device_pool": null,
+        "gpu_measurement_scope": "dedicated model-GPU device total",
+        "driver_wall_samples": 799,
+        "mean_driver_wall_seconds": 471.17334869209253,
+        "p50_driver_wall_seconds": 261.3727838039398,
+        "p90_driver_wall_seconds": 1012.653388762474,
+        "mean_episode_wall_seconds": 459.5218671847659,
+        "total_replans": 105569,
+        "mean_inference_seconds_per_replan": 2.225685804959917,
+        "mean_env_step_seconds": 0.07376212342851712,
+        "mean_env_construct_seconds": 11.03202659882605,
+        "steps_per_driver_second": 4.472521465814706,
+        "episodes_per_aggregate_driver_hour": 7.640500062223526,
+        "gpu": {
+          "samples": 9726,
+          "peak_memory_mib": 45218.0,
+          "mean_memory_mib": 24380.98313798067,
+          "mean_gpu_utilization_pct": 16.773390910960313,
+          "p95_gpu_utilization_pct": 67.0,
+          "mean_power_w": 108.15241620398983,
+          "p95_power_w": 206.46249999999998,
+          "server_memory_samples": 5952,
+          "peak_server_process_memory_mib": 13170.0,
+          "mean_server_process_memory_mib": 13037.824596774193,
+          "server_instance_roles": [
+            "primary"
+          ]
+        }
+      },
+      "paper_style_memory": {
+        "plan_sha256": "8ec43c724ddbe2f195ab4fcff619a3568372decd45d306e697edeb098705e093",
+        "quantized_layers": 116,
+        "fp16_layers": 64,
+        "planned_fp16_skips": 0,
+        "quantized_parameters": 905969664,
+        "component_bytes": 963772416,
+        "component_mib": 919.125,
+        "component_gib": 0.8975830078125,
+        "relative_savings": 0.5495416848537756,
+        "compression_ratio": 2.2199612403100777,
+        "breakdown_mib": {
+          "packed_weights": 432.0,
+          "weight_scales": 0.703125,
+          "rotations": 174.0,
+          "permutation_indices": 0.0
+        }
+      }
+    },
+    "cscka_final": {
+      "per_task": {
+        "DeliverStraw": 0.06,
+        "GetToastedBread": 0.0,
+        "KettleBoiling": 0.52,
+        "LoadDishwasher": 0.66,
+        "PackIdenticalLunches": 0.1,
+        "PreSoakPan": 0.74,
+        "PrepareCoffee": 0.16,
+        "RinseSinkBasin": 0.56,
+        "ScrubCuttingBoard": 0.66,
+        "SearingMeat": 0.18,
+        "SetUpCuttingStation": 0.38,
+        "StackBowlsCabinet": 0.82,
+        "SteamInMicrowave": 0.32,
+        "StirVegetables": 0.36,
+        "StoreLeftoversInBowl": 0.36,
+        "WashLettuce": 0.62
+      },
+      "per_task_details": {
+        "DeliverStraw": {
+          "sr": 0.06,
+          "successes": 3,
+          "episodes": 50,
+          "mean_success_steps": 1522.0,
+          "mean_failure_steps": 2550.0
+        },
+        "GetToastedBread": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 50,
+          "mean_success_steps": null,
+          "mean_failure_steps": 3000.0
+        },
+        "KettleBoiling": {
+          "sr": 0.52,
+          "successes": 26,
+          "episodes": 50,
+          "mean_success_steps": 595.0769230769231,
+          "mean_failure_steps": 1500.0
+        },
+        "LoadDishwasher": {
+          "sr": 0.66,
+          "successes": 33,
+          "episodes": 50,
+          "mean_success_steps": 936.5151515151515,
+          "mean_failure_steps": 1800.0
+        },
+        "PackIdenticalLunches": {
+          "sr": 0.1,
+          "successes": 5,
+          "episodes": 50,
+          "mean_success_steps": 1729.2,
+          "mean_failure_steps": 3900.0
+        },
+        "PreSoakPan": {
+          "sr": 0.74,
+          "successes": 37,
+          "episodes": 50,
+          "mean_success_steps": 988.6756756756756,
+          "mean_failure_steps": 2400.0
+        },
+        "PrepareCoffee": {
+          "sr": 0.16,
+          "successes": 8,
+          "episodes": 50,
+          "mean_success_steps": 1068.375,
+          "mean_failure_steps": 1800.0
+        },
+        "RinseSinkBasin": {
+          "sr": 0.56,
+          "successes": 28,
+          "episodes": 50,
+          "mean_success_steps": 528.5714285714286,
+          "mean_failure_steps": 1350.0
+        },
+        "ScrubCuttingBoard": {
+          "sr": 0.66,
+          "successes": 33,
+          "episodes": 50,
+          "mean_success_steps": 685.1515151515151,
+          "mean_failure_steps": 1200.0
+        },
+        "SearingMeat": {
+          "sr": 0.18,
+          "successes": 9,
+          "episodes": 50,
+          "mean_success_steps": 1378.2222222222222,
+          "mean_failure_steps": 4350.0
+        },
+        "SetUpCuttingStation": {
+          "sr": 0.38,
+          "successes": 19,
+          "episodes": 50,
+          "mean_success_steps": 1071.4736842105262,
+          "mean_failure_steps": 2400.0
+        },
+        "StackBowlsCabinet": {
+          "sr": 0.82,
+          "successes": 41,
+          "episodes": 50,
+          "mean_success_steps": 419.1463414634146,
+          "mean_failure_steps": 2100.0
+        },
+        "SteamInMicrowave": {
+          "sr": 0.32,
+          "successes": 16,
+          "episodes": 50,
+          "mean_success_steps": 1237.375,
+          "mean_failure_steps": 2100.0
+        },
+        "StirVegetables": {
+          "sr": 0.36,
+          "successes": 18,
+          "episodes": 50,
+          "mean_success_steps": 1190.4444444444443,
+          "mean_failure_steps": 2400.0
+        },
+        "StoreLeftoversInBowl": {
+          "sr": 0.36,
+          "successes": 18,
+          "episodes": 50,
+          "mean_success_steps": 993.1666666666666,
+          "mean_failure_steps": 2550.0
+        },
+        "WashLettuce": {
+          "sr": 0.62,
+          "successes": 31,
+          "episodes": 50,
+          "mean_success_steps": 672.0322580645161,
+          "mean_failure_steps": 1650.0
+        }
+      },
+      "primary_task_macro_sr": 0.4062500000000001,
+      "primary_task_cluster_ci95": [
+        0.28875,
+        0.525
+      ],
+      "all18_task_macro_sr": 0.4062500000000001,
+      "task_macro_sr": 0.4062500000000001,
+      "episode_sr": 0.40625,
+      "successes": 325,
+      "episodes": 800,
+      "mean_success_steps": 836.9538461538461,
+      "mean_failure_steps": 2529.7894736842104,
+      "efficiency": {
+        "rollout_shards": 4,
+        "egl_device_pool": null,
+        "gpu_measurement_scope": "dedicated model-GPU device total",
+        "driver_wall_samples": 798,
+        "mean_driver_wall_seconds": 398.9442146168022,
+        "p50_driver_wall_seconds": 340.54554936885836,
+        "p90_driver_wall_seconds": 767.422118028005,
+        "mean_episode_wall_seconds": 383.90565283197094,
+        "total_replans": 92447,
+        "mean_inference_seconds_per_replan": 1.8292855334655453,
+        "mean_env_step_seconds": 0.086742540402822,
+        "mean_env_construct_seconds": 14.098641428290867,
+        "steps_per_driver_second": 4.628947260451215,
+        "episodes_per_aggregate_driver_hour": 9.023818037962796,
+        "gpu": {
+          "samples": 9726,
+          "peak_memory_mib": 45269.0,
+          "mean_memory_mib": 24120.083076290357,
+          "mean_gpu_utilization_pct": 15.807629035574749,
+          "p95_gpu_utilization_pct": 67.0,
+          "mean_power_w": 100.63300843100994,
+          "p95_power_w": 195.9675,
+          "server_memory_samples": 5952,
+          "peak_server_process_memory_mib": 12998.0,
+          "mean_server_process_memory_mib": 12970.597782258064,
+          "server_instance_roles": [
+            "primary"
+          ]
+        }
+      },
+      "paper_style_memory": {
+        "plan_sha256": "abe7571b4dd1548fdf24042c7b508f34a3607a787cd92d7fb6f66f4855b46532",
+        "quantized_layers": 100,
+        "fp16_layers": 80,
+        "planned_fp16_skips": 16,
+        "quantized_parameters": 818937856,
+        "component_bytes": 1074710528,
+        "component_mib": 1024.923828125,
+        "component_gib": 1.0009021759033203,
+        "relative_savings": 0.497690237159901,
+        "compression_ratio": 1.990803432419711,
+        "breakdown_mib": {
+          "packed_weights": 390.5,
+          "weight_scales": 0.626953125,
+          "rotations": 155.375,
+          "permutation_indices": 0.0
+        }
+      }
+    },
+    "cscka_final_atmohb": {
+      "per_task": {
+        "DeliverStraw": 0.16,
+        "GetToastedBread": 0.0,
+        "KettleBoiling": 0.52,
+        "LoadDishwasher": 0.56,
+        "PackIdenticalLunches": 0.12,
+        "PreSoakPan": 0.66,
+        "PrepareCoffee": 0.24,
+        "RinseSinkBasin": 0.46,
+        "ScrubCuttingBoard": 0.54,
+        "SearingMeat": 0.16,
+        "SetUpCuttingStation": 0.46,
+        "StackBowlsCabinet": 0.76,
+        "SteamInMicrowave": 0.32,
+        "StirVegetables": 0.42,
+        "StoreLeftoversInBowl": 0.2,
+        "WashLettuce": 0.68
+      },
+      "per_task_details": {
+        "DeliverStraw": {
+          "sr": 0.16,
+          "successes": 8,
+          "episodes": 50,
+          "mean_success_steps": 1144.625,
+          "mean_failure_steps": 2550.0
+        },
+        "GetToastedBread": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 50,
+          "mean_success_steps": null,
+          "mean_failure_steps": 3000.0
+        },
+        "KettleBoiling": {
+          "sr": 0.52,
+          "successes": 26,
+          "episodes": 50,
+          "mean_success_steps": 606.7307692307693,
+          "mean_failure_steps": 1500.0
+        },
+        "LoadDishwasher": {
+          "sr": 0.56,
+          "successes": 28,
+          "episodes": 50,
+          "mean_success_steps": 1004.2857142857143,
+          "mean_failure_steps": 1800.0
+        },
+        "PackIdenticalLunches": {
+          "sr": 0.12,
+          "successes": 6,
+          "episodes": 50,
+          "mean_success_steps": 1726.8333333333333,
+          "mean_failure_steps": 3900.0
+        },
+        "PreSoakPan": {
+          "sr": 0.66,
+          "successes": 33,
+          "episodes": 50,
+          "mean_success_steps": 1022.4848484848485,
+          "mean_failure_steps": 2400.0
+        },
+        "PrepareCoffee": {
+          "sr": 0.24,
+          "successes": 12,
+          "episodes": 50,
+          "mean_success_steps": 970.75,
+          "mean_failure_steps": 1800.0
+        },
+        "RinseSinkBasin": {
+          "sr": 0.46,
+          "successes": 23,
+          "episodes": 50,
+          "mean_success_steps": 459.82608695652175,
+          "mean_failure_steps": 1350.0
+        },
+        "ScrubCuttingBoard": {
+          "sr": 0.54,
+          "successes": 27,
+          "episodes": 50,
+          "mean_success_steps": 659.7037037037037,
+          "mean_failure_steps": 1200.0
+        },
+        "SearingMeat": {
+          "sr": 0.16,
+          "successes": 8,
+          "episodes": 50,
+          "mean_success_steps": 782.375,
+          "mean_failure_steps": 4350.0
+        },
+        "SetUpCuttingStation": {
+          "sr": 0.46,
+          "successes": 23,
+          "episodes": 50,
+          "mean_success_steps": 1191.5217391304348,
+          "mean_failure_steps": 2400.0
+        },
+        "StackBowlsCabinet": {
+          "sr": 0.76,
+          "successes": 38,
+          "episodes": 50,
+          "mean_success_steps": 376.7368421052632,
+          "mean_failure_steps": 2100.0
+        },
+        "SteamInMicrowave": {
+          "sr": 0.32,
+          "successes": 16,
+          "episodes": 50,
+          "mean_success_steps": 1192.5,
+          "mean_failure_steps": 2100.0
+        },
+        "StirVegetables": {
+          "sr": 0.42,
+          "successes": 21,
+          "episodes": 50,
+          "mean_success_steps": 1167.8095238095239,
+          "mean_failure_steps": 2400.0
+        },
+        "StoreLeftoversInBowl": {
+          "sr": 0.2,
+          "successes": 10,
+          "episodes": 50,
+          "mean_success_steps": 961.0,
+          "mean_failure_steps": 2550.0
+        },
+        "WashLettuce": {
+          "sr": 0.68,
+          "successes": 34,
+          "episodes": 50,
+          "mean_success_steps": 636.6470588235294,
+          "mean_failure_steps": 1650.0
+        }
+      },
+      "primary_task_macro_sr": 0.39125000000000004,
+      "primary_task_cluster_ci95": [
+        0.2850000000000001,
+        0.49750000000000005
+      ],
+      "all18_task_macro_sr": 0.39125000000000004,
+      "task_macro_sr": 0.39125000000000004,
+      "episode_sr": 0.39125,
+      "successes": 313,
+      "episodes": 800,
+      "mean_success_steps": 830.7731629392971,
+      "mean_failure_steps": 2504.4147843942505,
+      "efficiency": {
+        "rollout_shards": 4,
+        "egl_device_pool": null,
+        "gpu_measurement_scope": "dedicated model-GPU device total",
+        "driver_wall_samples": 799,
+        "mean_driver_wall_seconds": 409.61186591644895,
+        "p50_driver_wall_seconds": 379.1707178115845,
+        "p90_driver_wall_seconds": 730.4170300960541,
+        "mean_episode_wall_seconds": 394.1658363124263,
+        "total_replans": 92825,
+        "mean_inference_seconds_per_replan": 1.9013222177397011,
+        "mean_env_step_seconds": 0.08686789372898622,
+        "mean_env_construct_seconds": 14.926578399243299,
+        "steps_per_driver_second": 4.52115173129208,
+        "episodes_per_aggregate_driver_hour": 8.788807892431306,
+        "gpu": {
+          "samples": 9726,
+          "peak_memory_mib": 45414.0,
+          "mean_memory_mib": 24450.443758996505,
+          "mean_gpu_utilization_pct": 18.203578038247993,
+          "p95_gpu_utilization_pct": 74.0,
+          "mean_power_w": 110.22820995270362,
+          "p95_power_w": 209.6175,
+          "server_memory_samples": 5952,
+          "peak_server_process_memory_mib": 12756.0,
+          "mean_server_process_memory_mib": 12705.369959677419,
+          "server_instance_roles": [
+            "primary"
+          ]
+        }
+      },
+      "paper_style_memory": {
+        "plan_sha256": "abe7571b4dd1548fdf24042c7b508f34a3607a787cd92d7fb6f66f4855b46532",
+        "quantized_layers": 100,
+        "fp16_layers": 80,
+        "planned_fp16_skips": 16,
+        "quantized_parameters": 818937856,
+        "component_bytes": 1074710528,
+        "component_mib": 1024.923828125,
+        "component_gib": 1.0009021759033203,
+        "relative_savings": 0.497690237159901,
+        "compression_ratio": 1.990803432419711,
+        "breakdown_mib": {
+          "packed_weights": 390.5,
+          "weight_scales": 0.626953125,
+          "rotations": 155.375,
+          "permutation_indices": 0.0
+        }
+      }
+    }
+  },
+  "comparisons": {
+    "w4a8_atmohb_vs_fp16": {
+      "a": "w4a8_atmohb",
+      "b": "fp16",
+      "primary_task_macro_delta": -0.22250000000000003,
+      "task_cluster_ci95": [
+        -0.28375000000000006,
+        -0.16125
+      ],
+      "paired_permutation_p": 6.103515625e-05,
+      "episode_mcnemar": {
+        "a_wins": 47,
+        "b_wins": 225,
+        "two_sided_p": 5.0085018409588646e-29
+      },
+      "holm_adjusted_p": 0.00030517578125
+    },
+    "cscka_final_vs_fp16": {
+      "a": "cscka_final",
+      "b": "fp16",
+      "primary_task_macro_delta": -0.01249999999999999,
+      "task_cluster_ci95": [
+        -0.05749999999999999,
+        0.030031249999999572
+      ],
+      "paired_permutation_p": 0.6268310546875,
+      "episode_mcnemar": {
+        "a_wins": 117,
+        "b_wins": 127,
+        "two_sided_p": 0.5645926559195692
+      },
+      "holm_adjusted_p": 0.99853515625
+    },
+    "cscka_final_vs_w4a8_atmohb": {
+      "a": "cscka_final",
+      "b": "w4a8_atmohb",
+      "primary_task_macro_delta": 0.21000000000000002,
+      "task_cluster_ci95": [
+        0.14250000000000004,
+        0.27999999999999997
+      ],
+      "paired_permutation_p": 6.103515625e-05,
+      "episode_mcnemar": {
+        "a_wins": 215,
+        "b_wins": 47,
+        "two_sided_p": 7.515410060616527e-27
+      },
+      "holm_adjusted_p": 0.00030517578125
+    },
+    "cscka_final_atmohb_vs_cscka_final": {
+      "a": "cscka_final_atmohb",
+      "b": "cscka_final",
+      "primary_task_macro_delta": -0.014999999999999989,
+      "task_cluster_ci95": [
+        -0.05374999999999999,
+        0.02250000000000002
+      ],
+      "paired_permutation_p": 0.499267578125,
+      "episode_mcnemar": {
+        "a_wins": 101,
+        "b_wins": 113,
+        "two_sided_p": 0.4521621432456108
+      },
+      "holm_adjusted_p": 0.99853515625
+    },
+    "cscka_final_atmohb_vs_w4a8_atmohb": {
+      "a": "cscka_final_atmohb",
+      "b": "w4a8_atmohb",
+      "primary_task_macro_delta": 0.19500000000000003,
+      "task_cluster_ci95": [
+        0.13625,
+        0.255
+      ],
+      "paired_permutation_p": 0.0001220703125,
+      "episode_mcnemar": {
+        "a_wins": 201,
+        "b_wins": 45,
+        "two_sided_p": 1.015224200053398e-24
+      },
+      "holm_adjusted_p": 0.0003662109375
+    }
+  },
+  "decision": {
+    "spec": {
+      "final_config": "cscka_final",
+      "cka_to_cs_ratio": 16,
+      "mask_source_task_set": "atomic_seen",
+      "selection_scenarios_per_task": 50,
+      "selection_successes": 161,
+      "selection_macro_sr": 0.805
+    },
+    "passed": false
+  },
+  "acceptance": {
+    "enable_cs": false,
+    "default": "ckaonly",
+    "rule": "held-out delta > 0 and task-cluster bootstrap CI95 lower bound > 0"
+  },
+  "libero_context": {
+    "v1.4_macro_avg": 0.892,
+    "uniform_w6_macro_avg": 0.882,
+    "v1.3_macro_avg": 0.852,
+    "note": "cross-benchmark context only; not pooled with RoboCasa365"
+  },
+  "task_set": "composite_seen"
+}

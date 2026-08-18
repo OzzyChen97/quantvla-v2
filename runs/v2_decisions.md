@@ -1011,3 +1011,30 @@ LIBERO 表移除 uniform W4 列（未跑该配置，仅保留 D_solver 数据）
   `--replica-config-ids`，默认空值仍保持原 post-seen GPU1/3/4/5 行为；本次仅将
   `w4a8_atmohb` 映射到其 manifest replica GPU2:5772。preflight 和 runtime
   metadata 显式记录每个配置实际使用的 GPU、端口和 replica 编号。
+
+## 2026-08-19：official composite_seen 结果（D-058）
+
+- composite_seen 正式矩阵 **3200/3200** rows 完整（16 tasks × 50 scenarios ×
+  4 configs），所有 `(config, task, seed)` 唯一，0 crash / 0 timeout；严格 parser
+  对 manifest/config hash、task、seed 和 paired-noise 协议检查通过。
+
+  | config | 16-task macro SR (95% task-cluster CI) | episodes |
+  |---|---:|---:|
+  | FP16 | **41.9% [30.2, 53.4]** | 335/800 |
+  | 原版 W4A8 + static ATM/OHB | 19.6% [10.8, 29.6] | 157/800 |
+  | **CS+CKA final (16:1)** | **40.6% [28.9, 52.5]** | 325/800 |
+  | CS+CKA final + static ATM/OHB | 39.1% [28.5, 49.8] | 313/800 |
+
+- 配对比较：final 相对原版 W4A8+ATM/OHB **+21.0pp**，task-cluster CI
+  `[+14.3,+28.0]pp`，Holm p=0.000305；final 相对 FP16 仅 `-1.25pp`，CI
+  `[-5.75,+3.00]pp`、Holm p=0.999，当前 split 未检出显著差异。给 final 加
+  static ATM/OHB 为 `-1.5pp`，CI `[-5.4,+2.3]pp`、Holm p=0.999，再次不支持
+  启用该校正。
+- efficiency（mean episode wall / inference per replan / peak server-process
+  memory）：FP16 `382.4s / 1.850s / 7654MiB`；原版 W4A8 `459.5s / 2.226s /
+  13170MiB`；final `383.9s / 1.829s / 12998MiB`；final+ATM `394.2s /
+  1.901s / 12756MiB`。这里的 request latency 包含 4-client 并发排队，不能解释为
+  单请求 kernel latency；整卡峰值约 45GiB 还包含 EGL clients/外部进程，正式表
+  已与 server-process memory 和理论 packed memory 分栏。
+- 严格结果与 per-task 表：
+  `runs/robocasa365_official_full_composite_seen_paired50/{summary.json,summary.md}`。
