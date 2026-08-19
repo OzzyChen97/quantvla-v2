@@ -1,0 +1,9 @@
+Use case: scientific-educational
+Asset type: full-width CVPR method overview
+Primary request: Create a precise GDSQ-VLA pipeline centered on a visual layer map. The left panel compares an FP16 teacher path with a one-layer W4A8 intervention. The middle panel measures geometry and distribution. The right panel converts 116 candidates into a blue/orange mixed-precision layer map.
+Scene/backdrop: white conference-paper background
+Style/medium: polished academic infographic, flat vector shapes, sparse ink, consistent sans-serif font
+Composition/framing: 2048x1152 landscape; left 34 percent, middle 31 percent, right 35 percent; arrows flow only left to right; right panel ends with a vertical grid of blue FP16 and orange W4A8 blocks
+Text (verbatim): "GDSQ-VLA", "1  Layerwise Probing", "RGB + Instruction + Robot State", "FP16 Reference", "Single-Layer W4A8 Probe", "116 Candidate Linear Layers", "2  Dual-Similarity Scoring", "Geometry: 1 - CKA", "Distribution: D_CS", "Action Weight w_i", "16 x Geometry + 1 x Distribution", "RMS / Saturation Guards", "3  Budgeted Selection and Deployment", "W6-Equivalent Storage Budget", "Top-K Functional Adjudication", "100 W4A8", "16 FP16", "64 DiT Attention Projections Stay FP16", "1.99x Theoretical Storage Compression"
+Constraints: all quoted labels exact; explicitly pair FP16 and W4A8 features; CKA branch uses geometric point relationships, CS branch uses overlapping distributions; combine the branches with 16:1 weighting; final map must visibly contain many more orange than blue candidate blocks; no ATM or OHB; no performance success rates; no watermark
+Avoid: neural-network brain icons, semantic/visual alignment labels, rankings by generic unified score, circular workflow, decorative robot, tiny footnotes

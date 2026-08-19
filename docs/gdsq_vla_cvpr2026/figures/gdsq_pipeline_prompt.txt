@@ -1,0 +1,13 @@
+Use case: scientific-educational
+Asset type: full-width CVPR paper architecture figure
+Primary request: Create a technically accurate three-stage architecture diagram for GDSQ-VLA, a training-free mixed-precision post-training quantization framework for a vision-language-action model.
+Scene/backdrop: clean white scientific-paper background
+Style/medium: flat vector-like scientific diagram, crisp geometric modules, thin arrows, readable sans-serif typography
+Composition/framing: 2048x1152 landscape; three balanced left-to-right panels connected by one main arrow; generous whitespace; readable when scaled to a two-column paper width
+Color palette: colorblind-safe blue for full precision, orange for W4A8, green for selected deployment path, light gray for references and constraints
+Text (verbatim): "1  Layerwise Probing", "Multimodal Observation", "RGB", "Instruction", "Robot State", "FP16 Reference", "Single-Layer W4A8 Probe", "116 Candidate Linear Layers", "2  Dual-Similarity Scoring", "Geometry: 1 - CKA", "Distribution: D_CS", "Action Weight w_i", "16 x Geometry + 1 x Distribution", "RMS / Saturation Guards", "3  Budgeted Selection and Deployment", "W6-Equivalent Storage Budget", "Top-K Functional Adjudication", "Final: 100 W4A8 + 16 FP16", "64 DiT Attention Projections Stay FP16", "1.99x Theoretical LLM+DiT Storage Compression"
+Subject: Panel 1 shows RGB, instruction, and robot-state inputs entering two frozen paths, an FP16 reference and a single-layer W4A8 intervention, with paired hidden representations. Panel 2 shows the paired features branching into a CKA geometry module and a Cauchy-Schwarz distribution module, then combining with action importance and hard feasibility guards. Panel 3 shows budgeted binary layer selection, Top-K paired functional adjudication, and the final mixed W4A8/FP16 model.
+Constraints: preserve the exact left-to-right data flow; render every quoted label verbatim; make 16:1 weighting visually prominent; distinguish the 116 selectable layers from 64 always-FP16 attention projections; no ATM or OHB inside the final method path; no unverified performance numbers; no logos; no watermark
+Avoid: photorealism, robots as decorative characters, 3D perspective, tiny text, dense equations, gradients, black background, extra modules, claims of runtime speedup, claims of live GPU-memory reduction
+
+Execution target: bundled imagegen CLI, model gpt-image-2, quality high, size 2048x1152, PNG output at figures/gdsq_pipeline.png.

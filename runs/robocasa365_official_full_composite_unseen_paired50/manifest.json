@@ -1,0 +1,519 @@
+{
+  "schema_version": 1,
+  "run_id": "robocasa365_official_full_composite_unseen_paired50",
+  "created_at": "2026-08-17T17:11:55.257647+00:00",
+  "phase": "formal",
+  "repo": "/home1/gyy/vla/QuantVLA",
+  "spec": {
+    "path": "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_spec.json",
+    "sha256": "66aed6b7c02ddcbf332d741e578cf7c4f596652c40c1e27e525a4bea1e51f606",
+    "bytes": 2611
+  },
+  "checkpoint": {
+    "path": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/composite_unseen/checkpoint-60000/config.json",
+    "sha256": "6713ae6e9ee07ebf30f18a231bedcf9c06f8c64595d62529b6eb175498ef0526",
+    "bytes": 1706
+  },
+  "checkpoint_path": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/composite_unseen/checkpoint-60000",
+  "data_config": "examples.RoboCasa365.custom_data_config:RoboCasa365DataConfig",
+  "task_set": "composite_unseen",
+  "tasks": [
+    "ArrangeBreadBasket",
+    "ArrangeTea",
+    "BreadSelection",
+    "CategorizeCondiments",
+    "CuttingToolSelection",
+    "GarnishPancake",
+    "GatherTableware",
+    "HeatKebabSandwich",
+    "MakeIceLemonade",
+    "PanTransfer",
+    "PortionHotDogs",
+    "RecycleBottlesByType",
+    "SeparateFreezerRack",
+    "WaffleReheat",
+    "WashFruitColander",
+    "WeighIngredients"
+  ],
+  "dev_tasks": [],
+  "heldout_tasks": [
+    "ArrangeBreadBasket",
+    "ArrangeTea",
+    "BreadSelection",
+    "CategorizeCondiments",
+    "CuttingToolSelection",
+    "GarnishPancake",
+    "GatherTableware",
+    "HeatKebabSandwich",
+    "MakeIceLemonade",
+    "PanTransfer",
+    "PortionHotDogs",
+    "RecycleBottlesByType",
+    "SeparateFreezerRack",
+    "WaffleReheat",
+    "WashFruitColander",
+    "WeighIngredients"
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49
+  ],
+  "shards": [
+    [
+      "ArrangeBreadBasket",
+      "CuttingToolSelection"
+    ],
+    [
+      "WaffleReheat",
+      "CategorizeCondiments"
+    ],
+    [
+      "WashFruitColander",
+      "PanTransfer"
+    ],
+    [
+      "MakeIceLemonade",
+      "PortionHotDogs"
+    ],
+    [
+      "WeighIngredients",
+      "BreadSelection"
+    ],
+    [
+      "RecycleBottlesByType",
+      "GatherTableware"
+    ],
+    [
+      "GarnishPancake",
+      "SeparateFreezerRack"
+    ],
+    [
+      "HeatKebabSandwich",
+      "ArrangeTea"
+    ]
+  ],
+  "task_horizons": {
+    "ArrangeBreadBasket": 4350,
+    "ArrangeTea": 2250,
+    "BreadSelection": 1950,
+    "CategorizeCondiments": 1650,
+    "CuttingToolSelection": 1200,
+    "GarnishPancake": 2700,
+    "GatherTableware": 2250,
+    "HeatKebabSandwich": 2700,
+    "MakeIceLemonade": 3000,
+    "PanTransfer": 1800,
+    "PortionHotDogs": 2250,
+    "RecycleBottlesByType": 2850,
+    "SeparateFreezerRack": 2400,
+    "WaffleReheat": 4050,
+    "WashFruitColander": 3150,
+    "WeighIngredients": 3000
+  },
+  "comparisons": [
+    [
+      "w4a8_atmohb",
+      "fp16"
+    ],
+    [
+      "cscka_final",
+      "fp16"
+    ],
+    [
+      "cscka_final",
+      "w4a8_atmohb"
+    ],
+    [
+      "cscka_final_atmohb",
+      "cscka_final"
+    ],
+    [
+      "cscka_final_atmohb",
+      "w4a8_atmohb"
+    ]
+  ],
+  "decision": {
+    "final_config": "cscka_final",
+    "cka_to_cs_ratio": 16,
+    "mask_source_task_set": "atomic_seen",
+    "selection_scenarios_per_task": 50,
+    "selection_successes": 161,
+    "selection_macro_sr": 0.805
+  },
+  "protocol": {
+    "split": "target",
+    "official_task_horizons": true,
+    "n_action_steps": 16,
+    "denoising_steps": 4,
+    "paired_action_noise": true,
+    "action_noise_scheme": "sha256(task,env_seed,replan_index)/torch-cpu-normal-v1",
+    "action_noise_mode": "paired",
+    "render": true,
+    "egl_devices": {
+      "fp16": 1,
+      "w4a8_atmohb": 3,
+      "cscka_final": 4,
+      "cscka_final_atmohb": 5
+    },
+    "scenarios_per_task": 50,
+    "trial_timeout_seconds": 3600,
+    "trial_batch_size": 10,
+    "gpu_sample_interval_seconds": 10.0,
+    "egl_device_pool": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "shard_egl_devices": {
+      "fp16": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        1
+      ],
+      "w4a8_atmohb": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        1,
+        2
+      ],
+      "cscka_final": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        1,
+        2,
+        3
+      ],
+      "cscka_final_atmohb": [
+        4,
+        5,
+        6,
+        7,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "gpu_efficiency_scope": "model-GPU device totals; replicas and EGL clients use shared GPUs 1-7",
+    "server_instances": {
+      "fp16": [
+        {
+          "gpu": 1,
+          "port": 5771,
+          "replica": 0
+        }
+      ],
+      "w4a8_atmohb": [
+        {
+          "gpu": 3,
+          "port": 5773,
+          "replica": 0
+        },
+        {
+          "gpu": 2,
+          "port": 5772,
+          "replica": 1
+        }
+      ],
+      "cscka_final": [
+        {
+          "gpu": 4,
+          "port": 5775,
+          "replica": 0
+        },
+        {
+          "gpu": 6,
+          "port": 5774,
+          "replica": 1
+        }
+      ],
+      "cscka_final_atmohb": [
+        {
+          "gpu": 5,
+          "port": 5776,
+          "replica": 0
+        },
+        {
+          "gpu": 7,
+          "port": 5777,
+          "replica": 1
+        }
+      ]
+    }
+  },
+  "configs": [
+    {
+      "id": "fp16",
+      "gpu": 1,
+      "port": 5771,
+      "expected_wrapped": 0,
+      "egl_device": 1,
+      "plan": null,
+      "packdir": null,
+      "act_scale": null,
+      "atm": null,
+      "ohb": false,
+      "meta": {},
+      "shard_egl_devices": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        1
+      ],
+      "config_sha256": "812c109c4a624f3870f0ffa59de2935eefd37592bba92c881b47bc5dd25256c1",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/fp16_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/fp16_s1.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/fp16_s2.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/fp16_s3.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/fp16_s4.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/fp16_s5.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/fp16_s6.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/fp16_s7.jsonl"
+      ]
+    },
+    {
+      "id": "w4a8_atmohb",
+      "gpu": 3,
+      "port": 5773,
+      "expected_wrapped": 116,
+      "egl_device": 3,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/quantvla_v1_uniform_w4a8_composite_unseen.json",
+        "sha256": "e9cd8f7225af2e46d6658bc798aa3961a6285cc1e489cfc1131963240cfdec50",
+        "bytes": 16207
+      },
+      "packdir": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_composite_unseen_d4_w4a8_b64c32ls015",
+        "sha256_tree": "77e0c576bb64bb71ef4267e0fc2947fdf6c53c25d9a7803efb4eb8bf068112d8",
+        "files": 116,
+        "bytes": 186919968
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_quantvla_v1_w4a8_composite_unseen_d4.npz",
+        "sha256": "19c5d594f20a15c0dff28811e2573985af7605b03e200f1082f3bb77aa53a3b8",
+        "bytes": 1417402
+      },
+      "atm": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_quantvla_v1_w4a8_composite_unseen_d4.json",
+        "sha256": "3811e282a4fde0d1b4058cf6dfb6a675f19ea16a181201ea992633e07b0adbf8",
+        "bytes": 27631
+      },
+      "ohb": true,
+      "meta": {
+        "method": "original QuantVLA W4A8 + static ATM/OHB"
+      },
+      "replicas": [
+        {
+          "gpu": 2,
+          "port": 5772
+        }
+      ],
+      "shard_egl_devices": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        1,
+        2
+      ],
+      "config_sha256": "f6a512233ba6e14454a3f743ec26cfdbc5695de3238e4f25c1ce708d64e9b364",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/w4a8_atmohb_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/w4a8_atmohb_s1.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/w4a8_atmohb_s2.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/w4a8_atmohb_s3.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/w4a8_atmohb_s4.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/w4a8_atmohb_s5.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/w4a8_atmohb_s6.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/w4a8_atmohb_s7.jsonl"
+      ]
+    },
+    {
+      "id": "cscka_final",
+      "gpu": 4,
+      "port": 5775,
+      "expected_wrapped": 100,
+      "egl_device": 4,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_composite_unseen.final_plan.json",
+        "sha256": "970d6865b7fcd01b7848baa0daa2dfb7b98db79bbde8ea0022641d390bb71d47",
+        "bytes": 16271
+      },
+      "packdir": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_composite_unseen_d4_w4a8_b64c32ls015",
+        "sha256_tree": "77e0c576bb64bb71ef4267e0fc2947fdf6c53c25d9a7803efb4eb8bf068112d8",
+        "files": 116,
+        "bytes": 186919968
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_composite_unseen_d4.npz",
+        "sha256": "2daa247eee8a19a600799ae4b072a0d9093ccc34a077caefe59006f8d8c2fde6",
+        "bytes": 1266192
+      },
+      "atm": null,
+      "ohb": false,
+      "meta": {
+        "cka_to_cs_ratio": 16,
+        "mask_transfer": "atomic_seen"
+      },
+      "replicas": [
+        {
+          "gpu": 6,
+          "port": 5774
+        }
+      ],
+      "shard_egl_devices": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        1,
+        2,
+        3
+      ],
+      "config_sha256": "5417e7ff696c3fefd6c572e4faecbfd3c8c4842026062e8be4cf21fc038cd304",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_s1.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_s2.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_s3.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_s4.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_s5.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_s6.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_s7.jsonl"
+      ]
+    },
+    {
+      "id": "cscka_final_atmohb",
+      "gpu": 5,
+      "port": 5776,
+      "expected_wrapped": 100,
+      "egl_device": 5,
+      "plan": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/gr00t_quant_plan_robocasa365_cscka_16to1_composite_unseen.final_plan.json",
+        "sha256": "970d6865b7fcd01b7848baa0daa2dfb7b98db79bbde8ea0022641d390bb71d47",
+        "bytes": 16271
+      },
+      "packdir": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/duquant_packed_robocasa365_composite_unseen_d4_w4a8_b64c32ls015",
+        "sha256_tree": "77e0c576bb64bb71ef4267e0fc2947fdf6c53c25d9a7803efb4eb8bf068112d8",
+        "files": 116,
+        "bytes": 186919968
+      },
+      "act_scale": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/a8_scales_cscka_16to1_composite_unseen_d4.npz",
+        "sha256": "2daa247eee8a19a600799ae4b072a0d9093ccc34a077caefe59006f8d8c2fde6",
+        "bytes": 1266192
+      },
+      "atm": {
+        "path": "/home1/gyy/vla/QuantVLA/checkpoints/packs/robocasa365/atm_alpha_beta_static_cscka_16to1_composite_unseen_d4.json",
+        "sha256": "5717e37798691c852fbc7e1931c568f80f906c54e652dfdfc6a07f77fdb9d22b",
+        "bytes": 23549
+      },
+      "ohb": true,
+      "meta": {
+        "cka_to_cs_ratio": 16,
+        "mask_transfer": "atomic_seen"
+      },
+      "replicas": [
+        {
+          "gpu": 7,
+          "port": 5777
+        }
+      ],
+      "shard_egl_devices": [
+        4,
+        5,
+        6,
+        7,
+        1,
+        2,
+        3,
+        4
+      ],
+      "config_sha256": "6869912a964b7cd4df991709c4be5e8c566030f73e94637831fe363356953f02",
+      "result_files": [
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_atmohb_s0.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_atmohb_s1.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_atmohb_s2.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_atmohb_s3.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_atmohb_s4.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_atmohb_s5.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_atmohb_s6.jsonl",
+        "/home1/gyy/vla/QuantVLA/runs/robocasa365_official_full_composite_unseen_paired50/cscka_final_atmohb_s7.jsonl"
+      ]
+    }
+  ]
+}

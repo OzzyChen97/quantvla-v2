@@ -1,0 +1,7 @@
+Use case: infographic-diagram
+Asset type: CVPR paper architecture figure edit
+Input image: Image 1 is the edit target and must otherwise be preserved exactly.
+Primary request: Change only the Stage 3 box label "Top-K Functional Adjudication" to the exact text "Paired Top-K Functional Adjudication".
+Text (verbatim): "Paired Top-K Functional Adjudication"
+Constraints: Preserve the entire existing GDSQ-VLA diagram, canvas, three-panel layout, typography, colors, arrows, borders, spacing, formulas, counts, and every other label. In particular, keep 116 Candidate Linear Layers, Geometry: 1 - CKA, Distribution: D_CS, Action Weight w_i, 16 x Geometry + 1 x Distribution, RMS / Saturation Guards, W6-Equivalent Storage Budget, Final: 100 W4A8 + 16 FP16, 64 DiT Attention Projections Stay FP16, and 1.99x Theoretical LLM+DiT Storage Compression unchanged.
+Avoid: Do not add, delete, move, recolor, restyle, reinterpret, or redraw any other element. Do not introduce ATM, OHB, W6A8 layers, runtime speedup, GPU-memory claims, decorative icons, gradients, shadows, watermarks, or new text.

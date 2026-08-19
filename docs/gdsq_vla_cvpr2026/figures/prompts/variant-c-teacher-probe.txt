@@ -1,0 +1,9 @@
+Use case: scientific-educational
+Asset type: CVPR two-column paper pipeline figure
+Primary request: Visualize GDSQ-VLA as teacher-versus-probe evidence flowing into a constrained selector. Emphasize that the method is training-free and that complete configurations are adjudicated by paired action behavior.
+Scene/backdrop: clean white page
+Style/medium: minimalist scientific vector diagram, IEEE/CVPR aesthetic, high contrast, colorblind-safe blue/orange/teal
+Composition/framing: 2048x1152 landscape; three numbered stages; left stage has two horizontal FP16/W4A8 lanes; middle stage has two metric cards and one guard card; right stage has budget, Top-K adjudication, and final precision map
+Text (verbatim): "GDSQ-VLA", "Training-Free", "1  Layerwise Probing", "Multimodal Observation", "FP16 Reference", "One-Layer W4A8 Intervention", "116 Candidate Linear Layers", "2  Dual-Similarity Evidence", "1 - CKA", "D_CS", "Action Weight w_i", "CKA:CS = 16:1", "RMS Guard", "Saturation Guard", "3  Constrained Selection", "W6-Equivalent Budget", "Paired Top-K Functional Adjudication", "Final Candidate Mask", "100 W4A8 + 16 FP16", "64 Protected DiT Attention Projections", "1.99x Theoretical LLM+DiT Storage Compression"
+Constraints: quoted labels verbatim; show no training arrows or gradients; the output is a precision mask, not a compact pruned model; all 64 protected attention projections remain FP16; no ATM/OHB in the final method; no runtime or live-memory claim; no logos; no watermark
+Avoid: semantic similarity, visual similarity, top-layer pruning, network compression by deleting layers, generic score ranking, 3D graphics, dark background, excessive prose

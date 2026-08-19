@@ -1,0 +1,1064 @@
+{
+  "manifest_sha256": "bbaca128589c5897d2f217d0d0aa593c60d823ae2baa1614220fbdc142ad078d",
+  "primary_scope": {
+    "tasks": [
+      "ArrangeBreadBasket",
+      "ArrangeTea",
+      "BreadSelection",
+      "CategorizeCondiments",
+      "CuttingToolSelection",
+      "GarnishPancake",
+      "GatherTableware",
+      "HeatKebabSandwich",
+      "MakeIceLemonade",
+      "PanTransfer",
+      "PortionHotDogs",
+      "RecycleBottlesByType",
+      "SeparateFreezerRack",
+      "WaffleReheat",
+      "WashFruitColander",
+      "WeighIngredients"
+    ],
+    "n_tasks": 16
+  },
+  "secondary_scope": {
+    "tasks": [
+      "ArrangeBreadBasket",
+      "ArrangeTea",
+      "BreadSelection",
+      "CategorizeCondiments",
+      "CuttingToolSelection",
+      "GarnishPancake",
+      "GatherTableware",
+      "HeatKebabSandwich",
+      "MakeIceLemonade",
+      "PanTransfer",
+      "PortionHotDogs",
+      "RecycleBottlesByType",
+      "SeparateFreezerRack",
+      "WaffleReheat",
+      "WashFruitColander",
+      "WeighIngredients"
+    ],
+    "n_tasks": 16
+  },
+  "bootstrap_draws": 10000,
+  "validation_errors": [],
+  "paper_style_memory": {
+    "scope": "LLM+DiT Linear weights/biases (QuantVLA Tables 1/2)",
+    "unit_note": "GiB (2^30 bytes), displayed as GB in the paper",
+    "estimate_kind": "theoretical tightly-packed deployment component storage",
+    "excluded": [
+      "vision modules",
+      "activation peaks",
+      "CUDA/runtime workspaces",
+      "fake-quant caches",
+      "simulator"
+    ],
+    "atm_ohb": "folded into existing scales; zero additional operators/buffers",
+    "checkpoint": "/home1/gyy/vla/QuantVLA/checkpoints/robocasa365/gr00t_n1-5/foundation_model_learning/target_posttraining/composite_unseen/checkpoint-60000",
+    "scope_linear_layers": 180,
+    "fp16_weight_bytes": 2139095040,
+    "fp16_bias_bytes": 442368,
+    "fp16_component_bytes": 2139537408,
+    "fp16_component_gib": 1.9925994873046875,
+    "configs": {
+      "fp16": {
+        "plan_sha256": null,
+        "quantized_layers": 0,
+        "fp16_layers": 180,
+        "planned_fp16_skips": 0,
+        "quantized_parameters": 0,
+        "component_bytes": 2139537408,
+        "component_mib": 2040.421875,
+        "component_gib": 1.9925994873046875,
+        "relative_savings": 0.0,
+        "compression_ratio": 1.0,
+        "breakdown_mib": {
+          "packed_weights": 0.0,
+          "weight_scales": 0.0,
+          "rotations": 0.0,
+          "permutation_indices": 0.0
+        }
+      },
+      "w4a8_atmohb": {
+        "plan_sha256": "e9cd8f7225af2e46d6658bc798aa3961a6285cc1e489cfc1131963240cfdec50",
+        "quantized_layers": 116,
+        "fp16_layers": 64,
+        "planned_fp16_skips": 0,
+        "quantized_parameters": 905969664,
+        "component_bytes": 963772416,
+        "component_mib": 919.125,
+        "component_gib": 0.8975830078125,
+        "relative_savings": 0.5495416848537756,
+        "compression_ratio": 2.2199612403100777,
+        "breakdown_mib": {
+          "packed_weights": 432.0,
+          "weight_scales": 0.703125,
+          "rotations": 174.0,
+          "permutation_indices": 0.0
+        }
+      },
+      "cscka_final": {
+        "plan_sha256": "970d6865b7fcd01b7848baa0daa2dfb7b98db79bbde8ea0022641d390bb71d47",
+        "quantized_layers": 100,
+        "fp16_layers": 80,
+        "planned_fp16_skips": 16,
+        "quantized_parameters": 818937856,
+        "component_bytes": 1074710528,
+        "component_mib": 1024.923828125,
+        "component_gib": 1.0009021759033203,
+        "relative_savings": 0.497690237159901,
+        "compression_ratio": 1.990803432419711,
+        "breakdown_mib": {
+          "packed_weights": 390.5,
+          "weight_scales": 0.626953125,
+          "rotations": 155.375,
+          "permutation_indices": 0.0
+        }
+      },
+      "cscka_final_atmohb": {
+        "plan_sha256": "970d6865b7fcd01b7848baa0daa2dfb7b98db79bbde8ea0022641d390bb71d47",
+        "quantized_layers": 100,
+        "fp16_layers": 80,
+        "planned_fp16_skips": 16,
+        "quantized_parameters": 818937856,
+        "component_bytes": 1074710528,
+        "component_mib": 1024.923828125,
+        "component_gib": 1.0009021759033203,
+        "relative_savings": 0.497690237159901,
+        "compression_ratio": 1.990803432419711,
+        "breakdown_mib": {
+          "packed_weights": 390.5,
+          "weight_scales": 0.626953125,
+          "rotations": 155.375,
+          "permutation_indices": 0.0
+        }
+      }
+    }
+  },
+  "configs": {
+    "fp16": {
+      "per_task": {
+        "ArrangeBreadBasket": 0.78,
+        "ArrangeTea": 0.64,
+        "BreadSelection": 0.8,
+        "CategorizeCondiments": 0.22,
+        "CuttingToolSelection": 0.46,
+        "GarnishPancake": 0.46,
+        "GatherTableware": 0.18,
+        "HeatKebabSandwich": 0.26,
+        "MakeIceLemonade": 0.3,
+        "PanTransfer": 0.24,
+        "PortionHotDogs": 0.2,
+        "RecycleBottlesByType": 0.94,
+        "SeparateFreezerRack": 0.02,
+        "WaffleReheat": 0.88,
+        "WashFruitColander": 0.38,
+        "WeighIngredients": 0.48
+      },
+      "per_task_details": {
+        "ArrangeBreadBasket": {
+          "sr": 0.78,
+          "successes": 39,
+          "episodes": 50,
+          "mean_success_steps": 883.5384615384615,
+          "mean_failure_steps": 4350.0
+        },
+        "ArrangeTea": {
+          "sr": 0.64,
+          "successes": 32,
+          "episodes": 50,
+          "mean_success_steps": 1331.34375,
+          "mean_failure_steps": 2250.0
+        },
+        "BreadSelection": {
+          "sr": 0.8,
+          "successes": 40,
+          "episodes": 50,
+          "mean_success_steps": 768.625,
+          "mean_failure_steps": 1950.0
+        },
+        "CategorizeCondiments": {
+          "sr": 0.22,
+          "successes": 11,
+          "episodes": 50,
+          "mean_success_steps": 921.5454545454545,
+          "mean_failure_steps": 1650.0
+        },
+        "CuttingToolSelection": {
+          "sr": 0.46,
+          "successes": 23,
+          "episodes": 50,
+          "mean_success_steps": 392.69565217391306,
+          "mean_failure_steps": 1200.0
+        },
+        "GarnishPancake": {
+          "sr": 0.46,
+          "successes": 23,
+          "episodes": 50,
+          "mean_success_steps": 1284.8695652173913,
+          "mean_failure_steps": 2700.0
+        },
+        "GatherTableware": {
+          "sr": 0.18,
+          "successes": 9,
+          "episodes": 50,
+          "mean_success_steps": 1079.3333333333333,
+          "mean_failure_steps": 2250.0
+        },
+        "HeatKebabSandwich": {
+          "sr": 0.26,
+          "successes": 13,
+          "episodes": 50,
+          "mean_success_steps": 1834.923076923077,
+          "mean_failure_steps": 2700.0
+        },
+        "MakeIceLemonade": {
+          "sr": 0.3,
+          "successes": 15,
+          "episodes": 50,
+          "mean_success_steps": 1525.8666666666666,
+          "mean_failure_steps": 3000.0
+        },
+        "PanTransfer": {
+          "sr": 0.24,
+          "successes": 12,
+          "episodes": 50,
+          "mean_success_steps": 394.9166666666667,
+          "mean_failure_steps": 1800.0
+        },
+        "PortionHotDogs": {
+          "sr": 0.2,
+          "successes": 10,
+          "episodes": 50,
+          "mean_success_steps": 1061.0,
+          "mean_failure_steps": 2250.0
+        },
+        "RecycleBottlesByType": {
+          "sr": 0.94,
+          "successes": 47,
+          "episodes": 50,
+          "mean_success_steps": 905.468085106383,
+          "mean_failure_steps": 2850.0
+        },
+        "SeparateFreezerRack": {
+          "sr": 0.02,
+          "successes": 1,
+          "episodes": 50,
+          "mean_success_steps": 1690.0,
+          "mean_failure_steps": 2400.0
+        },
+        "WaffleReheat": {
+          "sr": 0.88,
+          "successes": 44,
+          "episodes": 50,
+          "mean_success_steps": 1274.3181818181818,
+          "mean_failure_steps": 4050.0
+        },
+        "WashFruitColander": {
+          "sr": 0.38,
+          "successes": 19,
+          "episodes": 50,
+          "mean_success_steps": 1146.7894736842106,
+          "mean_failure_steps": 3150.0
+        },
+        "WeighIngredients": {
+          "sr": 0.48,
+          "successes": 24,
+          "episodes": 50,
+          "mean_success_steps": 708.4583333333334,
+          "mean_failure_steps": 3000.0
+        }
+      },
+      "primary_task_macro_sr": 0.4525,
+      "primary_task_cluster_ci95": [
+        0.32249999999999995,
+        0.58875
+      ],
+      "all18_task_macro_sr": 0.4525,
+      "task_macro_sr": 0.4525,
+      "episode_sr": 0.4525,
+      "successes": 362,
+      "episodes": 800,
+      "mean_success_steps": 1015.0303867403314,
+      "mean_failure_steps": 2418.150684931507,
+      "efficiency": {
+        "rollout_shards": 8,
+        "egl_device_pool": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "gpu_measurement_scope": "model-GPU device totals; replicas and EGL clients use shared GPUs 1-7",
+        "driver_wall_samples": 800,
+        "mean_driver_wall_seconds": 230.4880366560812,
+        "p50_driver_wall_seconds": 203.08429230451583,
+        "p90_driver_wall_seconds": 379.2553678607944,
+        "mean_episode_wall_seconds": 219.13929020064535,
+        "total_replans": 89489,
+        "mean_inference_seconds_per_replan": 0.8210217959096283,
+        "mean_env_step_seconds": 0.06575781071445758,
+        "mean_env_construct_seconds": 11.199579924333374,
+        "steps_per_driver_second": 7.73679526222365,
+        "episodes_per_aggregate_driver_hour": 15.619031912583292,
+        "gpu": {
+          "samples": 2784,
+          "peak_memory_mib": 24889.0,
+          "mean_memory_mib": 15734.062859195403,
+          "mean_gpu_utilization_pct": 23.501795977011493,
+          "p95_gpu_utilization_pct": 67.0,
+          "mean_power_w": 125.33705100574741,
+          "p95_power_w": 176.7525,
+          "server_memory_samples": 2779,
+          "peak_server_process_memory_mib": 7902.0,
+          "mean_server_process_memory_mib": 7739.422813961857,
+          "server_instance_roles": [
+            "primary"
+          ]
+        }
+      },
+      "paper_style_memory": {
+        "plan_sha256": null,
+        "quantized_layers": 0,
+        "fp16_layers": 180,
+        "planned_fp16_skips": 0,
+        "quantized_parameters": 0,
+        "component_bytes": 2139537408,
+        "component_mib": 2040.421875,
+        "component_gib": 1.9925994873046875,
+        "relative_savings": 0.0,
+        "compression_ratio": 1.0,
+        "breakdown_mib": {
+          "packed_weights": 0.0,
+          "weight_scales": 0.0,
+          "rotations": 0.0,
+          "permutation_indices": 0.0
+        }
+      }
+    },
+    "w4a8_atmohb": {
+      "per_task": {
+        "ArrangeBreadBasket": 0.34,
+        "ArrangeTea": 0.38,
+        "BreadSelection": 0.5,
+        "CategorizeCondiments": 0.08,
+        "CuttingToolSelection": 0.22,
+        "GarnishPancake": 0.22,
+        "GatherTableware": 0.06,
+        "HeatKebabSandwich": 0.02,
+        "MakeIceLemonade": 0.02,
+        "PanTransfer": 0.04,
+        "PortionHotDogs": 0.1,
+        "RecycleBottlesByType": 0.52,
+        "SeparateFreezerRack": 0.0,
+        "WaffleReheat": 0.42,
+        "WashFruitColander": 0.06,
+        "WeighIngredients": 0.18
+      },
+      "per_task_details": {
+        "ArrangeBreadBasket": {
+          "sr": 0.34,
+          "successes": 17,
+          "episodes": 50,
+          "mean_success_steps": 1269.8235294117646,
+          "mean_failure_steps": 4350.0
+        },
+        "ArrangeTea": {
+          "sr": 0.38,
+          "successes": 19,
+          "episodes": 50,
+          "mean_success_steps": 1410.5263157894738,
+          "mean_failure_steps": 2250.0
+        },
+        "BreadSelection": {
+          "sr": 0.5,
+          "successes": 25,
+          "episodes": 50,
+          "mean_success_steps": 891.84,
+          "mean_failure_steps": 1950.0
+        },
+        "CategorizeCondiments": {
+          "sr": 0.08,
+          "successes": 4,
+          "episodes": 50,
+          "mean_success_steps": 1410.0,
+          "mean_failure_steps": 1650.0
+        },
+        "CuttingToolSelection": {
+          "sr": 0.22,
+          "successes": 11,
+          "episodes": 50,
+          "mean_success_steps": 602.3636363636364,
+          "mean_failure_steps": 1200.0
+        },
+        "GarnishPancake": {
+          "sr": 0.22,
+          "successes": 11,
+          "episodes": 50,
+          "mean_success_steps": 1482.2727272727273,
+          "mean_failure_steps": 2700.0
+        },
+        "GatherTableware": {
+          "sr": 0.06,
+          "successes": 3,
+          "episodes": 50,
+          "mean_success_steps": 1317.6666666666667,
+          "mean_failure_steps": 2250.0
+        },
+        "HeatKebabSandwich": {
+          "sr": 0.02,
+          "successes": 1,
+          "episodes": 50,
+          "mean_success_steps": 1893.0,
+          "mean_failure_steps": 2700.0
+        },
+        "MakeIceLemonade": {
+          "sr": 0.02,
+          "successes": 1,
+          "episodes": 50,
+          "mean_success_steps": 1330.0,
+          "mean_failure_steps": 3000.0
+        },
+        "PanTransfer": {
+          "sr": 0.04,
+          "successes": 2,
+          "episodes": 50,
+          "mean_success_steps": 386.0,
+          "mean_failure_steps": 1800.0
+        },
+        "PortionHotDogs": {
+          "sr": 0.1,
+          "successes": 5,
+          "episodes": 50,
+          "mean_success_steps": 1502.8,
+          "mean_failure_steps": 2250.0
+        },
+        "RecycleBottlesByType": {
+          "sr": 0.52,
+          "successes": 26,
+          "episodes": 50,
+          "mean_success_steps": 931.5384615384615,
+          "mean_failure_steps": 2850.0
+        },
+        "SeparateFreezerRack": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 50,
+          "mean_success_steps": null,
+          "mean_failure_steps": 2400.0
+        },
+        "WaffleReheat": {
+          "sr": 0.42,
+          "successes": 21,
+          "episodes": 50,
+          "mean_success_steps": 1999.8095238095239,
+          "mean_failure_steps": 4050.0
+        },
+        "WashFruitColander": {
+          "sr": 0.06,
+          "successes": 3,
+          "episodes": 50,
+          "mean_success_steps": 2158.6666666666665,
+          "mean_failure_steps": 3150.0
+        },
+        "WeighIngredients": {
+          "sr": 0.18,
+          "successes": 9,
+          "episodes": 50,
+          "mean_success_steps": 844.7777777777778,
+          "mean_failure_steps": 3000.0
+        }
+      },
+      "primary_task_macro_sr": 0.1975,
+      "primary_task_cluster_ci95": [
+        0.11625000000000002,
+        0.285
+      ],
+      "all18_task_macro_sr": 0.1975,
+      "task_macro_sr": 0.1975,
+      "episode_sr": 0.1975,
+      "successes": 158,
+      "episodes": 800,
+      "mean_success_steps": 1234.246835443038,
+      "mean_failure_steps": 2553.9719626168226,
+      "efficiency": {
+        "rollout_shards": 8,
+        "egl_device_pool": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "gpu_measurement_scope": "model-GPU device totals; replicas and EGL clients use shared GPUs 1-7",
+        "driver_wall_samples": 800,
+        "mean_driver_wall_seconds": 511.3331282383189,
+        "p50_driver_wall_seconds": 381.9296610236168,
+        "p90_driver_wall_seconds": 1060.500238859654,
+        "mean_episode_wall_seconds": 498.22918451145523,
+        "total_replans": 114984,
+        "mean_inference_seconds_per_replan": 2.101901710089369,
+        "mean_env_step_seconds": 0.08036284013181881,
+        "mean_env_construct_seconds": 12.935036026280141,
+        "steps_per_driver_second": 4.484994465156463,
+        "episodes_per_aggregate_driver_hour": 7.040420033810395,
+        "gpu": {
+          "samples": 10661,
+          "peak_memory_mib": 41619.0,
+          "mean_memory_mib": 22317.118750586247,
+          "mean_gpu_utilization_pct": 19.442360003751993,
+          "p95_gpu_utilization_pct": 88.0,
+          "mean_power_w": 112.14543945220886,
+          "p95_power_w": 198.37,
+          "server_memory_samples": 7666,
+          "peak_server_process_memory_mib": 13418.0,
+          "mean_server_process_memory_mib": 13195.962953300286,
+          "server_instance_roles": [
+            "primary",
+            "replica_1"
+          ]
+        }
+      },
+      "paper_style_memory": {
+        "plan_sha256": "e9cd8f7225af2e46d6658bc798aa3961a6285cc1e489cfc1131963240cfdec50",
+        "quantized_layers": 116,
+        "fp16_layers": 64,
+        "planned_fp16_skips": 0,
+        "quantized_parameters": 905969664,
+        "component_bytes": 963772416,
+        "component_mib": 919.125,
+        "component_gib": 0.8975830078125,
+        "relative_savings": 0.5495416848537756,
+        "compression_ratio": 2.2199612403100777,
+        "breakdown_mib": {
+          "packed_weights": 432.0,
+          "weight_scales": 0.703125,
+          "rotations": 174.0,
+          "permutation_indices": 0.0
+        }
+      }
+    },
+    "cscka_final": {
+      "per_task": {
+        "ArrangeBreadBasket": 0.68,
+        "ArrangeTea": 0.6,
+        "BreadSelection": 0.74,
+        "CategorizeCondiments": 0.18,
+        "CuttingToolSelection": 0.52,
+        "GarnishPancake": 0.5,
+        "GatherTableware": 0.14,
+        "HeatKebabSandwich": 0.08,
+        "MakeIceLemonade": 0.28,
+        "PanTransfer": 0.1,
+        "PortionHotDogs": 0.24,
+        "RecycleBottlesByType": 0.9,
+        "SeparateFreezerRack": 0.0,
+        "WaffleReheat": 0.88,
+        "WashFruitColander": 0.28,
+        "WeighIngredients": 0.34
+      },
+      "per_task_details": {
+        "ArrangeBreadBasket": {
+          "sr": 0.68,
+          "successes": 34,
+          "episodes": 50,
+          "mean_success_steps": 1100.2941176470588,
+          "mean_failure_steps": 4350.0
+        },
+        "ArrangeTea": {
+          "sr": 0.6,
+          "successes": 30,
+          "episodes": 50,
+          "mean_success_steps": 1277.3666666666666,
+          "mean_failure_steps": 2250.0
+        },
+        "BreadSelection": {
+          "sr": 0.74,
+          "successes": 37,
+          "episodes": 50,
+          "mean_success_steps": 743.3243243243244,
+          "mean_failure_steps": 1950.0
+        },
+        "CategorizeCondiments": {
+          "sr": 0.18,
+          "successes": 9,
+          "episodes": 50,
+          "mean_success_steps": 1052.6666666666667,
+          "mean_failure_steps": 1650.0
+        },
+        "CuttingToolSelection": {
+          "sr": 0.52,
+          "successes": 26,
+          "episodes": 50,
+          "mean_success_steps": 442.3076923076923,
+          "mean_failure_steps": 1200.0
+        },
+        "GarnishPancake": {
+          "sr": 0.5,
+          "successes": 25,
+          "episodes": 50,
+          "mean_success_steps": 1293.72,
+          "mean_failure_steps": 2700.0
+        },
+        "GatherTableware": {
+          "sr": 0.14,
+          "successes": 7,
+          "episodes": 50,
+          "mean_success_steps": 1272.142857142857,
+          "mean_failure_steps": 2250.0
+        },
+        "HeatKebabSandwich": {
+          "sr": 0.08,
+          "successes": 4,
+          "episodes": 50,
+          "mean_success_steps": 1498.25,
+          "mean_failure_steps": 2700.0
+        },
+        "MakeIceLemonade": {
+          "sr": 0.28,
+          "successes": 14,
+          "episodes": 50,
+          "mean_success_steps": 1758.642857142857,
+          "mean_failure_steps": 3000.0
+        },
+        "PanTransfer": {
+          "sr": 0.1,
+          "successes": 5,
+          "episodes": 50,
+          "mean_success_steps": 410.0,
+          "mean_failure_steps": 1800.0
+        },
+        "PortionHotDogs": {
+          "sr": 0.24,
+          "successes": 12,
+          "episodes": 50,
+          "mean_success_steps": 1368.75,
+          "mean_failure_steps": 2250.0
+        },
+        "RecycleBottlesByType": {
+          "sr": 0.9,
+          "successes": 45,
+          "episodes": 50,
+          "mean_success_steps": 950.6888888888889,
+          "mean_failure_steps": 2850.0
+        },
+        "SeparateFreezerRack": {
+          "sr": 0.0,
+          "successes": 0,
+          "episodes": 50,
+          "mean_success_steps": null,
+          "mean_failure_steps": 2400.0
+        },
+        "WaffleReheat": {
+          "sr": 0.88,
+          "successes": 44,
+          "episodes": 50,
+          "mean_success_steps": 1493.5,
+          "mean_failure_steps": 4050.0
+        },
+        "WashFruitColander": {
+          "sr": 0.28,
+          "successes": 14,
+          "episodes": 50,
+          "mean_success_steps": 1350.0,
+          "mean_failure_steps": 3150.0
+        },
+        "WeighIngredients": {
+          "sr": 0.34,
+          "successes": 17,
+          "episodes": 50,
+          "mean_success_steps": 622.8823529411765,
+          "mean_failure_steps": 3000.0
+        }
+      },
+      "primary_task_macro_sr": 0.40375000000000005,
+      "primary_task_cluster_ci95": [
+        0.26875000000000004,
+        0.545
+      ],
+      "all18_task_macro_sr": 0.40375000000000005,
+      "task_macro_sr": 0.40375000000000005,
+      "episode_sr": 0.40375,
+      "successes": 323,
+      "episodes": 800,
+      "mean_success_steps": 1091.421052631579,
+      "mean_failure_steps": 2453.4591194968552,
+      "efficiency": {
+        "rollout_shards": 8,
+        "egl_device_pool": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "gpu_measurement_scope": "model-GPU device totals; replicas and EGL clients use shared GPUs 1-7",
+        "driver_wall_samples": 800,
+        "mean_driver_wall_seconds": 452.2377842125293,
+        "p50_driver_wall_seconds": 341.5664140105248,
+        "p90_driver_wall_seconds": 855.1068832921983,
+        "mean_episode_wall_seconds": 438.6187493195746,
+        "total_replans": 95496,
+        "mean_inference_seconds_per_replan": 2.1743815381563265,
+        "mean_env_step_seconds": 0.08739600470452726,
+        "mean_env_construct_seconds": 13.44055971607333,
+        "steps_per_driver_second": 4.209149072571593,
+        "episodes_per_aggregate_driver_hour": 7.960414024822346,
+        "gpu": {
+          "samples": 10661,
+          "peak_memory_mib": 37449.0,
+          "mean_memory_mib": 27472.52058906294,
+          "mean_gpu_utilization_pct": 54.83810149141731,
+          "p95_gpu_utilization_pct": 100.0,
+          "mean_power_w": 201.37008910983943,
+          "p95_power_w": 302.45,
+          "server_memory_samples": 7666,
+          "peak_server_process_memory_mib": 13004.0,
+          "mean_server_process_memory_mib": 12787.580485259588,
+          "server_instance_roles": [
+            "primary",
+            "replica_1"
+          ]
+        }
+      },
+      "paper_style_memory": {
+        "plan_sha256": "970d6865b7fcd01b7848baa0daa2dfb7b98db79bbde8ea0022641d390bb71d47",
+        "quantized_layers": 100,
+        "fp16_layers": 80,
+        "planned_fp16_skips": 16,
+        "quantized_parameters": 818937856,
+        "component_bytes": 1074710528,
+        "component_mib": 1024.923828125,
+        "component_gib": 1.0009021759033203,
+        "relative_savings": 0.497690237159901,
+        "compression_ratio": 1.990803432419711,
+        "breakdown_mib": {
+          "packed_weights": 390.5,
+          "weight_scales": 0.626953125,
+          "rotations": 155.375,
+          "permutation_indices": 0.0
+        }
+      }
+    },
+    "cscka_final_atmohb": {
+      "per_task": {
+        "ArrangeBreadBasket": 0.74,
+        "ArrangeTea": 0.52,
+        "BreadSelection": 0.72,
+        "CategorizeCondiments": 0.26,
+        "CuttingToolSelection": 0.5,
+        "GarnishPancake": 0.46,
+        "GatherTableware": 0.14,
+        "HeatKebabSandwich": 0.16,
+        "MakeIceLemonade": 0.24,
+        "PanTransfer": 0.14,
+        "PortionHotDogs": 0.26,
+        "RecycleBottlesByType": 0.84,
+        "SeparateFreezerRack": 0.04,
+        "WaffleReheat": 0.8,
+        "WashFruitColander": 0.34,
+        "WeighIngredients": 0.28
+      },
+      "per_task_details": {
+        "ArrangeBreadBasket": {
+          "sr": 0.74,
+          "successes": 37,
+          "episodes": 50,
+          "mean_success_steps": 1068.7837837837837,
+          "mean_failure_steps": 4350.0
+        },
+        "ArrangeTea": {
+          "sr": 0.52,
+          "successes": 26,
+          "episodes": 50,
+          "mean_success_steps": 1296.7307692307693,
+          "mean_failure_steps": 2250.0
+        },
+        "BreadSelection": {
+          "sr": 0.72,
+          "successes": 36,
+          "episodes": 50,
+          "mean_success_steps": 786.7777777777778,
+          "mean_failure_steps": 1950.0
+        },
+        "CategorizeCondiments": {
+          "sr": 0.26,
+          "successes": 13,
+          "episodes": 50,
+          "mean_success_steps": 865.1538461538462,
+          "mean_failure_steps": 1650.0
+        },
+        "CuttingToolSelection": {
+          "sr": 0.5,
+          "successes": 25,
+          "episodes": 50,
+          "mean_success_steps": 411.24,
+          "mean_failure_steps": 1200.0
+        },
+        "GarnishPancake": {
+          "sr": 0.46,
+          "successes": 23,
+          "episodes": 50,
+          "mean_success_steps": 1350.6521739130435,
+          "mean_failure_steps": 2700.0
+        },
+        "GatherTableware": {
+          "sr": 0.14,
+          "successes": 7,
+          "episodes": 50,
+          "mean_success_steps": 1301.5714285714287,
+          "mean_failure_steps": 2250.0
+        },
+        "HeatKebabSandwich": {
+          "sr": 0.16,
+          "successes": 8,
+          "episodes": 50,
+          "mean_success_steps": 1913.625,
+          "mean_failure_steps": 2700.0
+        },
+        "MakeIceLemonade": {
+          "sr": 0.24,
+          "successes": 12,
+          "episodes": 50,
+          "mean_success_steps": 1600.25,
+          "mean_failure_steps": 3000.0
+        },
+        "PanTransfer": {
+          "sr": 0.14,
+          "successes": 7,
+          "episodes": 50,
+          "mean_success_steps": 522.0,
+          "mean_failure_steps": 1800.0
+        },
+        "PortionHotDogs": {
+          "sr": 0.26,
+          "successes": 13,
+          "episodes": 50,
+          "mean_success_steps": 1233.3076923076924,
+          "mean_failure_steps": 2250.0
+        },
+        "RecycleBottlesByType": {
+          "sr": 0.84,
+          "successes": 42,
+          "episodes": 50,
+          "mean_success_steps": 944.3809523809524,
+          "mean_failure_steps": 2850.0
+        },
+        "SeparateFreezerRack": {
+          "sr": 0.04,
+          "successes": 2,
+          "episodes": 50,
+          "mean_success_steps": 1178.5,
+          "mean_failure_steps": 2400.0
+        },
+        "WaffleReheat": {
+          "sr": 0.8,
+          "successes": 40,
+          "episodes": 50,
+          "mean_success_steps": 1422.075,
+          "mean_failure_steps": 4050.0
+        },
+        "WashFruitColander": {
+          "sr": 0.34,
+          "successes": 17,
+          "episodes": 50,
+          "mean_success_steps": 1385.6470588235295,
+          "mean_failure_steps": 3150.0
+        },
+        "WeighIngredients": {
+          "sr": 0.28,
+          "successes": 14,
+          "episodes": 50,
+          "mean_success_steps": 620.5,
+          "mean_failure_steps": 3000.0
+        }
+      },
+      "primary_task_macro_sr": 0.4025,
+      "primary_task_cluster_ci95": [
+        0.28375,
+        0.52625
+      ],
+      "all18_task_macro_sr": 0.4025,
+      "task_macro_sr": 0.4025,
+      "episode_sr": 0.4025,
+      "successes": 322,
+      "episodes": 800,
+      "mean_success_steps": 1082.7142857142858,
+      "mean_failure_steps": 2462.4476987447697,
+      "efficiency": {
+        "rollout_shards": 8,
+        "egl_device_pool": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "gpu_measurement_scope": "model-GPU device totals; replicas and EGL clients use shared GPUs 1-7",
+        "driver_wall_samples": 800,
+        "mean_driver_wall_seconds": 456.9211707431083,
+        "p50_driver_wall_seconds": 382.96653393507006,
+        "p90_driver_wall_seconds": 941.4339630866052,
+        "mean_episode_wall_seconds": 442.65333655627563,
+        "total_replans": 95683,
+        "mean_inference_seconds_per_replan": 2.1999266802078776,
+        "mean_env_step_seconds": 0.08738561778791169,
+        "mean_env_construct_seconds": 14.091753638659139,
+        "steps_per_driver_second": 4.173816233768294,
+        "episodes_per_aggregate_driver_hour": 7.878820747450119,
+        "gpu": {
+          "samples": 10661,
+          "peak_memory_mib": 43021.0,
+          "mean_memory_mib": 22618.501547697215,
+          "mean_gpu_utilization_pct": 48.65519182065472,
+          "p95_gpu_utilization_pct": 96.0,
+          "mean_power_w": 359.7106387768491,
+          "p95_power_w": 285.56,
+          "server_memory_samples": 7666,
+          "peak_server_process_memory_mib": 13004.0,
+          "mean_server_process_memory_mib": 12790.639446908426,
+          "server_instance_roles": [
+            "primary",
+            "replica_1"
+          ]
+        }
+      },
+      "paper_style_memory": {
+        "plan_sha256": "970d6865b7fcd01b7848baa0daa2dfb7b98db79bbde8ea0022641d390bb71d47",
+        "quantized_layers": 100,
+        "fp16_layers": 80,
+        "planned_fp16_skips": 16,
+        "quantized_parameters": 818937856,
+        "component_bytes": 1074710528,
+        "component_mib": 1024.923828125,
+        "component_gib": 1.0009021759033203,
+        "relative_savings": 0.497690237159901,
+        "compression_ratio": 1.990803432419711,
+        "breakdown_mib": {
+          "packed_weights": 390.5,
+          "weight_scales": 0.626953125,
+          "rotations": 155.375,
+          "permutation_indices": 0.0
+        }
+      }
+    }
+  },
+  "comparisons": {
+    "w4a8_atmohb_vs_fp16": {
+      "a": "w4a8_atmohb",
+      "b": "fp16",
+      "primary_task_macro_delta": -0.255,
+      "task_cluster_ci95": [
+        -0.3125,
+        -0.19625000000000004
+      ],
+      "paired_permutation_p": 3.0517578125e-05,
+      "episode_mcnemar": {
+        "a_wins": 38,
+        "b_wins": 242,
+        "two_sided_p": 1.6478155068453373e-37
+      },
+      "holm_adjusted_p": 0.000152587890625
+    },
+    "cscka_final_vs_fp16": {
+      "a": "cscka_final",
+      "b": "fp16",
+      "primary_task_macro_delta": -0.04875,
+      "task_cluster_ci95": [
+        -0.08124999999999999,
+        -0.017499999999999995
+      ],
+      "paired_permutation_p": 0.01580810546875,
+      "episode_mcnemar": {
+        "a_wins": 85,
+        "b_wins": 124,
+        "two_sided_p": 0.008419191935872705
+      },
+      "holm_adjusted_p": 0.0316162109375
+    },
+    "cscka_final_vs_w4a8_atmohb": {
+      "a": "cscka_final",
+      "b": "w4a8_atmohb",
+      "primary_task_macro_delta": 0.20625000000000004,
+      "task_cluster_ci95": [
+        0.14500000000000005,
+        0.2675
+      ],
+      "paired_permutation_p": 6.103515625e-05,
+      "episode_mcnemar": {
+        "a_wins": 214,
+        "b_wins": 49,
+        "two_sided_p": 9.153089437119238e-26
+      },
+      "holm_adjusted_p": 0.00018310546875
+    },
+    "cscka_final_atmohb_vs_cscka_final": {
+      "a": "cscka_final_atmohb",
+      "b": "cscka_final",
+      "primary_task_macro_delta": -0.0012500000000000024,
+      "task_cluster_ci95": [
+        -0.0275,
+        0.026249999999999992
+      ],
+      "paired_permutation_p": 1.0,
+      "episode_mcnemar": {
+        "a_wins": 91,
+        "b_wins": 92,
+        "two_sided_p": 1.0
+      },
+      "holm_adjusted_p": 1.0
+    },
+    "cscka_final_atmohb_vs_w4a8_atmohb": {
+      "a": "cscka_final_atmohb",
+      "b": "w4a8_atmohb",
+      "primary_task_macro_delta": 0.205,
+      "task_cluster_ci95": [
+        0.15500000000000005,
+        0.2575
+      ],
+      "paired_permutation_p": 3.0517578125e-05,
+      "episode_mcnemar": {
+        "a_wins": 199,
+        "b_wins": 35,
+        "two_sided_p": 4.8784291584597244e-29
+      },
+      "holm_adjusted_p": 0.000152587890625
+    }
+  },
+  "decision": {
+    "spec": {
+      "final_config": "cscka_final",
+      "cka_to_cs_ratio": 16,
+      "mask_source_task_set": "atomic_seen",
+      "selection_scenarios_per_task": 50,
+      "selection_successes": 161,
+      "selection_macro_sr": 0.805
+    },
+    "status": "frozen",
+    "passed": null
+  },
+  "acceptance": {
+    "applicable": false,
+    "enable_cs": null,
+    "default": "cscka_final",
+    "rule": "not applicable; configuration was frozen before this matrix"
+  },
+  "libero_context": {
+    "v1.4_macro_avg": 0.892,
+    "uniform_w6_macro_avg": 0.882,
+    "v1.3_macro_avg": 0.852,
+    "note": "cross-benchmark context only; not pooled with RoboCasa365"
+  },
+  "task_set": "composite_unseen"
+}

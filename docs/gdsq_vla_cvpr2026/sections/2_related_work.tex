@@ -1,0 +1,26 @@
+\section{Related Work}
+\label{sec:related}
+
+% Role: VLA foundations and action-generation context.
+\paragraph{Vision-language-action models.}
+Generalist robot policies have progressed from large-scale transformer control and embodied language models~\cite{brohan2023rt1,driess2023palme,brohan2023rt2} to reusable multi-robot and open VLA policies~\cite{octo2024,kim2024openvla}. Continuous-control systems increasingly use diffusion or flow-based action generation: Diffusion Policy established action-space denoising~\cite{chi2023diffusionpolicy}, while RDT-1B, $\pi_0$, $\pi_{0.5}$, and GR00T combine large multimodal encoders with generative action heads~\cite{liu2025rdt1b,black2024pi0,intelligence2025pi05,bjorck2025groot}. This coupling improves generality but makes numerical errors consequential both in semantic conditioning and across iterative action refinement.
+
+% Role: efficient VLA alternatives and distinction.
+\paragraph{Efficient VLA inference.}
+Efficiency work reduces VLA cost through smaller policies, dynamic depth, token reuse, and cache reuse. SmolVLA targets an affordable compact model~\cite{shukor2025smolvla}; MoLe-VLA routes examples through selected language layers~\cite{zhang2025molevla}; EfficientVLA combines language-layer pruning, visual-token reduction, and action-head caching~\cite{yang2025efficientvla}; and VLA-Cache reuses temporally stable token features~\cite{xu2025vlacache}. These approaches are complementary to quantization, but they change training, execution, or token flow. Our setting leaves the checkpoint and operator graph intact and allocates numerical precision after training.
+
+% Role: transformer and multimodal PTQ landscape.
+\paragraph{Transformer and multimodal PTQ.}
+Weight-only PTQ methods such as GPTQ and AWQ optimize rounding or protect activation-salient channels~\cite{frantar2022gptq,lin2024awq}. Weight--activation methods instead reshape difficult activation distributions: SmoothQuant migrates channel outliers into weights~\cite{xiao2023smoothquant}, OmniQuant learns calibration transformations~\cite{shao2024omniquant}, and rotation-based methods redistribute outliers before quantization~\cite{ashkboos2024quarot,lin2024duquant,liu2025spinquant,sun2025flatquant,hu2025ostquant}. Block reconstruction provides another calibration objective~\cite{li2021brecq}. Multimodal PTQ further accounts for modality imbalance in vision-language models through calibrated scaling or modality-aware objectives~\cite{wang2024qvlm,li2025mbq}. These methods improve the low-bit substrate, whereas our primary question is which individual VLA layers should use that substrate.
+
+% Role: diffusion and VLA quantization, with the closest baseline.
+\paragraph{Diffusion and VLA quantization.}
+Diffusion PTQ must accommodate timestep-dependent activation statistics and error accumulation. PTQ4DM and Q-Diffusion introduced timestep-aware calibration for convolutional diffusion models~\cite{shang2023ptq4dm,li2023qdiffusion}; PTQ4DiT, Q-DiT, and ViDiT-Q extend quantization to transformer generators~\cite{wu2024ptq4dit,chen2024qdit,zhao2024viditq}; MixDQ searches metric-decoupled mixed precision~\cite{zhao2024mixdq}; and SVDQuant isolates outliers in low-rank branches~\cite{li2024svdquant}. QuantVLA is the closest VLA-specific PTQ baseline: it applies DuQuant-style transformations to the language and action stacks while calibrating attention temperature and output-head energy~\cite{zhang2026quantvla}. \method uses the same W4A8 substrate for controlled comparison, but replaces a fixed protection layout with checkpoint-specific layer evidence and budgeted W4/FP16 allocation.
+
+% Role: representation metrics and complementary insight.
+\paragraph{Representation similarity and distribution alignment.}
+SVCCA and projection-weighted CCA compare learned representation subspaces~\cite{raghu2017svcca,morcos2018pwcca}, while centered kernel alignment (CKA) compares sample geometry with invariance to orthogonal transformations and isotropic scaling~\cite{kornblith2019similarity}. CS divergence instead estimates distribution overlap from within-set and cross-set kernel similarities and has recently been used for distributional vision-language alignment~\cite{yin2026csaligner}. We use CKA and CS divergence as complementary frozen probes, not training losses: they rank isolated quantization interventions, while action weighting and complete-configuration adjudication determine deployment.
+
+% Role: mixed-precision allocation and distinction.
+\paragraph{Mixed-precision allocation.}
+Mixed-precision search has been driven by reinforcement learning and hardware feedback~\cite{wang2019haq}, Hessian sensitivity~\cite{wang2019hawq,dong2020hawqv2}, reconstruction loss~\cite{hubara2021accurate,li2021brecq}, and task-specific diffusion metrics~\cite{zhao2024mixdq,chen2024qdit}. Additive layer objectives are efficient but miss cancellation and amplification among simultaneous interventions; direct task search captures those interactions but scales poorly. \method bridges the two by using dual-similarity evidence to generate feasible masks and reserving paired action-functional evaluation for a diverse Top-$K$ set.

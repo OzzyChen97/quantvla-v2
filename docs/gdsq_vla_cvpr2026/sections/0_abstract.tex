@@ -1,0 +1,8 @@
+\begin{abstract}
+% Role: challenge.
+Post-training quantization can reduce the deployment storage of vision-language-action (VLA) policies, yet uniform low precision is brittle because language reasoning and diffusion-based action generation exhibit strongly heterogeneous layer sensitivity.
+% Role: insight and method.
+We present \method, a training-free layer-selection framework that treats quantization robustness as both a representation-geometry and a distribution-overlap problem. For each candidate Linear layer, \method compares an isolated W4A8 intervention with a full-precision reference using centered kernel alignment (CKA) and Cauchy--Schwarz (CS) divergence, weights the resulting score by paired action-generation sensitivity, and rejects infeasible choices with activation-magnitude and saturation guards. A budgeted selector then proposes W4/FP16 masks, while paired functional adjudication captures cross-layer error accumulation that additive proxies miss.
+% Role: evidence and boundary.
+On RoboCasa365 with GR00T N1.5, a predeclared 200-scenario development study selects a CKA:CS ratio of 16:1. On 14 atomic tasks excluded from this selection, \method reaches 65.9\% success, compared with 45.6\% for the original W4A8 QuantVLA recipe, a 20.3 percentage-point gain with a 95\% task-cluster interval of $[13.9,26.9]$. The resulting model quantizes 100 of 180 LLM+DiT Linear layers and provides a theoretical 1.99$\times$ component-storage compression, while remaining 8.0 points below FP16. These results show that dual-similarity layer allocation recovers a substantial fraction of low-bit control quality, but does not eliminate the accuracy--compression trade-off.
+\end{abstract}

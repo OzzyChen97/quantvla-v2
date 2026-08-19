@@ -1,0 +1,28 @@
+\section{Introduction}
+\label{sec:introduction}
+
+% Role: opening and application importance.
+Vision-language-action (VLA) models connect visual perception and language-conditioned reasoning to continuous robot control, enabling one policy to execute diverse instructions across objects, scenes, and embodiments~\cite{brohan2023rt1,driess2023palme,brohan2023rt2,octo2024,kim2024openvla}. Diffusion- and flow-based policies further provide expressive continuous action generation~\cite{chi2023diffusionpolicy,liu2025rdt1b,black2024pi0,intelligence2025pi05,bjorck2025groot}. Their capabilities, however, come with a deployment cost: large language backbones and generative action heads require substantial weight storage and memory bandwidth, while control loops impose strict latency and hardware constraints. Post-training quantization (PTQ) is attractive in this setting because it changes numerical precision without retraining the policy or redesigning its architecture~\cite{xiao2023smoothquant,lin2024duquant}.
+
+% Role: technical challenge.
+The central challenge is that a VLA policy is not uniformly tolerant to quantization. Its language backbone produces a multimodal conditioning representation, and its action head repeatedly transforms a noise sample into an executable action chunk. A small representation error can therefore alter both the geometry of task-conditioned features and their distribution, then accumulate through the action solver. Uniform W4A8 quantization ignores this heterogeneity. Fixed architectural layouts, including the selective attention protection and scale calibration used by QuantVLA~\cite{zhang2026quantvla}, protect known fragile interfaces but cannot decide which individual language and action layers should remain in full precision for a new policy checkpoint.
+
+% Role: gap in existing selection criteria.
+Existing mixed-precision methods commonly rank layers using local reconstruction error, activation magnitude, Hessian sensitivity, or task-specific proxy metrics~\cite{hubara2021accurate,frantar2022gptq,wang2019hawq,dong2020hawqv2,chen2024qdit,zhao2024mixdq}. These criteria provide useful signals, but each exposes only one view of representation damage. Centered kernel alignment (CKA) detects whether relationships among samples are preserved~\cite{raghu2017svcca,morcos2018pwcca,kornblith2019similarity}, yet is intentionally invariant to isotropic scaling. Cauchy--Schwarz (CS) divergence instead measures distribution overlap~\cite{yin2026csaligner}, but depends on a kernel bandwidth and may be noisy across layers. Neither metric alone indicates how strongly a representation change affects downstream robot actions.
+
+% Role: core insight.
+Our insight is that reliable VLA precision allocation requires complementary representation evidence and a behavioral referee. Geometry and distribution should be measured under the same isolated intervention protocol, because their disagreement identifies failure modes that a single metric suppresses. Their layer score should then be scaled by an action-level sensitivity measured with paired solver noise. Finally, feasibility guards and configuration-level action comparison are needed because representation similarity is not a guarantee of stable activation range or compositional behavior.
+
+% Role: method overview.
+We instantiate this insight as \method, a geometry- and distribution-sensitive layer-selection framework for W4/FP16 PTQ. We probe each of 116 candidate Linear layers by applying W4A8 to that layer while the remaining candidate layers follow a full-precision attribution path. The probe computes linear CKA and CS divergence, combines their normalized distortions with an action-derived weight, and removes layers that violate activation RMS or estimated saturation thresholds. Under a uniform-W6-equivalent storage budget, a selector generates diverse masks and a paired functional score adjudicates the most promising complete configurations. Closed-loop development evaluation freezes the final CKA:CS ratio at 16:1 and produces a mask with 100 W4A8 candidate layers and 16 FP16 skips; 64 DiT attention projections remain protected outside the candidate set.
+
+% Role: empirical evidence.
+We evaluate the frozen method on RoboCasa365~\cite{nasiriany2026robocasa365}, using official task horizons, four denoising steps, 16 executed actions per replan, and common random numbers for paired policy comparison. The primary result excludes the four tasks used for ratio selection. Across the remaining 14 atomic tasks and 700 episodes per configuration, \method obtains 65.9\% success versus 45.6\% for QuantVLA W4A8 with static ATM/OHB. The paired task-level improvement is 20.3 points with a 95\% interval of $[13.9,26.9]$. \method retains a theoretical 1.99$\times$ LLM+DiT component-storage compression, although its current eager fake-quant implementation neither accelerates inference nor reduces live GPU memory.
+
+% Role: contributions.
+Our contributions are threefold:
+\begin{enumerate}[(1)]
+    \item We formulate VLA layer selection as action-weighted geometry and distribution preservation, combining CKA and CS divergence with explicit magnitude and saturation feasibility guards.
+    \item We introduce a two-level selection procedure that uses additive layer proxies for efficient search and paired functional adjudication for cross-layer action error, yielding a reproducible W4/FP16 mask under a fixed storage budget.
+    \item We provide a controlled RoboCasa365 evaluation that separates development and primary tasks, reports paired uncertainty and ablations, and states the deployment-storage benefit separately from the limitations of the current fake-quant runtime.
+\end{enumerate}

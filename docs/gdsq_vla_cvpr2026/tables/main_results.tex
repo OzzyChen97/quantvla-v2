@@ -1,0 +1,27 @@
+\begin{table*}[t]
+\centering
+\caption{Unified RoboCasa365 results across the official Atomic, Composite-Seen, and Composite-Unseen task groups. Atomic reports the All-18 macro success rate; the selection-controlled Primary-14 result is reported separately in Table~\ref{tab:primary14_results}. Green cells mark the best compressed configuration within the same policy, excluding the uncompressed FP16 reference. Deployment storage is a theoretical tightly packed Linear-layer estimate, not live CUDA memory. \todoresult{} denotes a predeclared evaluation that has not been completed and frozen; no partial logs are used.}
+\label{tab:main_results}
+\scriptsize
+\setlength{\tabcolsep}{2.6pt}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+Configuration & \shortstack{W4A8\\layers} & \multicolumn{1}{c}{Atomic} & \multicolumn{1}{c}{Composite-Seen} & \multicolumn{1}{c}{Composite-Unseen} & \multicolumn{2}{c}{Deployment} \\
+\cmidrule(lr){3-3}\cmidrule(lr){4-4}\cmidrule(lr){5-5}\cmidrule(lr){6-7}
+& & All 18 SR (\%) $\uparrow$ & SR (\%) $\uparrow$ & SR (\%) $\uparrow$ & Storage (GiB) $\downarrow$ & Compression $\uparrow$ \\
+\midrule
+\multicolumn{7}{@{}l}{\textit{GR00T N1.5 --- 50 paired scenarios per task}} \\
+FP16 (uncompressed) & 0 & 75.6 & 41.9 & 45.3 & 1.993 & Uncompressed \\
+\quantvla W4A8 + ATM/OHB & 116 & 49.6 & 19.6 & 19.8 & \best{0.898} & \best{2.22$\times$} \\
+\method + ATM/OHB & 100 & 66.7 & 39.1 & 40.3 & 1.001 & 1.99$\times$ \\
+\cmidrule(lr){1-7}
+\method (Ours) & 100 & \best{69.0} & \best{40.6} & \best{40.4} & 1.001 & 1.99$\times$ \\
+\addlinespace[2pt]
+\multicolumn{7}{@{}l}{\textit{$\pi_{0.5}$ --- planned RoboCasa365 evaluation}} \\
+FP16 (uncompressed) & 0 & \todoresult & \todoresult & \todoresult & \todoresult & Uncompressed \\
+\quantvla W4A8 + ATM/OHB & \todoresult & \todoresult & \todoresult & \todoresult & \todoresult & \todoresult \\
+\cmidrule(lr){1-7}
+\method (Ours) & \todoresult & \todoresult & \todoresult & \todoresult & \todoresult & \todoresult \\
+\bottomrule
+\end{tabular}
+\end{table*}

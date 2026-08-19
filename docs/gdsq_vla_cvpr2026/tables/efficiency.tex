@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\caption{Observed eager fake-quant runtime. These measurements explain why we claim theoretical component storage rather than end-to-end speed or live-memory gains. Green cells compare compressed configurations only; FP16 is an uncompressed reference.}
+\label{tab:efficiency}
+\scriptsize
+\setlength{\tabcolsep}{2.2pt}
+\begin{tabular}{lccc}
+\toprule
+Configuration & Wall (s) & Replan (s) & Peak MiB \\
+\midrule
+FP16 (uncompressed) & 26.9 & 0.139 & 12,769 \\
+QuantVLA+ATM/OHB & 37.5 & 0.268 & 17,973 \\
+\method+ATM/OHB & 31.6 & 0.259 & 17,719 \\
+\midrule
+\method (Ours) & \best{30.9} & \best{0.254} & \best{17,671} \\
+\bottomrule
+\end{tabular}
+\end{table}

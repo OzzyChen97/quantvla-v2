@@ -1,0 +1,9 @@
+Use case: scientific-educational
+Asset type: full-width CVPR architecture figure
+Primary request: Draw GDSQ-VLA as a clean, publication-ready, three-panel pipeline. Show isolated layer probing, complementary CKA/CS scoring, and budgeted mixed-precision deployment.
+Scene/backdrop: pure white scientific-paper background
+Style/medium: flat vector-like diagram, thin dark-blue arrows, crisp rectangular modules, no decorative illustration
+Composition/framing: 2048x1152 landscape; three equal panels from left to right; strong alignment and generous whitespace; large text readable at paper width
+Text (verbatim): "GDSQ-VLA", "1  Layerwise Probing", "Multimodal Observation", "RGB", "Instruction", "Robot State", "FP16 Reference", "Single-Layer W4A8 Probe", "116 Candidate Linear Layers", "2  Dual-Similarity Scoring", "Geometry: 1 - CKA", "Distribution: D_CS", "Action Weight w_i", "16 x Geometry + 1 x Distribution", "RMS / Saturation Guards", "3  Budgeted Selection and Deployment", "W6-Equivalent Storage Budget", "Top-K Functional Adjudication", "Final: 100 W4A8 + 16 FP16", "64 DiT Attention Projections Stay FP16", "1.99x Theoretical LLM+DiT Storage Compression"
+Constraints: render quoted text verbatim; show FP16 reference and W4A8 probe as parallel paths; show CKA and CS as two distinct branches that merge; show action weight and guards before selection; show selected W4A8 layers in orange and FP16 layers in blue; no ATM or OHB in final path; no claims about runtime speed or live GPU memory; no extra sentences; no logos; no watermark
+Avoid: semantic similarity, visual similarity, generic VLM ranking, photorealistic robot, 3D perspective, dark background, gradients, tiny text

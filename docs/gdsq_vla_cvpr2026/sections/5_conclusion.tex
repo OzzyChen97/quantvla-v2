@@ -1,0 +1,8 @@
+\section{Conclusion and Limitations}
+\label{sec:conclusion}
+
+% Role: conclusion and strongest evidence.
+This paper introduced \method, a training-free W4/FP16 layer-selection framework for quantized VLA policies. Its central idea is to treat quantization sensitivity as a combination of representation geometry, distribution overlap, and downstream action behavior. CKA and CS divergence guide layer-level search, action sensitivity weights the local evidence, hard guards reject unstable interventions, and paired functional adjudication selects complete masks. On 14 RoboCasa365 atomic tasks excluded from ratio selection, this design improves success by 20.3 points over the original QuantVLA W4A8+ATM/OHB recipe. The same 20.3-point gain holds across all 50 official tasks, while the final mask retains a theoretical 1.99$\times$ LLM+DiT component-storage compression.
+
+% Role: limitations and future work.
+The present evidence has three boundaries. First, the frozen allocation is evaluated on one GR00T N1.5 checkpoint family and a binary W4/FP16 search space; the planned $\pi_{0.5}$ rows remain TBD, so broader model transfer is not yet supported. Second, \method remains 8.0 success points below FP16 on the primary atomic tasks and 4.9 points below FP16 on Composite-Unseen, despite recovering 20.6 points over the fixed low-bit baseline on that unseen split. Across all 50 tasks, the remaining FP16 gap is 4.3 points. Third, the eager fake-quant runtime is slower and uses more live GPU memory than FP16, so our deployment claim is limited to theoretical tightly packed storage. Future work should validate the selection rule on additional VLA architectures and pair it with fused low-bit kernels that realize the predicted storage benefit in an end-to-end system.

@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\caption{Five-seed diagnostic ablation. This screen predates the 50-scenario ratio freeze and therefore studies signal composition rather than the final 16:1 mask. Green cells compare quantized configurations only.}
+\label{tab:component_ablation}
+\small
+\begin{tabular}{lcc}
+\toprule
+Configuration & Held-out 14 SR & All 18 SR \\
+\midrule
+FP16 (uncompressed) & 71.4 & 73.3 \\
+W4A8 + ATM/OHB & 52.9 & 52.2 \\
+CS only & 58.6 & 61.1 \\
+CKA only & 57.1 & 60.0 \\
+CKA + ATM/OHB & 60.0 & 63.3 \\
+CS+CKA (64:1) & \best{67.1} & \best{67.8} \\
+\bottomrule
+\end{tabular}
+\end{table}

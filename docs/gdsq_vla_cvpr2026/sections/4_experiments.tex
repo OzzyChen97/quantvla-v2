@@ -1,0 +1,79 @@
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Experimental Setup}
+\label{sec:setup}
+
+% Role: benchmark and model.
+\paragraph{Benchmark and policy.}
+We evaluate exclusively on RoboCasa365 v1.0.1~\cite{nasiriany2026robocasa365}. The completed frozen results use the corresponding GR00T N1.5 atomic-seen, composite-seen, and composite-unseen target post-training checkpoints at 60k steps; the unified results table also reserves rows for a planned $\pi_{0.5}$ study~\cite{intelligence2025pi05}. The benchmark provides long-horizon kitchen manipulation tasks with task-specific horizons and diverse initial scenes. Our atomic evaluation contains 18 tasks. Four tasks---OpenCabinet, OpenStandMixerHead, PickPlaceDrawerToCounter, and CoffeeSetupMug---are declared as development tasks for selecting the CKA:CS ratio. The other 14 tasks form the primary evaluation set. We also report the 18-task average as a secondary, partially development-inclusive statistic.
+
+% Role: quantization configurations.
+\paragraph{Configurations.}
+The FP16 policy is the uncompressed deployment reference and is excluded from best-compressed highlighting. For GR00T N1.5, the strongest low-bit baseline is the original QuantVLA W4A8 layout with checkpoint-specific static ATM and OHB~\cite{zhang2026quantvla}; it quantizes 116 of the 180 LLM+DiT Linear layers. \method uses the frozen 16:1 mask and quantizes 100 layers. A fourth configuration applies plan-specific static ATM/OHB to the same \method mask, isolating whether scale correction remains useful after layer selection. All completed low-bit configurations use group size 64, 32 static-A8 calibration batches, P99.9 activation scales, and the same frozen calibration buffer. The $\pi_{0.5}$ configurations remain predeclared placeholders until their model-specific masks and evaluations are complete.
+
+% Role: rollout protocol.
+\paragraph{Rollout protocol.}
+Each configuration is evaluated on 50 scenarios per task, giving 700 episodes for the 14-task atomic primary set, 900 for all 18 atomic tasks, and 800 for each 16-task composite group. We use official task horizons, four denoising steps, and execute 16 actions per replan. To obtain paired comparisons, every configuration receives a deterministic standard-normal initial action noise keyed by $(\text{task},\text{environment seed},\text{replan index})$. This common-random-number design preserves the marginal noise distribution of each policy while reducing variance in configuration differences. It is a paired evaluation protocol and should not be conflated with an implementation that draws native GPU random noise independently for each configuration.
+
+% Role: statistical protocol.
+\paragraph{Statistics.}
+Success rate (SR) is first averaged within each task and then macro-averaged across tasks. We report 10,000-draw task-cluster bootstrap confidence intervals, paired task-level sign-flip tests, and Holm correction across the five predeclared contrasts. This treats tasks, rather than individual frames or replans, as the unit of generalization. The incomplete $\pi_{0.5}$ evaluation appears only as \todoresult{} in the unified table; running partial logs are never reported.
+
+\subsection{RoboCasa365 Results}
+\label{sec:main_results}
+
+\input{tables/main_results}
+
+% Role: official-split overview.
+Table~\ref{tab:main_results} keeps the three official RoboCasa365 task groups in one view. On the completed GR00T N1.5 Atomic evaluation, \method reaches 69.0\% over all 18 tasks, compared with 49.6\% for QuantVLA W4A8+ATM/OHB and 75.6\% for the uncompressed reference. This aggregate includes the four development tasks and is therefore a benchmark overview rather than the selection-controlled primary result.
+
+% Role: completed composite-seen evidence and boundary.
+The completed Composite-Seen split tests whether the atomic-selected mask transfers to longer, multi-stage tasks without further tuning. \method reaches 40.6\% SR, compared with 19.6\% for QuantVLA W4A8+ATM/OHB and 41.9\% for FP16. Its paired gain over the low-bit baseline is 21.0 points with a 95\% task-cluster interval of $[14.3,28.0]$ and Holm-adjusted $p=0.0003$; its $-1.25$-point difference from FP16 has interval $[-5.75,3.00]$. This split supports transfer to seen composite tasks; the separate frozen split below tests unseen compositions.
+
+% Role: completed composite-unseen evidence.
+The frozen Composite-Unseen split evaluates 16 unseen task compositions without changing the atomic-selected ratio or layer budget. \method reaches 40.4\% SR, compared with 19.8\% for QuantVLA W4A8+ATM/OHB and 45.3\% for FP16. Its paired gain over the low-bit baseline is 20.6 points with interval $[14.5,26.8]$ and Holm-adjusted $p=0.0002$. The remaining $-4.88$-point gap to FP16 has interval $[-8.12,-1.75]$ and adjusted $p=0.0316$. Thus, the allocation transfers substantially better than the fixed W4A8 layout to unseen compositions, although it is not lossless relative to full precision.
+
+% Role: aggregate evidence across all official task groups.
+Across all 50 official tasks and 2,500 episodes per configuration, \method obtains 50.8\% macro SR, compared with 30.4\% for QuantVLA W4A8+ATM/OHB and 55.1\% for FP16. The corresponding paired differences are $+20.3$ points with interval $[16.9,24.0]$ and $-4.32$ points with interval $[-6.56,-2.08]$, respectively. Static ATM/OHB changes the 50-task result from 50.8\% to 49.4\%; its $-1.36$-point interval $[-3.28,0.52]$ spans zero, so we retain the simpler selected mask as the final configuration.
+
+% Role: memory evidence and definition.
+The final model stores an estimated 1.001 GiB over the LLM+DiT Linear scope, compared with 1.993 GiB for FP16, corresponding to 49.8\% savings or 1.99$\times$ compression. The estimate assumes tightly packed W4 weights, FP16 per-output scales, FP32 block rotations, and FP16 for unselected layers and biases. It excludes vision parameters, activation peaks, CUDA workspaces, simulator memory, and fake-quant caches. This accounting matches the component scope used for the baseline comparison but is not a measurement of current process memory.
+
+% Role: missing-evidence boundary.
+The same table reserves $\pi_{0.5}$ cells so that the planned cross-policy study remains visible without mixing incomplete evidence into the GR00T N1.5 results. These entries stay \todoresult{} until each complete matrix is frozen and validated. We make no cross-policy transfer claim from placeholders.
+
+\subsection{Ratio Selection and Held-Out Evaluation}
+\label{sec:ratio}
+
+\input{tables/ratio_sweep}
+
+% Role: ratio-selection result and interpretation.
+Table~\ref{tab:ratio_sweep} demonstrates why the representation proxy is a search guide rather than the final objective. The 64:1 configuration achieves the lowest $\dfunc$ on its paired calibration observations, but only 75.0\% closed-loop development SR. The 16:1 configuration instead achieves the highest development SR at 80.5\% (161/200 scenarios) and is frozen by the predeclared rule. CKA-only reaches 77.5\%, indicating that the CS term should be down-weighted but not removed for this checkpoint. The non-monotonic sweep also argues against inferring a universal ratio from proxy correlation alone.
+
+\input{tables/primary14_results}
+
+% Role: primary evidence after tuning is frozen.
+Table~\ref{tab:primary14_results} reports the selection-controlled result after the 16:1 ratio is frozen. On the 14 tasks excluded from ratio selection, \method reaches 65.9\% SR, whereas the original QuantVLA W4A8+ATM/OHB recipe reaches 45.6\%. The paired gain is 20.3 percentage points with a 95\% task-cluster interval of $[13.9,26.9]$; the exact sign-flip test remains significant after Holm correction ($p=0.0012$).
+
+% Role: honest accuracy boundary.
+Layer selection does not close the full-precision gap. FP16 obtains 73.9\% on the Primary 14 tasks, exceeding \method by 8.0 points with a paired interval of $[-12.1,-3.9]$ for \method minus FP16 and Holm-adjusted $p=0.0073$. The result therefore supports a precision-allocation improvement over the fixed low-bit layout, not lossless quantization. The final mask trades 7.8 percentage points of theoretical storage savings for 20.3 points of task success relative to the W4A8 baseline.
+
+\subsection{Component and Calibration Ablations}
+\label{sec:ablations}
+
+\input{tables/component_ablation}
+
+% Role: dual-signal diagnostic.
+The five-seed diagnostic in Table~\ref{tab:component_ablation} separates the two representation signals under a smaller screening protocol. CS-only and CKA-only reach 58.6\% and 57.1\% on the 14 held-out tasks, respectively, while a 64:1 combination reaches 67.1\%. The task-cluster intervals in this screen overlap, so we treat the result as evidence that the signals can be complementary, not as a significance claim for the 64:1 mask. The higher-powered ratio study subsequently replaces 64:1 with the final 16:1 configuration.
+
+% Role: ATM/OHB interaction ablation.
+Static ATM/OHB does not improve the selected final mask. In the 50-scenario evaluation, adding it changes primary SR from 65.9\% to 63.0\%, a paired difference of $-2.9$ points with interval $[-6.9,0.7]$ and adjusted $p=0.226$. This negative, non-significant point estimate motivates leaving ATM/OHB out of \method. The result also illustrates that a calibration designed for a fixed quantization layout need not remain helpful after sensitive layers have already been protected in FP16.
+
+\subsection{Runtime and Deployment Scope}
+\label{sec:runtime}
+
+\input{tables/efficiency}
+
+% Role: practical limitation.
+Table~\ref{tab:efficiency} exposes the current implementation boundary. The eager W4A8 path retains floating-point weights and caches, applies block transformations, and ultimately executes floating-point GEMMs. Consequently, \method requires 0.254 seconds per replan and peaks at 17.7 GiB, compared with 0.139 seconds and 12.8 GiB for FP16. Episode wall time also depends on how early successful tasks terminate and is not a pure model benchmark. Realizing the theoretical storage benefit in live memory and latency requires fused INT4/INT8 kernels and removal of redundant floating-point buffers; those systems changes are orthogonal to the layer-allocation policy evaluated here.
